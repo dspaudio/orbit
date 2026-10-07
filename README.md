@@ -43,6 +43,10 @@ The existing SLOOP piano-roll sequencer is retained. The capture below shows a 1
 
 The SAMPLE/GRAIN scope displays the actual **master audio output**, rather than a raw sample waveform for trim editing. Synth graphics visualise parameters. ORBIT uses original graphics and does not include OP-1 artwork, audio or logos.
 
+HOME now briefly displays the loaded engine and preset after turning PRESETS. It browses individual sounds rather than only the first sound of each category.
+
+![HOME preset selection feedback](docs/orbit-preset-feedback.png)
+
 ## Development milestones
 
 - **0.1:** Added event Tape editing, native firmware rendering and the browser preview.
@@ -72,6 +76,7 @@ The preview uses the firmware DSP but buffers approximately 250–550 ms of brow
 | KNOB 4 | Select COPY or LIFT |
 | OCT− | Copy or lift the selected region |
 | OCT+ | Drop the clipboard at the head; overwrite destination events |
+| PRESETS | Browse individual sounds; HOME briefly shows the loaded engine and preset |
 | ALGORITHM | Select a track |
 | SELECT | Adjust BPM |
 | PLAY / REC | Existing transport / live recording |

@@ -859,6 +859,20 @@ static void ui_input(void)
             TDRUM->p[P_E0] = (int16_t)clamp(TDRUM->p[P_E0] + s, 0, DRUM_KITS - 1);
         else if (total)
             preset_go((uint32_t)(((int32_t)cur + s % (int32_t)total + (int32_t)total) % (int32_t)total));
+        if (ui.home) {
+            /* Report the sound actually loaded, including user presets and drum kits. */
+            const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
+            char name[13], sound[32];
+            if (is_drum(TSEL)) str_cpy(name,DRUM_KIT_NAMES[drum_kit()],sizeof name);
+            else if (user_of(TSEL)<UP_SLOTS) up_name(user_of(TSEL),name);
+            else if (e->npresets) str_cpy(name,e->presets[TSEL->preset % e->npresets].name,sizeof name);
+            else str_cpy(name,e->name,sizeof name);
+            str_cpy(sound,is_drum(TSEL)?"DRUM":e->name,sizeof sound);
+            str_cpy(sound+str_len(sound)," ",sizeof sound-str_len(sound));
+            str_cpy(sound+str_len(sound),name,sizeof sound-str_len(sound));
+            ui_message(sound);
+            ui.msg_t=80;
+        }
     }
     if ((s = panel_enc(EN_ALGO)) != 0 && !ft_on)     /* ALGORITHM: the selected track, on every page (not in a take) */
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));

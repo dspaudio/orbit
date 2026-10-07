@@ -131,7 +131,18 @@ int main(int argc, char **argv)
     check(orbit_capture(NPART,0,0,0) && orbit_drop(NPART,2)==1,"drum clipboard copy/drop");
     check(TDRUM->dstep[2].on[1]==128 && TDRUM->dstep[2].rat[3]==192,"drum lane 16 / ratchet bits preserved");
     check(!orbit_drop(0,0),"reject drum clipboard on synth track");
-    song.sel=0; go_home(); frame(); ppm("orbit-tape");
+    bank_resolve();
+    { uint32_t matched=0; for(i=0;i<NBANK;i++) matched+=bank_pi[i]!=0xFF;
+      check(matched==NBANK,"all 68 preset bank names resolve to real engine presets"); }
+    song.sel=0; go_home(); preset_go(0); frame();
+    encs[panel.enc[EN_PRESET]]=1; frame();
+    check(TSEL->eng_req==BANK[1].e && TSEL->preset==bank_pi[1] && str_eq(ui.msg,"ANALOG 808 DIRTY"),
+          "HOME PRESETS selects and displays the second individual bass sound");
+    encs[panel.enc[EN_PRESET]]=2; frame();
+    check(TSEL->preset==bank_pi[3] && str_eq(ui.msg,"ANALOG SUB BASS"),
+          "HOME PRESETS multi-detent display matches the loaded sound");
+    ppm("orbit-preset-feedback");
+    preset_go(0); ui.msg_t=0; frame(); ppm("orbit-tape");
     tap(B_PLAY); frames(10); check(song.playing,"Tape PLAY reaches real transport"); ppm("orbit-playing");
     tap(B_PLAY); frame(); check(!song.playing,"Tape PLAY stops transport");
     encs[panel.enc[EN_K1]]=5; frame(); check(orbit_tape.cursor==5,"Tape knob moves head");
