@@ -8,7 +8,7 @@ import subprocess
 import sys
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/host'
-CASES = ['orbit_test', 'seq2_test', 'project_test', 'storage_test', 'drumkit_test', 'studio_drums_test',
+CASES = ['irq_init_test', 'recovery_test', 'orbit_test', 'seq2_test', 'project_test', 'storage_test', 'drumkit_test', 'studio_drums_test',
          'punch_test', 'song_audio_test', 'song_ui_test']
 
 

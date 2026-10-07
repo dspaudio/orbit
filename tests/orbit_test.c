@@ -153,7 +153,17 @@ int main(int argc, char **argv)
         encs[panel.enc[EN_K1]]=1; frame();
     }
     check(1,"every engine graphic renders with bounded framebuffer access");
-    open_family(FAM_SEQ); frame(); ppm("orbit-sequencer");
+    /* Representative sequence for screenshots; this does not alter firmware boot defaults. */
+    {
+        const uint8_t notes[16]={57,0,60,64,0,67,64,60,57,0,60,64,67,64,60,57};
+        steps_clear(TSEL); TSEL->p[P_SLEN]=16;
+        for(i=0;i<16;i++) if(notes[i]) TSEL->step[i]=(step_t){.note={notes[i]},.n=1,.time=ST_NOTE,.vel=100};
+        TSEL->step[3]=(step_t){.note={64,67,71},.n=3,.time=ST_NOTE,.vel=110,.flags=SF_ACCENT};
+        TSEL->step[6].time=ST_TIE;
+    }
+    set_engine_of(TSEL,0); apply_preset_to(TSEL,0); TSEL->engine=TSEL->eng_req;
+    go_home(); open_family(FAM_SEQ); cursor_set(3); frame(); ppm("orbit-sequencer");
+    open_family(FAM_SEQ); frame(); ppm("orbit-pattern");
     studio_open(SC_TRK); frame(); ppm("orbit-mixer");
     go_home();
     for(i=0;i<2000;i++) {

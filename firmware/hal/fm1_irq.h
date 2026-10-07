@@ -5,7 +5,7 @@
  *   fm1_irq_init()        first thing in cstart: all ICFG off, pendings and
  *                         exception causes cleared, all 128 vectors -> fatal
  *                         stubs (fm1_vec.S), vector 1 (CPU
- *                         exception) enabled at prio 7, div0 trap + ETM on.
+ *                         exception) enabled at prio 7, ETM on, div0 trap off.
  *   fm1_irq_attach(n, h, prio)   h = asm wrapper (fm1_isr.S), prio 0..7
  *   fm1_irq_enable_all()  icfg bit 8 + sti, after every source is set up
  *
@@ -64,7 +64,11 @@ static void fm1_irq_init(void)
     for (i = 0; i < 128u; i++)
         FM1_VEC[i] = (uint32_t)(uintptr_t)(fm1_fatal_stubs + 6u * i);
     FM1_ICFG(1) = (FM1_ICFG(1) & ~0xF0u) | 0xF0u;           /* exception: enable, prio 7 */
-    FM1_EMU_CON |= 1u << 2;                                 /* div0 traps */
+    FM1_EMU_CON &= ~(1u << 2);  /* div0 trap off, including after a warm reset.
+     * JieLi's compiler can hoist a loop-invariant divide before its guard
+     * (Felucca #61 / #111). Match the upstream mitigation: an unused speculative
+     * divide must not reset the device. Genuine arithmetic bugs still need fixes;
+     * disabling the trap does not make division by zero mathematically valid. */
     FM1_ETM_CON |= 1u;                                      /* branch trace for the report */
 }
 
