@@ -89,7 +89,11 @@ static void frame(void)
 {
     uint32_t q;
     static int32_t o[CTL * 2];
-    for (q = 0; q < 22u; q++) mix_block(o, CTL);
+    for (q = 0; q < 22u; q++) {
+        uint32_t sample;
+        mix_block(o,CTL);
+        for(sample=0;sample<CTL;sample++) scope_buf[scope_w++&(SCOPE_N-1u)]=(int16_t)clamp((o[sample*2]+o[sample*2+1])/2,-32768,32767);
+    }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
 }
 static void frames(uint32_t n) { while (n--) frame(); }
@@ -137,6 +141,18 @@ int main(int argc, char **argv)
     orbit_tape.cursor=0; tap(B_OCTUP); check(trk[0].step[0].n==3,"OCT+ drops via panel input");
     ui.msg_t=0; frame(); ppm("orbit-edited");
     open_family(FAM_EDIT); frame(); ppm("orbit-synth");
+    open_family(FAM_ENV); frame(); ppm("orbit-envelope");
+    open_family(FAM_LFO); frame(); ppm("orbit-lfo");
+    set_engine_of(TSEL,1); apply_preset_to(TSEL,0); TSEL->engine=TSEL->eng_req;
+    open_family(FAM_EDIT); frame(); ppm("orbit-digital");
+    set_engine_of(TSEL,4); apply_preset_to(TSEL,0); TSEL->engine=TSEL->eng_req;
+    open_family(FAM_EDIT); fm1_in.notes=1; frames(4); ppm("orbit-sampler"); fm1_in.notes=0; frame();
+    for(i=0;i<NENGINES;i++) {
+        set_engine_of(TSEL,i); apply_preset_to(TSEL,0); TSEL->engine=TSEL->eng_req;
+        go_home(); open_family(FAM_EDIT); frame();
+        encs[panel.enc[EN_K1]]=1; frame();
+    }
+    check(1,"every engine graphic renders with bounded framebuffer access");
     open_family(FAM_SEQ); frame(); ppm("orbit-sequencer");
     studio_open(SC_TRK); frame(); ppm("orbit-mixer");
     go_home();

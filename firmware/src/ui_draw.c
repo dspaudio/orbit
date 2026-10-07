@@ -916,6 +916,8 @@ static void ui_timers(void)
         ui.hot_t--;
 }
 
+#include "orbit_modes.c"
+
 static void ui_draw(void)
 {
     ui.frame++;
@@ -988,13 +990,19 @@ static void ui_draw(void)
         return;
     }
     if (!ui.home && cur_page()->scope == SC_TRK) {
-        studio_tracks_draw();
+        orbit_mixer_draw();
         ui_timers();
         ui.force = 0;
         return;
     }
     if (on_drum_page()) {
         drum_screen_draw();
+        ui_timers();
+        ui.force = 0;
+        return;
+    }
+    if (orbit_sound_page()) {
+        orbit_sound_draw();
         ui_timers();
         ui.force = 0;
         return;

@@ -89,7 +89,11 @@ static void frame(void)
 {
     uint32_t q;
     static int32_t o[CTL * 2];
-    for (q = 0; q < 22u; q++) mix_block(o, CTL);
+    for (q = 0; q < 22u; q++) {
+        uint32_t sample;
+        mix_block(o,CTL);
+        for(sample=0;sample<CTL;sample++) scope_buf[scope_w++&(SCOPE_N-1u)]=(int16_t)clamp((o[sample*2]+o[sample*2+1])/2,-32768,32767);
+    }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
 }
 static void frames(uint32_t n) { while (n--) frame(); }

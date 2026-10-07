@@ -1,6 +1,14 @@
-# ORBIT 0.1 — FM-1 groovebox firmware
+# ORBIT 0.2 — FM-1 groovebox firmware
 
 SLOOP/Felucca의 실제 C 음원 엔진 위에 이벤트 Tape 중심의 작업 흐름을 추가한 개발 버전입니다. OP-1의 네 색상 노브와 모드별 편집 흐름에서 영감을 얻었으며, OP-1 화면·음원·로고를 복제하지 않습니다.
+
+## 0.2 화면 업데이트
+
+OP-1의 그래픽 중심 화면 흐름을 참고해 Tape의 두 릴, 신스의 네 색상 파형/오비트, 엔벌로프의 네 색상 곡선, 믹서의 네 채널 페이더를 추가했습니다. 기존 노브의 파라미터 연결을 유지하며 화면 요소를 해당 색상에 맞췄습니다. 엔진 그래픽은 파라미터를 시각화한 그림이고, SAMPLE/GRAIN의 output 파형만 실제 마스터 오디오를 표시합니다. 원본 샘플 파일의 편집용 파형은 아닙니다.
+
+화면 참조: https://teenage.engineering/guides/op-1/original/synthesizer-mode 및 https://teenage.engineering/guides/op-1/original/tape-mode
+
+![ORBIT 0.2 screens](docs/orbit-preview-0.2.png)
 
 ## 구현 상태
 
