@@ -2,9 +2,31 @@
 
 **An experimental groovebox firmware for the FM-1, built on SLOOP/Felucca.**
 
-ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current development version: **0.2.1**.
+ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current development version: **0.3.0**.
 
 > Development status: host tests pass, but the pi32v2 target build and real FM-1 validation are pending. No installable firmware package is provided. Bluetooth headphone pairing and audio output are not implemented.
+
+## Independent sound engines (0.3.0)
+
+ORBIT now has independently written SWARM (six detuned harmonic oscillators), PULSE (dual pulse oscillators with PWM and edge correction), and FM4 (four sine operators with three routing choices). These are original implementations of synthesis families documented for the original OP-1, not ports of Teenage Engineering algorithms or factory sounds.
+
+The first 12 PRESETS entries are new ORBIT sounds. New/empty projects start with FM4 / ORBIT ROUND, SWARM / ORBIT HAZE and PULSE / ORBIT PWM. Existing saved projects retain their legacy engines and sound parameters.
+
+![Independent ORBIT engine parameter screens](docs/orbit-engines-0.3.png)
+
+[Listen to the C DSP demonstration](docs/audio/orbit-engines-0.3.mp3): SWARM / ORBIT HAZE, PULSE / ORBIT PWM, then FM4 / ORBIT TINES (three seconds each). This is host-rendered audio, not a recording of OP-1 or FM-1 hardware.
+
+Read [engine feasibility, controls and limitations](docs/OP1-ENGINES.md) for what is implemented, deferred and unknown. The voice allocator, envelope, mixer, effects, sample assets and sequencing infrastructure remain derived from SLOOP/Felucca. The new oscillator algorithms and twelve patch definitions are in `firmware/src/eng_orbit.c`.
+
+## Built-in demo song: FIRST LIGHT
+
+Load it through **hold HOME → DEMO SONG → OCT+ → OCT+ again**, then press **PLAY**. Stop playback first. The first confirmation shows AGAIN; OCT− cancels. Loading replaces the current working patterns and sounds, so save work you want to keep beforehand. Numbered project slots are not written by the loader; normal working-project autosave still applies.
+
+FIRST LIGHT is an original four-bar, 64-step loop at 108 BPM: Am7 → Fmaj7 → Cmaj7 → G7. It combines FM4 / ORBIT ROUND bass, SWARM / ORBIT HAZE sustained chords, PULSE / ORBIT PIN melody and the existing synthesised 808 drums. The notes, dynamics, chords and ties remain fully editable. It is not a prerecorded backing track or a multi-section arrangement.
+
+[Listen to FIRST LIGHT](docs/audio/orbit-first-light.mp3) (actual C sequencer/DSP render).
+
+![FIRST LIGHT event Tape](docs/orbit-demo-0.3.png)
 
 ## Screens
 
@@ -28,7 +50,7 @@ The existing SLOOP piano-roll sequencer is retained. The capture below shows a 1
 |---|---|---|
 | Event Tape | Implemented; host tested | Four-track event timeline, transport position, inclusive region selection, COPY / LIFT / DROP |
 | Tape editing | Implemented; host tested | Preserves chords, ties, velocity and ratchets; clips at the pattern boundary and checks synth/drum compatibility |
-| Synths | Existing functionality retained | Nine engines with sound, envelope, LFO and FX editing |
+| Synths | Three independent ORBIT engines added | SWARM, PULSE and FM4, with 12 original presets; nine legacy engines retained for compatibility |
 | Sampler | Existing functionality retained | Three user slots; sample import, CHOP and device upload through the original web editor |
 | Sequencer | Existing functionality retained | Up to 64 steps, live recording, chords, ratchets, drum lanes and song arrangement |
 | Graphics | Implemented; host tested | Two Tape reels, coloured synth graphics, envelope curves and four mixer faders |
@@ -52,6 +74,7 @@ HOME now briefly displays the loaded engine and preset after turning PRESETS. It
 - **0.1:** Added event Tape editing, native firmware rendering and the browser preview.
 - **0.2:** Added reel, oscillator/orbit, envelope and mixer graphics; connected the preview scope to the actual mixed audio.
 - **0.2.1:** Applied the divide-by-zero trap mitigation and captured STEP/PATTERN screens.
+- **0.3.0:** Added independent SWARM, PULSE and FM4 engines, 12 original patches and independent defaults; verified native DSP and wasm32 integration.
 - **Next:** Complete target compilation and memory/timing checks, then validate on FM-1 hardware. Bluetooth support remains a separate development task.
 
 ## Try the native preview

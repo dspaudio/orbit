@@ -17,7 +17,10 @@ enum { V_POLY, V_MONO, V_LEGATO, V_UNISON };   /* P_VOICE */
 #ifndef FELUCCA_SLICE
 #define FELUCCA_SLICE 0          /* the SLICE engine (eng_slice.c): kept in the tree, not built by default */
 #endif
-#define NENGINES (9 + FELUCCA_SLICE)   /* SLICE, when built, comes last: the other engines keep their numbers */
+#define ORBIT_SWARM (9 + FELUCCA_SLICE)
+#define ORBIT_PULSE (10 + FELUCCA_SLICE)
+#define ORBIT_FM4 (11 + FELUCCA_SLICE)
+#define NENGINES (12 + FELUCCA_SLICE) /* append independent engines; retain legacy IDs, including SLICE */
 #define UP_SLOTS 32u             /* user presets (upreset.c) */
 
 /* ------------------------------------------------------- parameters --- */

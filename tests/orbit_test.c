@@ -133,13 +133,13 @@ int main(int argc, char **argv)
     check(!orbit_drop(0,0),"reject drum clipboard on synth track");
     bank_resolve();
     { uint32_t matched=0; for(i=0;i<NBANK;i++) matched+=bank_pi[i]!=0xFF;
-      check(matched==NBANK,"all 68 preset bank names resolve to real engine presets"); }
+      check(matched==NBANK,"all preset bank names resolve to real engine presets"); }
     song.sel=0; go_home(); preset_go(0); frame();
     encs[panel.enc[EN_PRESET]]=1; frame();
-    check(TSEL->eng_req==BANK[1].e && TSEL->preset==bank_pi[1] && str_eq(ui.msg,"ANALOG 808 DIRTY"),
-          "HOME PRESETS selects and displays the second individual bass sound");
+    check(TSEL->eng_req==BANK[1].e && TSEL->preset==bank_pi[1] && str_eq(ui.msg,"SWARM ORBIT GLASS"),
+          "HOME PRESETS selects and displays the second individual ORBIT sound");
     encs[panel.enc[EN_PRESET]]=2; frame();
-    check(TSEL->preset==bank_pi[3] && str_eq(ui.msg,"ANALOG SUB BASS"),
+    check(TSEL->preset==bank_pi[3] && str_eq(ui.msg,"SWARM ORBIT CHOIR"),
           "HOME PRESETS multi-detent display matches the loaded sound");
     ppm("orbit-preset-feedback");
     preset_go(0); ui.msg_t=0; frame(); ppm("orbit-tape");
@@ -161,6 +161,9 @@ int main(int argc, char **argv)
     for(i=0;i<NENGINES;i++) {
         set_engine_of(TSEL,i); apply_preset_to(TSEL,0); TSEL->engine=TSEL->eng_req;
         go_home(); open_family(FAM_EDIT); frame();
+        if(i==ORBIT_SWARM) ppm("orbit-swarm");
+        if(i==ORBIT_PULSE) ppm("orbit-pulse");
+        if(i==ORBIT_FM4) ppm("orbit-fm4");
         encs[panel.enc[EN_K1]]=1; frame();
     }
     check(1,"every engine graphic renders with bounded framebuffer access");
@@ -182,6 +185,32 @@ int main(int argc, char **argv)
         orbit_knob(i%4,(i%3)-1); frame();
     }
     check(orbit_tape.first<=orbit_tape.last && orbit_tape.last<NSTEP,"selection bounds survive track/length changes");
+    /* Actual menu confirmation and transport for the original demo composition. */
+    song.playing=0; ui.menu=1; ui.menu_sel=MI_DEMO;
+    { uint32_t saved=saves, prior=trk[0].p[P_SLEN];
+      menu_input(BT(B_OCTUP)); frame();
+      check(orbit_demo_pending && trk[0].p[P_SLEN]==prior,"demo first confirmation preserves working song");
+      menu_input(BT(B_OCTDN));
+      check(!orbit_demo_pending,"demo cancellation clears confirmation");
+      ui.menu=1; ui.menu_sel=MI_DEMO;
+      menu_input(BT(B_OCTUP)); menu_input(BT(B_OCTUP)); frames(8);
+      check(saves==saved && ui.menu==0 && song.g[G_BPM]==108,"demo loads without writing a numbered project slot"); }
+    check(trk[0].eng_req==ORBIT_FM4 && trk[1].eng_req==ORBIT_SWARM && trk[2].eng_req==ORBIT_PULSE,
+          "demo uses all three independent engines");
+    check(trk[0].p[P_SLEN]==64 && trk[1].step[16].n==3 && trk[1].step[17].time==ST_TIE &&
+          dstep_has(&TDRUM->dstep[4],2) && dstep_has(&TDRUM->dstep[2],4),"demo has four bars, chords, ties, snare and hats");
+    go_home(); tap(B_PLAY); check(song.playing,"demo starts with PLAY"); ppm("orbit-demo-tape");
+    { char path[512]; FILE *f; uint32_t b, j, nonzero=0; int32_t o[CTL*2];
+      snprintf(path,sizeof path,"%s/orbit-first-light.wav",outdir); f=fopen(path,"wb"); assert(f);
+      wav_hdr(f,(FS*12/CTL)*CTL);
+      for(b=0;b<FS*12/CTL;b++) {
+          mix_block(o,CTL);
+          for(j=0;j<CTL;j++) { nonzero+=o[j*2]!=0 || o[j*2+1]!=0; wav_put(f,o[j*2],o[j*2+1]); }
+      }
+      fclose(f); check(nonzero>FS*8,"demo sequencer produces sustained non-silent PCM across its loop"); }
+    ui.menu=1; ui.menu_sel=MI_DEMO; menu_input(BT(B_OCTUP));
+    check(!orbit_demo_pending && song.playing,"demo loader rejects replacement while playing");
+    menu_close(); tap(B_PLAY);
     printf("ORBIT checks: %d failures\n",fails);
     return fails ? 1 : 0;
 }

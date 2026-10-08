@@ -14,12 +14,14 @@
 #if FELUCCA_SLICE
 #include "eng_slice.c"
 #endif
+#include "eng_orbit.c"
 
 static const engine_t *const ENGINES[NENGINES] = {&ENG_ANALOG, &ENG_DIGITAL, &ENG_PHASE, &ENG_LOFI, &ENG_SAMPLE,
                                                     &ENG_FORMANT, &ENG_TRIO, &ENG_DRAWBAR, &ENG_GRAIN,
 #if FELUCCA_SLICE
                                                     &ENG_SLICE,
 #endif
+    &ENG_SWARM, &ENG_ORBIT_PULSE, &ENG_FM4,
 };
 
 /* every factory sound as loud as the others: a level trim per preset, 1/2 dB, measured on a phrase

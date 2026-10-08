@@ -35,3 +35,14 @@ Sequence screenshots are rendered by the actual STEP and PATTERN UI with a repre
 ## HOME preset feedback correction
 
 All 68 factory browser entries resolve to a real engine preset. Native panel tests verify that consecutive and multiple PRESETS detents load individual bass sounds and that HOME feedback matches the actual selected engine/preset. Tape layout is unchanged.
+
+
+## ORBIT 0.3.0 independent synthesis and FIRST LIGHT
+
+- All 12 host programs pass, including the new independent DSP suite.
+- All twelve new patches: deterministic direct renders, MIDI 24–120, parameter min/max, output bounds and guards. FM4 depth-zero carrier: 440 Hz.
+- New engine suite passes with optional SLICE enabled and under undefined-behaviour sanitisation. Engine voice state remains 84 bytes.
+- Actual menu: initial demo confirmation preserves the working song, cancel clears it, second confirmation loads all three new engines and four-bar patterns without saving a numbered slot. Loading while playing is rejected.
+- FIRST LIGHT actual C sequencer rendered 12 seconds of non-silent stereo PCM; MP3 is a listening copy. Screens are captured from the actual C framebuffer.
+- Native HTTP preview test and complete firmware preprocessing pass.
+- No pi32v2 build, hardware boot, target linker budget or IRQ timing measurement is available.

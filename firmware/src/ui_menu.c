@@ -2,18 +2,19 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* SLOOP menu (HOME held): COLOR, LOWCUT, ZOOM, LIGHTS, KEYS, NOTES, USB AUDIO, HARDWARE CALIBRATION, ABOUT. */
 /* ------------------------------------------------------------ menu --- */
-enum { MI_COLOR, MI_LOWCUT, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_USB, MI_PANEL, MI_ABOUT, MI_BACK, MI_COUNT };
+enum { MI_COLOR, MI_LOWCUT, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_USB, MI_PANEL, MI_DEMO, MI_ABOUT, MI_BACK, MI_COUNT };
 static const char *const MI_NAME[MI_COUNT] = {"COLOR", "LOWCUT", "ZOOM", "LIGHTS", "KEYS", "NOTES", "USB AUDIO",
-                                              "HARDWARE CALIBRATION", "ABOUT", "BACK"};
+                                              "HARDWARE CALIBRATION", "DEMO SONG", "ABOUT", "BACK"};
+static uint8_t orbit_demo_pending;
 static const char *const LIGHTS_NAME[LIGHTS_N] = {"OFF", "LOW", "MID", "HIGH"};   /* every button lit, the labels readable */
 static const char *const KEYS_NAME[KEYS_N] = {"OFF", "C KEYS", "WHITE KEYS"};      /* keys lit too, at the LIGHTS level */
-#define MI_DY 18                                   /* rows between two menu lines */
+#define MI_DY 16                                   /* eleven rows plus footer fit the 240 px screen */
 
 static void draw_menu(void)
 {
     uint32_t i, pass, sig = ui.menu * 7u + ui.menu_sel * 131u + settings.palette * 1009u + settings.lowcut * 7919u +
                             settings.zoom * 104729u + lights_lvl * 1299709u + lights_keys * 15485863u +
-                            lights_notes * 32452843u + usb_full * 49979687u;
+                            lights_notes * 32452843u + usb_full * 49979687u + orbit_demo_pending * 17u + song.playing;
     if (!ui.force && sig == ui.menu_sig)
         return;
     ui.menu_sig = sig;
@@ -50,6 +51,8 @@ static void draw_menu(void)
                 if (sel)
                     cv_rect(4, y + 6, 3, 3, C_WHITE);
                 cv_text(14, y, &FONT_S, MI_NAME[i], sel ? C_WHITE : C_GRAY);
+                if (i == MI_DEMO)
+                    cv_text(100, y, &FONT_S, song.playing ? "STOP FIRST" : orbit_demo_pending ? "AGAIN" : "LOAD", C_HI);
                 if (i == MI_LOWCUT || i == MI_ZOOM || i == MI_NOTES)
                     cv_text(100, y, &FONT_S, (i == MI_LOWCUT ? settings.lowcut : i == MI_ZOOM ? settings.zoom : lights_notes)
                                                 ? "ON" : "OFF", C_HI);
@@ -83,6 +86,7 @@ static void enc_drop(void)                             /* knob turns nobody take
 
 static void menu_close(void)
 {
+    orbit_demo_pending = 0;
     if (song.playing || transport_req)
         settings_later = 1;                            /* (a flash write stops the audio: once stopped) */
     else
@@ -98,14 +102,17 @@ static void menu_input(uint32_t pressed)
     int32_t s;
     uint32_t ok = (pressed >> panel.btn[B_OCTUP]) & 1u, back = (pressed >> panel.btn[B_OCTDN]) & 1u;
     if (back) {
+        orbit_demo_pending = 0;
         if (ui.menu == 2)
             ui.menu = 1, ui.force = 1;
         else
             menu_close();
         return;
     }
-    if ((s = panel_enc(EN_PRESET)) != 0 && ui.menu == 1)
+    if ((s = panel_enc(EN_PRESET)) != 0 && ui.menu == 1) {
+        orbit_demo_pending = 0;
         ui.menu_sel = (uint8_t)((ui.menu_sel + (s > 0 ? 1u : MI_COUNT - 1u)) % MI_COUNT);
+    }
     s = panel_enc(EN_K1);
     if (s != 0 && ui.menu == 1 && ui.menu_sel == MI_COLOR) {
         settings.palette = (settings.palette + (s > 0 ? 1u : NPALETTES - 1u)) % NPALETTES;
@@ -153,6 +160,13 @@ static void menu_input(uint32_t pressed)
         case MI_ABOUT:
             ui.menu = 2;
             ui.force = 1;
+            break;
+        case MI_DEMO:
+            if (song.playing) { orbit_demo_pending = 0; break; }
+            if (!orbit_demo_pending) { orbit_demo_pending = 1; ui.force = 1; break; }
+            orbit_demo_load();
+            menu_close();
+            ui_message("DEMO: FIRST LIGHT");
             break;
         default:
             menu_close();

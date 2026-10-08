@@ -3,9 +3,10 @@
 /* Felucca user interface. Four columns map to KNOB 1..4. Rendering is lazy:
  * every element remembers what it last drew and is redrawn only on change. */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "ORBIT 0.2.1"  /* the beat machine firmware for the FM-1 (based on Felucca) */
+#define FELUCCA_VERSION "ORBIT 0.3.0"  /* the beat machine firmware for the FM-1 (based on Felucca) */
 #endif
 static void project_save(uint32_t slot);
+static void orbit_demo_load(void);
 static void arrangement_save(void);
 static void panel_setup(void);
 static void project_load(uint32_t slot);
@@ -211,7 +212,8 @@ static void go_home(void)
  * writes the sequencer: every pattern is the one the player records or enters. */
 
 /* the parts' sounds at power-on (engine, preset): bass, pad, lead */
-static const uint8_t TRK_DEF[NPART][2] = {{0, 0}, {1, 0}, {4, 5}};   /* ANALOG 808 BOOM, DIGITAL RHODES, SAMPLE LOFI FLUTE */
+static const uint8_t TRK_DEF[NPART][2] = {{ORBIT_FM4, 2}, {ORBIT_SWARM, 0}, {ORBIT_PULSE, 1}};
+/* New/empty projects: original ORBIT ROUND, HAZE and PWM. Saved engines retain their IDs. */
 static uint32_t trk_def_engine(uint32_t i) { return i < NPART ? TRK_DEF[i][0] : 0u; }
 
 static int seq_is_empty(const track_t *t) { return track_empty(t); }
@@ -309,6 +311,12 @@ static void select_engine(uint32_t e)
 enum { BK_BASS, BK_KEYS, BK_ORGAN, BK_PAD, BK_LEAD, BK_PLUCK, BK_STAB, BK_FX };
 static const char *const BANK_KIND[] = {"BASS", "KEYS", "ORGN", "PAD", "LEAD", "PLCK", "STAB", "FX"};
 static const struct { uint8_t kind, e; const char *name; } BANK[] = {
+    {BK_PAD, ORBIT_SWARM, "ORBIT HAZE"}, {BK_PLUCK, ORBIT_SWARM, "ORBIT GLASS"},
+    {BK_LEAD, ORBIT_SWARM, "ORBIT REED"}, {BK_PAD, ORBIT_SWARM, "ORBIT CHOIR"},
+    {BK_LEAD, ORBIT_PULSE, "ORBIT SQUARE"}, {BK_PAD, ORBIT_PULSE, "ORBIT PWM"},
+    {BK_PLUCK, ORBIT_PULSE, "ORBIT PIN"}, {BK_BASS, ORBIT_PULSE, "ORBIT HOLLOW"},
+    {BK_KEYS, ORBIT_FM4, "ORBIT TINES"}, {BK_PLUCK, ORBIT_FM4, "ORBIT METAL"},
+    {BK_BASS, ORBIT_FM4, "ORBIT ROUND"}, {BK_PAD, ORBIT_FM4, "ORBIT AURORA"},
     {BK_BASS, 0, "808 BOOM"}, {BK_BASS, 0, "808 DIRTY"}, {BK_BASS, 0, "808 SLIDE"}, {BK_BASS, 0, "SUB BASS"},
     {BK_BASS, 0, "PLUGG BASS"}, {BK_BASS, 0, "REESE"}, {BK_BASS, 0, "WOBBLE"}, {BK_BASS, 0, "ACID 303"},
     {BK_BASS, 1, "FM BASS"}, {BK_BASS, 2, "CZ BASS"}, {BK_BASS, 6, "FAT BASS"}, {BK_BASS, 0, "FUNK BASS"},
