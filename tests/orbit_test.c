@@ -154,6 +154,11 @@ int main(int argc, char **argv)
     open_family(FAM_EDIT); frame(); ppm("orbit-synth");
     open_family(FAM_ENV); frame(); ppm("orbit-envelope");
     open_family(FAM_LFO); frame(); ppm("orbit-lfo");
+    check(cur_page()->graph==GR_LFO,"LFO opens source page");
+    open_family(FAM_LFO); frame(); ppm("orbit-lfo-dest");
+    check(cur_page()->id[0]==P_LD_PIT && cur_page()->id[3]==P_LD_AMP,"LFO second press opens audible modulation destinations");
+    encs[panel.enc[EN_K1+3]]=30; frame();
+    check(TSEL->p[P_LD_AMP]>0,"LFO DEST KNOB4 updates the actual amplitude depth");
     set_engine_of(TSEL,1); apply_preset_to(TSEL,0); TSEL->engine=TSEL->eng_req;
     open_family(FAM_EDIT); frame(); ppm("orbit-digital");
     set_engine_of(TSEL,4); apply_preset_to(TSEL,0); TSEL->engine=TSEL->eng_req;

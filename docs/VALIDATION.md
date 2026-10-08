@@ -46,3 +46,10 @@ All 68 factory browser entries resolve to a real engine preset. Native panel tes
 - FIRST LIGHT actual C sequencer rendered 12 seconds of non-silent stereo PCM; MP3 is a listening copy. Screens are captured from the actual C framebuffer.
 - Native HTTP preview test and complete firmware preprocessing pass.
 - No pi32v2 build, hardware boot, target linker budget or IRQ timing measurement is available.
+
+
+## ORBIT 0.3.1 LFO correction
+
+LFO source controls have no audio effect while all destination depths are zero; this is intentional and preserves patch defaults. SOURCE/DEST page labels and a zero-depth hint make that condition visible. New-engine SHP destinations now control harmonic balance, pulse width and FM4 depth.
+
+The added actual voice/LFO PCM regression suite verifies that zero-depth renders remain identical when source controls change, that PIT/FLT/SHP/AMP each change PCM on all three new engines, and that RATE/WAVE/PHASE/FADE each change PCM when a destination is enabled. Source-phase and fade tests retrigger a fresh phrase. UI regression checks the second LFO press and KNOB4 destination-depth update. All 13 host programs pass.

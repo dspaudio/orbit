@@ -36,7 +36,8 @@ static void orbit_emit(int32_t *out, uint32_t i, int32_t s, const vmod_t *m)
 static void swarm_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     uint32_t i, k, count = (uint32_t)t->p[P_E0], ph[6], inc[6];
-    int32_t spread = t->p[P_E1], harmonic = t->p[P_E2] * 128;
+    int32_t spread = t->p[P_E1];
+    int32_t harmonic = clamp(t->p[P_E2] * 128 + ((m->shape - (64 << 8)) >> 1), 0, 32767);
     int32_t a = orbit_tone_coef(t, m), z = v->s[6];
     spread = spread * (32767 - t->p[P_E3] * (32767 - m->envq15) / 127) / 32767;
     for (k = 0; k < count; k++) {
@@ -95,7 +96,8 @@ static void orbit_pulse_render(track_t *t, voice_t *v, int32_t *out, uint32_t n,
     uint32_t rate = 150000u + (uint32_t)t->p[P_E3] * 18000u;
     int32_t mix = t->p[P_E5] * 258;
     for (i = 0; i < n; i++) {
-        int32_t duty = clamp(t->p[P_E0] * 240 + 1024 + mulq15(sine_i(lp), t->p[P_E2] * 100), 2048, 30720);
+        int32_t width_param = clamp(t->p[P_E0] + ((m->shape - (64 << 8)) >> 8), 0, 127);
+        int32_t duty = clamp(width_param * 240 + 1024 + mulq15(sine_i(lp), t->p[P_E2] * 100), 2048, 30720);
         uint32_t width = (uint32_t)duty * 131072u;
         int32_t s = mulq15(orbit_pulse_wave(p0, inc, width), 32767 - mix)
                   + mulq15(orbit_pulse_wave(p1, inc2, 0x80000000u), mix);
@@ -117,7 +119,7 @@ static void orbit_fm4_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, c
     uint32_t i, ph[4] = {v->ph[0], v->ph[1], v->ph[2], (uint32_t)v->s[0]};
     uint32_t inc[4] = {m->inc, 0, 0, 0}, k;
     int32_t fb = v->s[1], z = v->s[2], a = orbit_tone_coef(t, m);
-    int32_t depth = t->p[P_E0] * 258;
+    int32_t depth = clamp(t->p[P_E0] * 258 + m->shape - (64 << 8), 0, 32767);
     depth = mulq15(depth, 32767 - t->p[P_E6] * (32767 - m->envq15) / 127);
     inc[1] = m->inc * (uint32_t)t->p[P_E1];
     inc[2] = m->inc * (uint32_t)t->p[P_E2];

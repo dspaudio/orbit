@@ -35,7 +35,7 @@ All three engines have two EDIT pages and a four-voice per-track cap, sharing th
 | PULSE | Duty width | Second oscillator detune | PWM depth | PWM rate |
 | FM4 | Phase modulation depth | Operator 2 ratio | Operator 3 ratio | Operator 4 ratio |
 
-Second page: SWARM tone; PULSE tone and oscillator mix; FM4 tone, routing, envelope depth and feedback. Spread/detune units are engine-specific linear frequency offsets, not OP-1 units or cents. Shared ADSR, LFO, sequencer and effects remain available. Pitch, amplitude and tone modulation are supported; the new engines do not implement the shared LFO's shape destination yet.
+Second page: SWARM tone; PULSE tone and oscillator mix; FM4 tone, routing, envelope depth and feedback. Spread/detune units are engine-specific linear frequency offsets, not OP-1 units or cents. Shared ADSR, LFO, sequencer and effects remain available. Pitch, amplitude and tone modulation are supported. In 0.3.1, SHP is also connected: SWARM harmonic balance, PULSE duty width, FM4 modulation depth.
 
 Original factory patch names:
 

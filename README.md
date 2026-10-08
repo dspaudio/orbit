@@ -2,7 +2,7 @@
 
 **An experimental groovebox firmware for the FM-1, built on SLOOP/Felucca.**
 
-ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current development version: **0.3.0**.
+ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current development version: **0.3.1**.
 
 > Development status: host tests pass, but the pi32v2 target build and real FM-1 validation are pending. No installable firmware package is provided. Bluetooth headphone pairing and audio output are not implemented.
 
@@ -17,6 +17,16 @@ The first 12 PRESETS entries are new ORBIT sounds. New/empty projects start with
 [Listen to the C DSP demonstration](docs/audio/orbit-engines-0.3.mp3): SWARM / ORBIT HAZE, PULSE / ORBIT PWM, then FM4 / ORBIT TINES (three seconds each). This is host-rendered audio, not a recording of OP-1 or FM-1 hardware.
 
 Read [engine feasibility, controls and limitations](docs/OP1-ENGINES.md) for what is implemented, deferred and unknown. The voice allocator, envelope, mixer, effects, sample assets and sequencing infrastructure remain derived from SLOOP/Felucca. The new oscillator algorithms and twelve patch definitions are in `firmware/src/eng_orbit.c`.
+
+## LFO controls (0.3.1)
+
+LFO has two pages. **LFO SOURCE 1/2** controls RATE, WAVE, PHASE and FADE; these define the modulation signal, not its strength. Press LFO again for **LFO DEST 2/2**: PIT (pitch), FLT (tone/filter), SHP (engine shape) and AMP (amplitude) depths. A source with all four depths at zero does not change the sound. The first page displays `NO DEPTH: PRESS LFO` in that case.
+
+For a clear first test, set LFO DEST KNOB4 / AMP to about 50%, then return to SOURCE and adjust RATE and WAVE while holding a note. PHASE is the starting phase of a new phrase; release all notes and retrigger to hear its change. FADE introduces modulation gradually after retrigger.
+
+SHP now modulates harmonic balance in SWARM, pulse width in PULSE, and operator modulation depth in FM4. Patch defaults remain unmodulated unless a destination depth is enabled.
+
+![LFO source and destination pages](docs/orbit-lfo-0.3.1.png)
 
 ## Built-in demo song: FIRST LIGHT
 

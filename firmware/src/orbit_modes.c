@@ -10,6 +10,7 @@ static void orbit_sound_draw(void)
     static uint32_t cache;
     const page_t *pg=cur_page();
     const engine_t *engine=ENGINES[TSEL->eng_req%NENGINES];
+    int lfo_off = !TSEL->p[P_LD_PIT] && !TSEL->p[P_LD_FLT] && !TSEL->p[P_LD_SHP] && !TSEL->p[P_LD_AMP];
     const param_desc_t *desc[4];
     char value[4][16], label[4][8], small[8], title[24];
     int32_t ratio[4]; uint32_t k,x,sig=ui.page+TSEL->eng_req*71u+song.sel*65537u;
@@ -25,13 +26,17 @@ static void orbit_sound_draw(void)
     /* The sample/grain page shows the live master output, labelled explicitly. */
     if(pg->scope==SC_ENGINE && (TSEL->eng_req==4 || TSEL->eng_req==8)) sig=sig*31u+scope_w;
     sig=sig*31u+ui.msg_t+ui.hot_t+ui.hot_col;
+    if(pg->fam==FAM_LFO) sig=sig*31u+(uint32_t)lfo_off;
     if(!ui.force && sig==cache) return;
     cache=sig;
     cv_begin(240,36,C_BLACK);
-    str_cpy(title,pg->scope==SC_ENGINE ? engine->name : pg->title,sizeof title);
+    str_cpy(title,pg->scope==SC_ENGINE ? engine->name : pg->fam==FAM_LFO ?
+            (pg->graph==GR_LFO ? "LFO SOURCE 1/2" : "LFO DEST 2/2") : pg->title,sizeof title);
     cv_text(8,2,&FONT_S,title,C_WHITE);
     fmt_int(small,song.sel+1); cv_text(218,2,&FONT_S,small,TE_COL[song.sel]);
-    if(ui.hot_t && label[ui.hot_col][0]) {
+    if(pg->fam==FAM_LFO && pg->graph==GR_LFO && lfo_off)
+        cv_text(8,20,&FONT_S,"NO DEPTH: PRESS LFO",TE_G3);
+    else if(ui.hot_t && label[ui.hot_col][0]) {
         cv_text(8,20,&FONT_S,label[ui.hot_col],TE_COL[ui.hot_col]);
         cv_text(72,20,&FONT_S,value[ui.hot_col],C_WHITE);
     } else cv_text(8,20,&FONT_S,"sound / four controls",TE_G3);
