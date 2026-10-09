@@ -114,6 +114,16 @@ static uint32_t strip_white(uint32_t cell)
     return n;
 }
 
+static void check_battery(uint32_t bars, uint16_t color)
+{
+    uint32_t k;
+    check(screen[4*240+217]==swap16(C_GRAY) && screen[8*240+235]==swap16(C_GRAY),
+          "top-right battery outline remains visible");
+    for(k=0;k<3u;k++)
+        check(screen[6*240+219+k*5]==swap16(k<bars ? color : C_BLACK),
+              "battery bars match current power state without a forced redraw");
+}
+
 int main(int argc, char **argv)
 {
     uint32_t i;
@@ -374,6 +384,32 @@ int main(int argc, char **argv)
     fm1_in.notes=0; vis_on=0;
     printf("Undo storage: %zu bytes\n",sizeof undo);
     palette_set(5); settings.palette=5;
+    /* 실제 페이지 경로에서 잔량 변경과 USB 애니메이션이 캐시를 무효화하는지 확인한다. */
+    for(i=0;i<4u;i++) {
+        uint32_t k;
+        char name[40];
+        go_home();
+        if(i==1u) open_family(FAM_EDIT);
+        if(i==2u) studio_open(SC_TRK);
+        if(i==3u) open_family(FAM_SEQ);
+        usb.config=0; usb.suspended=0; song.batt_raw=600; ui.msg_t=0; frame();
+        check_battery(3,C_HI);
+        snprintf(name,sizeof name,"orbit-battery-%u-full",i); ppm(name);
+        for(k=0;k<3u;k++) {
+            song.batt_raw=500+(int32_t)k*31;
+            frame();
+            check_battery(k,k==1u ? C_WHITE : C_HI);
+        }
+        snprintf(name,sizeof name,"orbit-battery-%u-half",i); ppm(name);
+        usb.config=1;
+        for(k=0;k<3u;k++) {
+            fm1_ms=k*600u; frame();
+            check_battery(k+1u,C_HI);
+            snprintf(name,sizeof name,"orbit-battery-%u-usb-%u",i,k); ppm(name);
+        }
+        usb.suspended=1; frame(); check_battery(2,C_HI);
+        usb.config=0; usb.suspended=0;
+    }
     printf("ORBIT checks: %d failures\n",fails);
     return fails ? 1 : 0;
 }

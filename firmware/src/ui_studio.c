@@ -8,6 +8,8 @@
  * signature changed. */
 static uint8_t drum_page, drum_lane, drum_cursor;   /* drum_page: 0 GRID, 1 KIT */
 static void trk_short_name(uint32_t c, char *b);
+static int32_t batt_shown(void);
+static void draw_battery(int usb_label);
 static int on_drum_page(void) { return !ui.home && cur_page()->scope == SC_DRUM; }
 
 /* ---------------------------------------------------------------- style --- */

@@ -61,12 +61,13 @@ static void orbit_screen_draw(void)
     }
     sig=sig*31u+orbit_tape.cursor+orbit_tape.first*67u+orbit_tape.last*4099u;
     sig=sig*31u+song.g[G_BPM]+ui.msg_t+orbit_tape.lift;
+    sig=sig*31u+(uint32_t)batt_shown();
     if(!ui.force && cache==sig) return;
     cache=sig;
     cv_begin(240,24,C_BLACK);
     cv_text(8,2,&FONT_S,"tape",C_WHITE); cv_text(64,2,&FONT_S,"events",TE_G3);
     fmt_int(b,song.g[G_BPM]); cv_text(168,2,&FONT_S,b,TE_G4);
-    te_play_icon(218,2,song.playing); cv_blit(0,0);
+    te_play_icon(196,2,song.playing); draw_battery(0); cv_blit(0,0);
     cv_begin(240,96,C_BLACK);
     {
         uint32_t pos=song.playing ? TSEL->seq_idx : orbit_tape.cursor, phase=(pos*89u)&1023u;

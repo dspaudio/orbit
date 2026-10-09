@@ -36,6 +36,21 @@ static int32_t batt_shown(void)
     return batt_level();
 }
 
+/* 현재 헤더 canvas에 기존 잔량 아이콘을 그린다. ORBIT 헤더는 USB 글자 대신 충전 애니메이션만 사용한다. */
+static void draw_battery(int usb_label)
+{
+    int32_t lvl = batt_shown(), k, bx = 217;
+    cv_rect(bx, 4, 17, 1, C_GRAY);
+    cv_rect(bx, 12, 17, 1, C_GRAY);
+    cv_rect(bx, 4, 1, 9, C_GRAY);
+    cv_rect(bx + 16, 4, 1, 9, C_GRAY);
+    cv_rect(bx + 17, 6, 2, 5, C_GRAY);
+    for (k = 0; k < lvl; k++)
+        cv_rect(bx + 2 + k * 5, 6, 3, 5, lvl == 1 && batt_level() <= 1 ? C_WHITE : C_HI);
+    if (usb_label && usb.config && !usb.suspended)
+        cv_text(bx - 28, 1, &FONT_S, "USB", C_DIM);
+}
+
 /* top bar: transport, BPM, octave | USB, battery, CPU; messages replace it */
 static void draw_head(void)
 {
@@ -88,19 +103,7 @@ static void draw_head(void)
         b[2] = 0;
         cv_text(158, 1, &FONT_S, b, C_HI);
     }
-    {   /* battery, 3 bars; USB when a host is there */
-        int32_t lvl = batt_shown(), k;
-        int32_t bx = 236 - 19;                          /* right edge (the CPU figure is in the console) */
-        cv_rect(bx, 4, 17, 1, C_GRAY);
-        cv_rect(bx, 12, 17, 1, C_GRAY);
-        cv_rect(bx, 4, 1, 9, C_GRAY);
-        cv_rect(bx + 16, 4, 1, 9, C_GRAY);
-        cv_rect(bx + 17, 6, 2, 5, C_GRAY);
-        for (k = 0; k < lvl; k++)
-            cv_rect(bx + 2 + k * 5, 6, 3, 5, lvl == 1 && batt_level() <= 1 ? C_WHITE : C_HI);
-        if (usb.config && !usb.suspended)
-            cv_text(bx - 28, 1, &FONT_S, "USB", C_DIM);
-    }
+    draw_battery(1);
     cv_blit(0, Y_HEAD);
 }
 /* full redraw: the strips (head, columns, graph, foot) cover the rest, so only

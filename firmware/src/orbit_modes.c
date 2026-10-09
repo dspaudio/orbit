@@ -42,13 +42,15 @@ static void orbit_sound_draw(void)
     if(pg->scope==SC_ENGINE && (TSEL->eng_req==4 || TSEL->eng_req==8)) sig=sig*31u+scope_w;
     sig=sig*31u+ui.msg_t+ui.hot_t+ui.hot_col;
     if(pg->fam==FAM_LFO) sig=sig*31u+(uint32_t)lfo_off;
+    sig=sig*31u+(uint32_t)batt_shown();
     if(!ui.force && sig==cache) return;
     cache=sig;
     cv_begin(240,36,C_BLACK);
     str_cpy(title,pg->scope==SC_ENGINE ? engine->name : pg->fam==FAM_LFO ?
             (pg->graph==GR_LFO ? "LFO SOURCE 1/2" : "LFO DEST 2/2") : pg->title,sizeof title);
     cv_text(8,2,&FONT_S,title,C_WHITE);
-    fmt_int(small,song.sel+1); cv_text(218,2,&FONT_S,small,TE_COL[song.sel]);
+    fmt_int(small,song.sel+1); cv_text(198,2,&FONT_S,small,TE_COL[song.sel]);
+    draw_battery(0);
     if(pg->fam==FAM_LFO && pg->graph==GR_LFO && lfo_off)
         cv_text(8,20,&FONT_S,"NO DEPTH: PRESS LFO",TE_G3);
     else if(ui.hot_t && label[ui.hot_col][0]) {
@@ -127,10 +129,12 @@ static void orbit_mixer_draw(void)
     char b[16],hint[32];
     for(k=0;k<NTRK;k++) sig=sig*31u+trk[k].p[P_LEVEL]+trk[k].p[P_MUTE]*521u+trk[k].p[P_PAN]*17u+trk[k].eng_req*97u;
     sig=sig*31u+song.g[G_DRLVL];
+    sig=sig*31u+(uint32_t)batt_shown();
     if(ui.force || sig!=cache) {
         cache=sig;
         cv_begin(240,36,C_BLACK);
-        cv_text(8,2,&FONT_S,"mixer",C_WHITE); fmt_int(b,song.g[G_BPM]); cv_text(192,2,&FONT_S,b,TE_G3);
+        cv_text(8,2,&FONT_S,"mixer",C_WHITE); fmt_int(b,song.g[G_BPM]); cv_text(178,2,&FONT_S,b,TE_G3);
+        draw_battery(0);
         if(kind==MX_TRACK) {                        /* 둘째 줄: 이 페이지의 네 knob과 SELECT가 가는 곧 */
             str_cpy(hint,"track ",sizeof hint); fmt_int(hint+6,(int32_t)song.sel+1);
             str_cpy(hint+str_len(hint)," / select: pan",sizeof hint-str_len(hint));
