@@ -6,7 +6,7 @@ The fake device is the one in web/test_web.mjs: identity on the handshake,
 then "device asks, host answers" reads of the logical image. Run from the repo root:
   python3 tests/install_test.py
 Also checks logical_image/product_of against web/fm1pkg.js (needs node and
-build/felucca.fwsc, skipped otherwise)."""
+build/orbit.fwsc, skipped otherwise)."""
 import io
 import queue
 import shutil
@@ -286,9 +286,9 @@ def errors():
 
 
 def against_js():
-    clean = ROOT / "build/felucca.fwsc"
+    clean = ROOT / "build/orbit.fwsc"
     if not shutil.which("node") or not clean.exists():
-        print("logical image vs fm1pkg.js: skipped (needs node and build/felucca.fwsc)")
+        print("logical image vs fm1pkg.js: skipped (needs node and build/orbit.fwsc)")
         return
     js = ("import { logicalImage, productOf } from %r; import { readFileSync } from 'node:fs';"
           "const p = readFileSync(process.argv[1]); process.stderr.write(productOf(p));"
