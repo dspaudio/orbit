@@ -53,6 +53,8 @@ def main():
                 if not 0 < length <= 4096:
                     raise ValueError('invalid body size')
                 data = json.loads(self.rfile.read(length))
+                if not isinstance(data, dict):
+                    raise ValueError('expected an operation object')
                 op = data.get('op', 'render')
                 if op == 'button':
                     command = f"button {BUTTONS[data['button']]}"

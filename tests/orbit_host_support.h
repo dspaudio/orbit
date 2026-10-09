@@ -16,9 +16,12 @@
  *   DRUMS   the grid: sound / step / hit / level knobs, GRID <-> KIT
  * then 20000 frames of random use: every draw stays on the screen. */
 #define FELUCCA_ARRANGER 1
+#pragma push_macro("main")
+#undef main
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
+#pragma pop_macro("main")
 #include <assert.h>
 static uint16_t screen[240*240];
 static void lcd_sync(void) {}
