@@ -1,6 +1,6 @@
 # Building ORBIT
 
-ORBIT integrates SLOOP v2.4.1. 실기기 빌드에는 pi32v2 툴체인과 AC79 SDK가 필요합니다. 2026-10-09에 타깃 컴파일과 `build/orbit.fwsc` 생성을 검증했습니다. 실기기 부트·USB·오디오 타이밍은 미검증이고, 기존 CPU 예산 검사 실패는 [검증 기록](docs/VALIDATION.md)에 구분합니다. 생성 패키지는 저장소에 커밋하지 않습니다.
+ORBIT integrates SLOOP v2.4.1. 실기기 빌드에는 pi32v2 툴체인과 AC79 SDK가 필요합니다. 2026-10-09에 최종 타깃 컴파일과 `build/orbit.fwsc` 생성·메모리·기존 CPU/ISR 예산을 검증했습니다. 실기기 부트·USB·오디오 타이밍은 미검증이며 [검증 기록](docs/VALIDATION.md)에 환경별 결과를 구분합니다. 생성 패키지는 저장소에 커밋하지 않습니다.
 
 The build makes three files in `build/`:
 
@@ -36,7 +36,7 @@ The build makes three files in `build/`:
       https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git ~/fw-AC79_AIoT_SDK
   ```
 
-- Node.js (optional, for the web tests).
+- Node.js 24(웹 검사에 사용한 버전). Node 18은 검사에서 사용하는 `CompressionStream("deflate-raw")`를 지원하지 않습니다.
 
 On Linux x86-64 the toolchain runs natively and Docker is not needed.
 
@@ -51,6 +51,8 @@ sh build.sh
 
 `sh build.sh --release 0.9-beta` makes a release build: the package identity becomes
 `FM-1_909` and the version string `0.9-BETA`; the package remains `build/orbit.fwsc`.
+
+ORBIT 0.4.1 공식 패키지는 `PYTHON=~/.jieli/orbit-venv/bin/python sh build.sh`로 만듭니다. 기본 소스 버전은 `ORBIT 0.4.1`, 설치 identity는 기존 `FM-1_900`입니다. `--release`는 upstream의 한 자리 `X.Y` 형식만 받으므로 `--release 0.4.1`을 사용하지 않습니다. GitHub 태그는 `v0.4.1`이며 패키지와 SHA-256은 [릴리스](https://github.com/dspaudio/orbit/releases/tag/v0.4.1)에 배포합니다.
 
 Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 

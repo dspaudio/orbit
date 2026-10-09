@@ -1,5 +1,58 @@
 # ORBIT 검증 기록
 
+## ORBIT 0.4.1 릴리스 빌드 — 2026-10-09
+
+기본 소스 버전 `ORBIT 0.4.1`로 다시 빌드했습니다. 설치 identity는 기존 `FM-1_900`을 유지하며 `--release X.Y`의 upstream 형식을 바꾸지 않았습니다.
+
+| 검사 | 현재 릴리스 결과 |
+|---|---|
+| `PYTHON=~/.jieli/orbit-venv/bin/python sh build.sh` | exit 0. app 570,576 B, loader 6,863 B, `orbit.fwsc` 610,019 B |
+| ELF 메모리·타깃 예산 | `.data + .bss` 83,972 / 98,304 B, pool 334,560 / 344,064 B. `.ram_text` 925 instructions, call 없음. ALNK0 cost 138 / baseline 174 |
+| Linux amd64 / Node 24 | `python3 tools/orbit_check.py` 19/19 PASS, `sh tests/run_tests.sh` **ALL HOST TESTS PASSED**, exit 0. stress·sanitizer·soak 조건 유지 |
+| 새 macOS `cc -O2` counted regress | 117 golden renders, changed/gone 0, health·voice·CPU 초과·crash 0, exit 0 |
+| 최신 native 미리보기 | 먼저 C host 재빌드 후 HTTP/DOM·44.1kHz stereo PCM·실제 좌우 visualizer tap PASS, exit 0 |
+| 설치·웹 | 전체 러너에서 실제 패키지 CRC·Python/JS logical image·loader marker 및 editor 검사 PASS |
+
+`orbit.fwsc` SHA-256: `31afad04333e6593e0333039c53f26b53ccab032b665cdc8e4aa3ec82bb53253`.
+
+로그는 `build/host/release-0.4.1-build.log`, `release-0.4.1-tests.log`, `release-0.4.1-counted-preview.log`입니다. Linux timed CPU의 21개 참고 메모는 실패 판정이 아니며, 엄격한 CPU 판정은 별도 macOS instruction counter 결과입니다. 기존 독자 엔진 12개 preset의 golden·CPU baseline 부재는 유지합니다.
+
+웹 에뮬레이터의 소스 pin과 생성 결과는 별도 [저장소](https://github.com/dspaudio/orbit-web-emu)의 `ORBIT_REVISION`·`build-info.json` 및 검증 기록에서 확인합니다. FM-1 실기기 플래싱·부트·USB·오디오 타이밍과 Dots 배포는 수행하지 않았습니다.
+
+## 오리지널 OP-1 조작·기존 예산 원인 수정 — 2026-10-09
+
+기준은 OP-1 field가 아닌 [오리지널 OP-1 공식 가이드](https://teenage.engineering/guides/op-1/original)입니다. [DESIGN.md](../DESIGN.md)에 따라 Synth / Drum / Event Tape / Mixer, T1 engine / T2 envelope / T3 effect / T4 LFO, blue / green / white / orange 역할을 실제 C 화면·입력, native preview와 Web MIDI editor에 반영했습니다. 기존 세부 페이지·hold layer·선택 팔레트·이벤트 클립보드·저장 형식·장치 프로토콜·라이선스를 보존했습니다. Event Tape는 sequencer 이벤트 편집이며 PCM 녹음이 아닙니다.
+
+### 원인 수정과 엄격한 예산
+
+- `eng_phase.c`: resonance 창의 case를 분리하여 쓰지 않는 창 계산을 제거했습니다. 창 정수식 196,608개 비교에서 차이는 0이며, 기존 PHASE `03_RESO_PLUCK` golden `0f46c3e6fb6a0c15`를 유지합니다.
+- `voice.c`: overload victim 검색을 평탄한 두 순회로 바꿔 최악 slot 방문을 72에서 48로 줄였습니다. release 우선, 동률 순서, POLY bass와 MONO/LEGATO/UNISON lead 보호, stage-4 fade를 기존 회귀로 확인했습니다. 작업을 다른 ISR이나 미계측 helper로 옮기지 않았습니다.
+- `tests/golden.txt`, `cpu_baseline.txt`, `target_budget.txt`와 허용치를 변경하지 않았습니다. 이전 PHASE 1,154 / baseline 899(+28%) 실패는 최종 macOS instruction-counted 실행에서 해소됐습니다. stock formatter는 통과 항목의 개별 CPU 수치를 출력하지 않으므로 새 수치를 추측하지 않습니다. 전체 CPU 초과는 0건이며 +25% 기준을 그대로 적용했습니다.
+- 최종 `fm1_alnk0_irq`: 221 instructions, loop 90, divide 0, loop call 2, **cost 138 / baseline 174**, 이전 cost 268 대비 감소했습니다. 전체 타깃 정적 예산 검사 exit 0입니다.
+
+### 최종 실행 결과
+
+| 검사 | 직접 확인한 결과 |
+|---|---|
+| pi32v2 빌드·패키지 | exit 0. app **570,576 B**, loader **6,863 B**, `build/orbit.fwsc` **610,019 B**, `FM-1_900` |
+| 실제 ELF 메모리 | `.data + .bss` **83,972 / 98,304 B**, pool **334,560 / 344,064 B**, 여유 **9,504 B**. `.ram_text` **2,964 B**, 925 instructions, call 없음 |
+| Linux amd64 `python3 tools/orbit_check.py` | **19/19 PASS**, IRQ RAM-backed MMIO 포함. `build/host/orbit-checks.txt` |
+| Linux amd64 / Node 24 `sh tests/run_tests.sh` | **ALL HOST TESTS PASSED**, exit 0. 기본 stress 40,000 frames, ASan/UBSan 15,000 frames, 10분 가상 soak를 줄이지 않았습니다 |
+| macOS fresh `cc -O2` counted regress | **117 golden renders, 0 changed/gone, 0 health/voice/CPU failures, 0 crashes**, exit 0 |
+| 설치·웹 검사 | 실제 패키지 CRC·loader marker·Python/JS logical image, 기존 SysEx·샘플·backup/restore·OTA 검사 PASS |
+| native 재빌드·HTTP/DOM 검사 | 실제 44.1kHz stereo C PCM, state metadata, 초기 Tape·rapid Drum→Synth, 짧은 note·blur·pointer cancel, 좌우 tap PASS. 서버 정리까지 exit 0 |
+| 실제 화면·브라우저 | 실제 C 240×240 Tape·engine·ENV·FX·LFO·mixer 캡처 확인. Chrome 1440px / 390px DPR3 touch에서 실제 주요 모드·모듈 이동, hover 중 선택 표시, overflow 없음 확인. 실제 Web Audio에서 2채널 non-silent PCM 디코딩 |
+
+메모리 값은 ELF의 `_bss_end=01c1c804`, `_pool_start=01c20000`, `_pool_end=01c71ae0`에서 직접 계산했습니다. full framebuffer나 PCM tape 버퍼를 추가하지 않았습니다. mixer는 SELECT로 LEVEL / PAN / 기존 TRACK(SWING / 선택 트랙 LEVEL / LEN / PAN)을 열며 drum level은 실제 `G_DRLVL`입니다.
+
+### 환경 한계와 수행하지 않은 검증
+
+macOS 전체 러너의 ASan은 sanitizer allocator 초기화 자체의 `CHECK failed`로 실패했습니다. 같은 기본 stress를 Linux ASan/UBSan에서 확인하고, 최종 전체 러너도 Linux에서 통과시켰습니다. Debian 기본 Node 18의 `deflate-raw` 미지원 실패는 Node 24로 환경만 바꿔 해결했습니다. Linux timed CPU는 비교 참고이며 엄격한 CPU 판정은 별도의 macOS instruction counter 결과입니다.
+
+기존 SWARM/PULSE/FM4 12개 preset의 golden·host CPU baseline 부재는 그대로 보고됐으며 새 기준을 만들어 검사를 통과시키지 않았습니다. standalone C LSP는 생성 헤더·unity build 설정을 이해하지 못하고 JS/Python 언어 서버도 설치되어 있지 않아 실제 컴파일·런타임으로 확인했습니다.
+
+FM-1 연결·플래싱·실기기 부트, USB 전송, Flash 전원 차단, ISR 사이클·오디오 underrun·지연, Dots 배포는 수행하지 않았습니다. preview의 project save는 비영구적 host double입니다. 아래 기록은 수정 전 또는 이전 버전의 당시 결과입니다.
+
 ## 기능 연결·설치 패키지·브랜딩 — 2026-10-09
 
 환경: Apple M2 / macOS, Docker Linux amd64, `jieli-linux-toolchains-20250324.1`, AC79 SDK 태그 `AC79NN_SDK_V1.2.1_2023-12-13`. SDK의 `uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin` SHA-256이 빌드 스크립트의 기준과 일치했습니다. Python 환경은 `~/.jieli/orbit-venv`, 툴체인은 `~/.jieli/toolchain`, SDK는 `~/fw-AC79_AIoT_SDK`에 설치했습니다.
@@ -19,7 +72,7 @@
 
 패널 진입·은행 staging 만료·좌우 tap의 새 회귀는 수정 전 실패를 직접 재현한 뒤 같은 검사로 통과했습니다. Tape의 GLO→믹서→글로벌 설정, 드럼 EDIT/SEQ 진입, 15초 staging 만료와 타이머 wrap 후 실제 NOR 쓰기를 확인했습니다. 웹 복원 중단 뒤 abort와 원래 오류 유지도 현재 소스의 테스트에서 통과했습니다. 생성된 부트 캡처는 `build/host/boot-qa/orbit-boot.png`에 있습니다.
 
-### 남아 있는 기존 예산 실패
+### 수정 전 기존 예산 실패
 
 `sh tests/run_tests.sh`는 exit 1입니다. 전체 로그 `build/host/full-tests.txt`에서 아래 두 예산 초과와 최종 실패 요약만 확인됐으며, 나머지 저장·복구·시퀀서·UI·DSP·USB descriptor·로더·설치·웹 검사는 통과했습니다.
 

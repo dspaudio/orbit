@@ -2,11 +2,17 @@
 
 **An experimental groovebox firmware for the FM-1, built on SLOOP/Felucca.**
 
-ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current development version: **0.4.0**.
+ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current release version: **0.4.1**.
 
-> 현재 상태: pi32v2 타깃 빌드와 `build/orbit.fwsc` 생성·설치 형식 검증을 완료했습니다. 실제 FM-1은 연결되지 않았으므로 실기기 부트·USB·오디오 타이밍은 미검증입니다. 전체 검사의 기존 CPU·ISR 예산 초과 두 건은 [검증 기록](docs/VALIDATION.md)에 남겨 두었습니다. Bluetooth 헤드폰 기능은 구현되지 않았습니다.
+> 현재 상태: pi32v2 타깃 빌드와 `build/orbit.fwsc` 생성·설치 형식 검증을 완료했습니다. 기존 PHASE CPU·ALNK0 ISR 예산 초과는 원인 수정으로 해결했으며 기준과 허용치를 유지했습니다. 실제 FM-1은 연결되지 않았으므로 실기기 부트·USB·오디오 타이밍은 미검증입니다. [검증 기록](docs/VALIDATION.md)에 실행 결과와 환경 한계를 구분합니다. Bluetooth 헤드폰 기능은 구현되지 않았습니다.
 
 웹 화면은 영어로 시작하며 Sloop 로고 대신 ultrathin `Orbit` 워드마크를 표시합니다. 펌웨어도 1픽셀 스트로크의 `Orbit` 부트 화면을 먼저 표시하고, 최소 750 ms 뒤 일반 UI를 그립니다. 새 framebuffer나 PCM 버퍼는 추가하지 않았습니다.
+
+## 0.4.1 릴리스
+
+[GitHub 릴리스](https://github.com/dspaudio/orbit/releases/tag/v0.4.1)에서 설치 패키지 [`orbit.fwsc`](https://github.com/dspaudio/orbit/releases/download/v0.4.1/orbit.fwsc)를 받습니다. [웹 에뮬레이터](https://dspaudio.github.io/orbit-web-emu/)는 같은 C 펌웨어를 WebAssembly로 실행합니다. 변경 사항과 설치·검증 한계는 [릴리스 기록](docs/releases/0.4.1.md)에 있습니다.
+
+오리지널 OP-1의 Synth / Drum / Event Tape / Mixer, T1–T4 sound 모듈과 blue / green / white / orange encoder 역할을 반영했습니다. 믹서는 LEVEL / PAN / 기존 TRACK 편집을 제공하며, PHASE와 ALNK0 예산 초과는 기존 기준을 유지한 채 해결했습니다. 저장 형식 FUN5와 editor protocol v9는 유지합니다.
 
 ## Color styles and SLOOP 2.4.1 integration (0.4.0)
 
@@ -92,12 +98,12 @@ The existing SLOOP piano-roll sequencer is retained. The capture below shows a 1
 | Sampler | Existing functionality retained | Four user slots; sample import, CHOP and device upload through the original web editor |
 | Sequencer | Existing functionality retained | Up to 64 steps, live recording, chords, ratchets, drum lanes and song arrangement |
 | Graphics | Implemented; host tested | Two Tape reels, coloured synth graphics, envelope curves and four mixer faders |
-| Mixer | Existing functionality retained | Track levels, pan, mute, solo and effects |
-| Project storage | Existing format retained | FUN4 projects; Tape selection and clipboard are temporary |
+| Mixer | Implemented; host tested | Four-track LEVEL / PAN, selected-track editing, mute, solo and effects |
+| Project storage | FUN5 retained | Reads older FUN1–FUN4 projects; Tape selection and clipboard are temporary |
 | Native preview | Implemented; host tested | Browser controls backed by the firmware's actual C DSP, sequencer and UI |
 | Divide-by-zero trap mitigation | Applied; host register test passed | Explicitly clears EMU_CON bit 2 during IRQ initialisation |
-| Target firmware build | Pending | Requires the JieLi pi32v2 toolchain and AC79 SDK |
-| Real FM-1 validation | Pending | Boot, memory budget, IRQ timing, controls, USB and sample upload still need hardware checks |
+| Target firmware build | Build and package verified | pi32v2 compile, ELF memory and static ISR budgets checked |
+| Real FM-1 validation | Pending | Boot, IRQ timing, controls, USB and sample upload still need hardware checks |
 | Bluetooth headphones | Not implemented | Pairing, reconnect and Bluetooth audio require further SDK integration and device testing |
 | PCM audio Tape | Not implemented | Tape edits note/drum events; it does not record long audio or provide tape-speed pitch changes |
 
@@ -113,7 +119,8 @@ HOME now briefly displays the loaded engine and preset after turning PRESETS. It
 - **0.2:** Added reel, oscillator/orbit, envelope and mixer graphics; connected the preview scope to the actual mixed audio.
 - **0.2.1:** Applied the divide-by-zero trap mitigation and captured STEP/PATTERN screens.
 - **0.3.0:** Added independent SWARM, PULSE and FM4 engines, 12 original patches and independent defaults; verified native DSP and wasm32 integration.
-- **Next:** Complete target compilation and memory/timing checks, then validate on FM-1 hardware. Bluetooth support remains a separate development task.
+- **0.4.1:** Original OP-1 control roles, Orbit branding, preview input fixes and PHASE/ISR budget fixes; install package and updated WebAssembly emulator.
+- **Next:** Validate boot, controls, USB and audio timing on FM-1 hardware. Bluetooth support remains a separate development task.
 
 ## Try the native preview
 
@@ -148,6 +155,10 @@ The preview uses the firmware DSP but buffers approximately 250–550 ms of brow
 
 Tape에서 GLO를 누르면 실제 트랙 믹서가 열리고, 믹서에서 다시 GLO를 누르면 글로벌 설정으로 이동합니다. 드럼 트랙의 Tape에서 EDIT 또는 SEQ를 누르면 DRUMS 페이지가 열립니다.
 
+화면과 웹의 주요 흐름은 **Synth / Drum / Event Tape / Mixer**입니다. 오리지널 OP-1의 T1 engine / T2 envelope / T3 effect / T4 LFO는 FM-1의 **EDIT / ENV / FX / LFO**에 대응하며, 네 encoder는 **blue / green / white / orange** 순서입니다. 반복 입력으로 여는 기존 세부 페이지와 hold layer는 유지합니다. 믹서의 SELECT는 네 트랙 LEVEL → 네 트랙 PAN → 기존 선택 트랙 편집(SWING / LEVEL / LEN / PAN)을 순회합니다.
+
+네이티브 미리보기는 실제 C 상태로 모드 선택을 표시하고, 웹 에디터의 Event Tape는 기존 sequencer 이벤트 편집을 엽니다. Drum은 트랙 4의 실제 편집 경로입니다. Engine 선택과 전체 sound preset 선택은 구분하며 PCM Tape 녹음·오디오 overdub·album 기능을 추가하지 않습니다. 적용 기준은 [DESIGN.md](DESIGN.md)와 [오리지널 OP-1 공식 가이드](https://teenage.engineering/guides/op-1/original)입니다.
+
 Synth clips can move between synth tracks. Drum clips can only be dropped onto the drum track. Synth LIFT participates in the existing EDIT+OCT− undo path. A lifted drum region can be restored by dropping the clipboard; copying another region replaces that clipboard. Visualizer에서도 OCT±는 옥타브를 조절하며 Tape나 클립보드를 수정하지 않습니다. Outside HOME, the existing OCT± controls remain available.
 
 For sample import and CHOP editing, use `web/editor.html`. Device communication uses the original SLOOP Web MIDI workflow and browser requirements; see [the upstream README](README-SLOOP.md).
@@ -161,7 +172,7 @@ python tools/orbit_preview.py --port 8080
 python tests/orbit_preview_test.py
 ```
 
-Linux amd64에서 `tools/orbit_check.py`의 **19개 호스트 프로그램**이 통과했습니다. 웹 에디터·설치 CLI·네이티브 HTTP 미리보기 검사도 통과했고, 실제 브라우저에서 C 엔진의 무음이 아닌 스테레오 오디오와 파형을 확인했습니다. 패키지 검사는 생성된 `orbit.fwsc`의 CRC, 로더 마커, Python/JavaScript logical image 일치를 포함합니다. `sh tests/run_tests.sh`는 기존 PHASE CPU 예산과 ALNK0 ISR 정적 예산 초과로 exit 1이며, 기준이나 허용치를 완화하지 않았습니다.
+Linux amd64에서 `tools/orbit_check.py`의 **19개 호스트 프로그램**과 Node 24 환경의 `sh tests/run_tests.sh`가 통과했습니다. macOS의 새 counted CPU·golden 실행도 117 renders unchanged, CPU 초과 0건으로 통과했습니다. ALNK0 정적 비용은 기존 기준 174에 대해 138입니다. 기준이나 허용치를 완화하지 않았습니다. 웹·설치 CLI·네이티브 HTTP 검사와 실제 브라우저 1440px / 390px 조작을 확인했습니다. 패키지 검사는 `orbit.fwsc`의 CRC, 로더 마커, Python/JavaScript logical image 일치를 포함합니다.
 
 See [validation details](docs/VALIDATION.md) for evidence and limitations. Host results do not establish target boot safety, RAM/flash usage or real-time audio performance.
 
