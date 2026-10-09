@@ -26,6 +26,8 @@ static uint32_t ed_fm6_bank_write(uint32_t k, const uint8_t *pk)
     int r;
     if (ed_flash_busy())
         return 3;
+    if (ed_bk_put && fm1_ms - ed_bk_ms > 15000u)
+        ed_bk_put = 0;
     if (ed_bk_put)
         return 2;
     r = fm6_bank_put(k, pk);

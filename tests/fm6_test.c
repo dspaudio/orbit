@@ -46,6 +46,15 @@ static uint8_t flash_ok = 1;
 static union { uint8_t b[3840]; } proj_tmp;             /* (project.c's staging buffer: the bank is built there) */
 #define FM6_BANK_XIP(copy) (nor + st_sector(OBJ_FM6BANK, copy) + ST_PAYLOAD_OFF)
 #include "../firmware/src/fm6_bank.c"
+#define FELUCCA_FLASH 1
+enum { ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE };
+static uint8_t ed_bk_put;
+static uint32_t ed_bk_ms;
+static struct { uint8_t force; } ui;
+static uint32_t ed_flash_busy(void) { return song.playing || transport_req; }
+static void ed_b(uint32_t v) { (void)v; }
+static void ed_str(const char *s, uint32_t n) { (void)s; (void)n; }
+#include "../firmware/src/editor_fm6.c"
 #ifdef __APPLE__
 #include <libproc.h>
 #include <sys/resource.h>
@@ -700,6 +709,16 @@ static void bank(void)
         check("bank: a store then starts a fresh bank", fm6_bank_put(0, pk) == 0 && fm6_bank_has(0) && !fm6_bank_has(3));
     }
     printf("fm6: bank: %u sector erases for 4 writes\n", nor_erases);
+    /* 유효한 복원은 잠그고, 만료된 복원은 타이머 wrap을 거쳐도 실제 은행 쓰기를 막지 않는다. */
+    ed_bk_put = 1; ed_bk_ms = UINT32_MAX - 100u;
+    fm1_ms = ed_bk_ms + 15000u; song.playing = 0; transport_req = 0;
+    r = ed_fm6_bank_write(1, pk);
+    check("editor bank: active staging blocks a write without changing NOR",
+          r == 2u && ed_bk_put && !fm6_bank_has(1));
+    fm1_ms = ed_bk_ms + 15001u;
+    r = ed_fm6_bank_write(1, pk);
+    check("editor bank: expired staging releases the real bank write after timer wrap",
+          r == 0u && !ed_bk_put && fm6_bank_get(1, got) == 0 && !memcmp(got, pk, FM6_PACKED));
 }
 
 /* ------------------------------------------------- amplitude modulation --- */
