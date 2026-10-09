@@ -509,10 +509,28 @@ static void t_mute(void)
 
 /* overload shedding (voice.c shed_voice): a releasing voice first, then the oldest held voice that is
  * neither a POLY part's lowest note nor a MONO part's lead; faded (stage 4), never cut */
+static void shed_clear(void)
+{
+    uint32_t p;
+    for (p = 0; p < NPART; p++) {
+        memset(trk[p].v, 0, sizeof trk[p].v);
+        trk[p].p[P_VOICE] = V_POLY;
+    }
+}
+static void shed_set(voice_t *v, uint32_t note, uint32_t gate, uint32_t stage, int32_t env, uint32_t age)
+{
+    memset(v, 0, sizeof *v);
+    v->active = 1;
+    v->gate = (uint8_t)gate;
+    v->stage = (uint8_t)stage;
+    v->note = (uint8_t)note;
+    v->env = env;
+    v->age = age;
+}
 static void t_shed(void)
 {
     track_t *t = &trk[0], *m = &trk[1];
-    uint32_t i, k, low_ok = 1, lead_ok = 1;
+    uint32_t i, k, c0, v0, low_ok = 1, lead_ok = 1;
     reset(120);
     t->p[P_VOICE] = V_POLY;
     m->p[P_VOICE] = V_MONO;
@@ -543,6 +561,67 @@ static void t_shed(void)
     for (k = 0, i = 0; i < NVOICE; i++)
         k += t->v[i].active && t->v[i].gate && (t->v[i].note == 64 || t->v[i].note == 67 || t->v[i].note == 72);
     check(low_ok && lead_ok && k == 0u, "overload: the upper notes thin out, the bass and the MONO lead stay");
+
+    shed_clear();
+    shed_set(&trk[0].v[0], 48, 1, 2, 1000, 1);       /* held보다 release가 먼저 */
+    shed_set(&trk[0].v[1], 60, 0, 3, 200, 2);        /* p/i 순회의 첫 동률 release */
+    shed_set(&trk[1].v[0], 62, 0, 3, 200, 3);
+    c0 = shed_count;
+    v0 = voice_kills;
+    shed_voice();
+    check(trk[0].v[1].stage == 4u && trk[0].v[1].kill == KILL_BLOCKS &&
+          trk[1].v[0].stage == 3u && trk[0].v[0].stage == 2u &&
+          shed_count == c0 + 1u && voice_kills == v0 + 1u,
+          "overload selection: release beats held; equal ENV keeps the first traversal voice");
+
+    shed_clear();
+    shed_set(&trk[0].v[0], 60, 1, 2, 1000, 7);       /* 뒤에서 더 낮은 음을 만나도 첫 동률 후보 */
+    shed_set(&trk[0].v[1], 64, 1, 2, 1000, 7);
+    shed_set(&trk[0].v[2], 36, 1, 2, 1000, 1);       /* 마지막에 정해지는 POLY 베이스 */
+    shed_set(&trk[1].v[0], 40, 1, 2, 1000, 2);       /* 이 파트의 베이스 */
+    shed_set(&trk[1].v[1], 67, 1, 2, 1000, 7);
+    shed_voice();
+    check(trk[0].v[2].stage == 2u && trk[1].v[0].stage == 2u &&
+          trk[0].v[0].stage == 4u && trk[0].v[1].stage == 2u && trk[1].v[1].stage == 2u,
+          "overload selection: POLY basses stay; equal AGE keeps the first traversal voice");
+
+    shed_clear();
+    shed_set(&trk[0].v[0], 36, 1, 4, 1000, 9);       /* stage 4여도 최저 gated voice는 베이스 */
+    shed_set(&trk[0].v[1], 48, 1, 2, 1000, 1);
+    shed_set(&trk[0].v[2], 60, 1, 2, 1000, 2);
+    shed_voice();
+    check(trk[0].v[0].stage == 4u && trk[0].v[1].stage == 4u && trk[0].v[2].stage == 2u,
+          "overload selection: a stage-4 lowest POLY voice remains the protected low index");
+
+    shed_clear();
+    trk[0].p[P_VOICE] = V_MONO;
+    trk[1].p[P_VOICE] = V_LEGATO;
+    trk[2].p[P_VOICE] = V_UNISON;
+    for (i = 0; i < NPART; i++) {
+        shed_set(&trk[i].v[0], 40 + i, 1, 2, 1000, 1);
+        shed_set(&trk[i].v[1], 52 + i, 1, 2, 1000, 10 + i);
+    }
+    c0 = shed_count;
+    v0 = voice_kills;
+    for (i = 0; i < NPART; i++)
+        shed_voice();
+    check(trk[0].v[0].stage == 2u && trk[1].v[0].stage == 2u && trk[2].v[0].stage == 2u &&
+          trk[0].v[1].stage == 4u && trk[1].v[1].stage == 4u && trk[2].v[1].stage == 4u,
+          "overload selection: MONO, LEGATO and UNISON preserve voice 0 and shed extras");
+    check(trk[0].v[1].kill == KILL_BLOCKS && trk[1].v[1].kill == KILL_BLOCKS &&
+          trk[2].v[1].kill == KILL_BLOCKS && shed_count == c0 + NPART && voice_kills == v0 + NPART,
+          "overload selection: every victim starts the same fade and increments both counters");
+
+    shed_clear();
+    shed_set(&trk[0].v[0], 36, 1, 2, 1000, 1);       /* 보호되는 POLY 베이스만 있음 */
+    trk[1].p[P_VOICE] = V_MONO;
+    shed_set(&trk[1].v[0], 48, 1, 2, 1000, 2);       /* 보호되는 lead만 있음 */
+    c0 = shed_count;
+    v0 = voice_kills;
+    shed_voice();
+    check(trk[0].v[0].stage == 2u && trk[1].v[0].stage == 2u &&
+          shed_count == c0 && voice_kills == v0,
+          "overload selection: no eligible victim leaves voices and fade counters unchanged");
 }
 
 /* MIDI clock in (SYNC USB / TRS): START, 24 pulses a beat, tempo changes, STOP; the other source ignored */

@@ -127,29 +127,34 @@ static uint32_t shed_count;
 
 static void shed_voice(void)
 {
-    uint32_t p, i;
+    uint32_t n, p, i, low[NPART] = {NVOICE, NVOICE, NVOICE};
     voice_t *best = 0;
-    for (p = 0; p < NPART; p++)
-        for (i = 0; i < NVOICE; i++) {
-            voice_t *v = &trk[p].v[i];
-            if (v->active && !v->gate && v->stage != 4u && (!best || v->env < best->env))
+    for (n = 0; n < NPART * NVOICE; n++) {
+        voice_t *v;
+        p = n / NVOICE;
+        i = n % NVOICE;
+        v = &trk[p].v[i];
+        if (v->active) {
+            if (v->gate) {
+                if (low[p] == NVOICE || v->note < trk[p].v[low[p]].note)
+                    low[p] = i;
+            } else if (v->stage != 4u && (!best || v->env < best->env)) {
                 best = v;
+            }
         }
-    if (best) {
-        voice_kill(best);
-        shed_count++;
-        return;
     }
-    for (p = 0; p < NPART; p++) {
-        const track_t *t = &trk[p];
-        uint32_t mode = (uint32_t)t->p[P_VOICE], low = mode == V_POLY ? lowest_held(t) : 0u;
-        for (i = 0; i < NVOICE; i++) {
-            voice_t *v = &trk[p].v[i];
+    if (!best)
+        for (n = 0; n < NPART * NVOICE; n++) {
+            voice_t *v;
+            uint32_t mode;
+            p = n / NVOICE;
+            i = n % NVOICE;
+            v = &trk[p].v[i];
+            mode = (uint32_t)trk[p].p[P_VOICE];
             if (v->active && v->gate && v->stage != 4u &&
-                ((mode == V_POLY && i != low) || (mode != V_POLY && i > 0u)) && (!best || v->age < best->age))
+                (mode == V_POLY ? i != low[p] : i > 0u) && (!best || v->age < best->age))
                 best = v;
         }
-    }
     if (best) {
         voice_kill(best);
         shed_count++;

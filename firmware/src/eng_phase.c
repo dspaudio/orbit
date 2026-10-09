@@ -97,15 +97,21 @@ static int32_t pd_wave(const pd_t *b, uint32_t ph)
         else
             pd = 32768u + (((ph - b->peak) * b->k1) >> 16);
         break;
-    default: {                                               /* RESONANCE: windowed sine, rez = pitch of the core */
-        uint32_t rp = (ph + ((ph * b->rez) >> 16) * 7u) & 0xFFFFu, win;
+    case 5: {                                                /* 공진파: 톱니 창 */
+        uint32_t rp = (ph + ((ph * b->rez) >> 16) * 7u) & 0xFFFFu;
         int32_t core = (pd_cos(rp) * 5) >> 3;
-        if (b->w == 5)
-            win = 65535u - ph;                               /* saw window */
-        else if (b->w == 6)
-            win = ph < 32768u ? ph << 1 : (65535u - ph) << 1; /* triangle window */
-        else
-            win = ph < 16384u ? ph << 2 : ph > 49152u ? (65535u - ph) << 2 : 65535u;   /* trapezoid */
+        return (core * (int32_t)(65535u - ph)) >> 16;
+    }
+    case 6: {                                                /* 공진파: 삼각 창 */
+        uint32_t rp = (ph + ((ph * b->rez) >> 16) * 7u) & 0xFFFFu;
+        int32_t core = (pd_cos(rp) * 5) >> 3;
+        uint32_t win = ph < 32768u ? ph << 1 : (65535u - ph) << 1;
+        return (core * (int32_t)win) >> 16;
+    }
+    default: {                                               /* 공진파: 사다리꼴 창 */
+        uint32_t rp = (ph + ((ph * b->rez) >> 16) * 7u) & 0xFFFFu;
+        int32_t core = (pd_cos(rp) * 5) >> 3;
+        uint32_t win = ph < 16384u ? ph << 2 : ph > 49152u ? (65535u - ph) << 2 : 65535u;
         if (win > 65535u)
             win = 65535u;
         return (core * (int32_t)win) >> 16;                  /* |core| <= 20479: fits 32 bits */
