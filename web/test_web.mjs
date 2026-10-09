@@ -548,6 +548,28 @@ async function editorBackup() {
   let caught = "";
   try { E.backupObjects(bad); } catch (e) { caught = e.code; }
   ok(caught === "bkBad", "backup: a damaged file is refused before anything is written");
+  /* begin 이후 data 실패는 staging을 해제하고 원래 오류를 전달한다. */
+  for (const abortFails of [false, true]) {
+    const f = attachMock({});
+    const ops = [], fail = new Error("link down");
+    const frq = async (r, o) => {
+      const isPut = r[0] === C.BK_PUT, op = isPut ? r[1][0] : -1;
+      if (isPut) ops.push([op, r[1][1]]);
+      if (op === 1) throw fail;
+      if (op === 3 && abortFails) throw new Error("abort failed");
+      return f.rq(r, o);
+    };
+    let err = null;
+    try { await E.backupRestore(frq, JSON.parse(JSON.stringify(A))); } catch (e) { err = e; }
+    const id = ops[0] && ops[0][1];
+    ok(err === fail && js(ops) === js([[0, id], [1, id], [3, id]]),
+      `backup: begin, failed data, then abort of the same object; the original error is thrown${abortFails ? " (abort failing too)" : ""}`);
+    if (!abortFails) {
+      const c = E.parse[C.BK_PUT](await f.rq(E.req.bkCommit(id), { timeout: 1000, retries: 0 }));
+      ok(c.rc === 5, "backup: after the abort the device holds no staging (a commit finds no begin)");
+    }
+    f.done();
+  }
   done();
   const old = attachMock({ noBackup: true });
   const oi = E.parse[C.INFO](await old.rq(E.req.info()));
@@ -961,7 +983,7 @@ print(",".join(i.filename + ":" + str(i.file_size) for i in z.infolist()))`, zp)
 async function packages() {
   const pkg = join(HERE, "../build/orbit.fwsc");
   if (!existsSync(pkg)) {
-    console.log("packages: skipped (run ./build.sh first)");
+    console.log("packages: skipped (run sh build.sh first)");
     return;
   }
   const raw = readFileSync(pkg);
