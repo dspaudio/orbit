@@ -28,7 +28,7 @@ Integrated from upstream tag **v2.4.1**, commit `a1c5d68767ae10fafb6821dc63b9b1f
 
 Tap HOME while on the event Tape to open the visualizer; turn SELECT for its style, then tap HOME to return. SAVE tapped from HOME opens SONG; from an editing page it opens SAVE / PRESETS. Hold SAVE for the section/chain layer. The first twelve PRESETS entries remain the independent ORBIT sounds; the complete factory bank now has 88 entries.
 
-ORBIT engine IDs 0…11 remain unchanged; FM6 is appended as **12** (13 with the optional SLICE engine). Existing ORBIT 0.3 FUN4 projects migrate to FUN5 while retaining engine IDs, notes and sound parameters. Tape COPY / LIFT / DROP also carries nudges, fill conditions and remapped parameter locks. A drop that would exceed the 24-lock limit fails without changing the destination. The inherited undo buffer covers note events; use the clipboard to restore lifted step metadata.
+ORBIT engine IDs 0…11 remain unchanged; FM6 is appended as **12** (13 with the optional SLICE engine). Existing ORBIT 0.3 FUN4 projects migrate to FUN5 while retaining engine IDs, notes and sound parameters. Tape COPY / LIFT / DROP also carries nudges, fill conditions and remapped parameter locks. A drop that would exceed the 24-lock limit fails without changing the destination. Synth Tape의 EDIT+OCT− Undo와 EDIT+OCT+ Redo는 note 이벤트, nudge, fill 조건과 parameter lock을 함께 복구합니다.
 
 **Save a backup before downgrading:** FUN5 files cannot be loaded by ORBIT 0.3 / SLOOP 2.3. SLOOP 2.4 uses a different engine registry (FM6=9), so its raw project/backup images are not interchangeable with ORBIT 0.4. The editor discovers engine IDs by name for patch-library conversion. USB/editor transfers and custom sample uploads are implemented for the firmware but remain unavailable in the emulator HAL.
 
@@ -142,7 +142,7 @@ The preview uses the firmware DSP but buffers approximately 250–550 ms of brow
 | EDIT / SEQ / GLO | Sound editing / step sequencer / mixer |
 | Hold HOME | Existing settings menu |
 
-Synth clips can move between synth tracks. Drum clips can only be dropped onto the drum track. Synth LIFT participates in the existing EDIT+OCT− undo path. A lifted drum region can be restored by dropping the clipboard; copying another region replaces that clipboard. Outside HOME, the existing OCT± controls remain available.
+Synth clips can move between synth tracks. Drum clips can only be dropped onto the drum track. Synth LIFT participates in the existing EDIT+OCT− undo path. A lifted drum region can be restored by dropping the clipboard; copying another region replaces that clipboard. Visualizer에서도 OCT±는 옥타브를 조절하며 Tape나 클립보드를 수정하지 않습니다. Outside HOME, the existing OCT± controls remain available.
 
 For sample import and CHOP editing, use `web/editor.html`. Device communication uses the original SLOOP Web MIDI workflow and browser requirements; see [the upstream README](README-SLOOP.md).
 

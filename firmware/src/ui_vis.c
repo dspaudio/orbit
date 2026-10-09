@@ -125,13 +125,23 @@ static void vis_poly(const int32_t *px, const int32_t *py, uint32_t n, uint16_t 
             cv_rect((xs[a] + 8) >> 4, y, ((xs[a + 1] + 8) >> 4) - ((xs[a] + 8) >> 4), 1, c);
     }
 }
+/* 고정 장식 색상도 MONO 선택 시 밝기를 유지한 회색으로 표시한다. */
+static uint16_t vis_color(uint16_t c)
+{
+    if (settings.palette == 4u) {
+        uint32_t r = (c >> 11) * 255u / 31u, g = ((c >> 5) & 63u) * 255u / 63u, b = (c & 31u) * 255u / 31u;
+        uint32_t v = (r * 77u + g * 150u + b * 29u) >> 8;
+        return RGB(v, v, v);
+    }
+    return c;
+}
 /* a seven-segment digit, the unlit segments faintly there (an LCD) */
 static void vis_seg(int32_t x, int32_t y, int32_t w, int32_t h, int32_t t, int ch, uint16_t c)
 {
     static const uint8_t SEG[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F};   /* gfedcba */
     uint32_t m = ch >= 0 && ch <= 9 ? SEG[ch] : 0u;
     int32_t hh = h / 2;
-    uint16_t off = RGB(18, 18, 21);
+    uint16_t off = vis_color(RGB(18, 18, 21));
     cv_rect(x + t, y, w - 2 * t, t, m & 0x01 ? c : off);
     cv_rect(x + w - t, y + t, t, hh - t, m & 0x02 ? c : off);
     cv_rect(x + w - t, y + hh, t, hh - t, m & 0x04 ? c : off);
@@ -377,8 +387,8 @@ static uint16_t vis_heat(uint32_t v)               /* 0..255: black, blue, green
     for (k = 1; k < 5u && v > AT[k]; k++)
         ;
     if (k >= 5u)
-        return ST[4];
-    return mix565(ST[k - 1u], ST[k], (int32_t)((v - AT[k - 1u]) * 256u / (AT[k] - AT[k - 1u])));
+        return vis_color(ST[4]);
+    return vis_color(mix565(ST[k - 1u], ST[k], (int32_t)((v - AT[k - 1u]) * 256u / (AT[k] - AT[k - 1u]))));
 }
 static void vis_spectrogram(void)
 {
@@ -405,7 +415,7 @@ static void vis_lissajous(void)
     for (f = 0; f < 3u; f++) {                      /* the oldest first, dimmest */
         const uint8_t (*p)[2] = vis_lj[(vs.lj_n + 1u + f) % 3u];
         for (i = 0; i < 256u; i++)
-            cv_pset(p[i][0], p[i][1], COLS[f]);
+            cv_pset(p[i][0], p[i][1], vis_color(COLS[f]));
     }
     cv_text(116, 4, &FONT_S, "M", C_DIM);
     cv_text(6, 112, &FONT_S, "L", C_DIM);
@@ -432,14 +442,14 @@ static void vis_ring(void)
 {
     int32_t k = vs.kick, r0 = 52 + k * 18 / 255, rc = r0 * 6 / 10, sc = vs.peak > vs.scale ? vs.peak : vs.scale;
     int32_t px = 0, py = 0, i;
-    vis_ellipse(120, 120, rc, rc, RGB(40 + 140 * k / 255, 14 + 50 * k / 255, 4));
+    vis_ellipse(120, 120, rc, rc, vis_color(RGB(40 + 140 * k / 255, 14 + 50 * k / 255, 4)));
     for (i = 0; i <= 180; i++) {                    /* the wave round the ring, 2 degrees a point */
         uint32_t a = (uint32_t)(i % 180) * 1024u / 180u, j = 20u + (uint32_t)(i % 180) * 2u;
         int32_t s = (vis_l[j - 2u] + vis_l[j - 1u] + vis_l[j] + vis_l[j + 1u] + vis_l[j + 2u]) / 5;
         int32_t rr = r0 + s * 20 / (sc > 1600 ? sc : 1600), x = 120 + ((icos(a) * rr) >> 15), y = 120 + ((isin(a) * rr) >> 15);
         if (i) {
-            cv_line(px, py - 1, x, y - 1, RGB(120, 40, 10));
-            cv_line(px, py + 2, x, y + 2, RGB(120, 40, 10));
+            cv_line(px, py - 1, x, y - 1, vis_color(RGB(120, 40, 10)));
+            cv_line(px, py + 2, x, y + 2, vis_color(RGB(120, 40, 10)));
             vis_thick(px, py, x, y, TE_COL[3]);
         }
         px = x, py = y;
@@ -453,7 +463,7 @@ static void vis_tape(void)
     char b[12];
     for (s = 0; s < 2u; s++) {
         int32_t cx = s ? 176 : 64, fill = s ? prog : 1000 - prog, rr = 26 + fill * 22 / 1000, k;
-        vis_ellipse(cx, 110, rr, rr, RGB(40, 40, 46));
+        vis_ellipse(cx, 110, rr, rr, vis_color(RGB(40, 40, 46)));
         vis_circle(cx, 110, 22, C_WHITE);
         vis_circle(cx, 110, 21, C_WHITE);
         for (k = 0; k < 3; k++) {                   /* three spokes, a quarter turn a beat (playing) */
@@ -493,11 +503,11 @@ static void vis_lcd(void)
     cv_rect(88, 164, 5, 6, TE_COL[3]);
     vis_seg(100, 124, 26, 46, 5, (int)(beat % 4u + 1u), TE_COL[3]);
     for (k = 0; k < 4u; k++)
-        vis_ellipse(154 + (int32_t)k * 22, 144, 8, 8, song.playing && beat % 4u == k ? TE_COL[3] : RGB(40, 40, 46));
+        vis_ellipse(154 + (int32_t)k * 22, 144, 8, 8, song.playing && beat % 4u == k ? TE_COL[3] : vis_color(RGB(40, 40, 46)));
     for (i = 0; i < 4u; i++)
         for (k = 0; k < 14u; k++)
             cv_rect(18 + (int32_t)k * 15, 186 + (int32_t)i * 12, 13, 9,
-                    (int32_t)k < vs.lvl[i] * 14 / 1000 + (vs.lvl[i] > 0) ? TE_COL[i] : RGB(30, 30, 34));
+                    (int32_t)k < vs.lvl[i] * 14 / 1000 + (vs.lvl[i] > 0) ? TE_COL[i] : vis_color(RGB(30, 30, 34)));
 }
 static void vis_bounce(void)
 {
@@ -505,7 +515,7 @@ static void vis_bounce(void)
     for (i = 0; i < 4u; i++) {
         int32_t x = 36 + (int32_t)i * 56, h = vs.bh[i], y = 196 - h * 45 / 2560, sh = 16 - h / 512;
         int32_t sq = h < 512 && vs.bv[i] < 0 ? 4 : 0;   /* squashed as it lands */
-        vis_ellipse(x, 205, sh < 4 ? 4 : sh, 3, RGB(30, 30, 34));
+        vis_ellipse(x, 205, sh < 4 ? 4 : sh, 3, vis_color(RGB(30, 30, 34)));
         vis_ellipse(x, y, 16 + sq, 16 - sq, TE_COL[i]);
         {
             char lab[2] = {(char)('1' + i), 0};
@@ -522,7 +532,7 @@ static void vis_orbit(void)
     for (i = 0; i < 4u; i++) {
         uint32_t a = (bq * 4u / PER[i]) - 256u;     /* a turn = 1024: per beats, from the top */
         int32_t pr = 4 + vs.lvl[i] * 8 / 1000;
-        vis_circle(120, 120, RAD[i], RGB(36, 36, 42));
+        vis_circle(120, 120, RAD[i], vis_color(RGB(36, 36, 42)));
         for (k = 1; k < 7u; k++) {                  /* its trail */
             uint32_t ak = a - k * 13u;
             vis_ellipse(120 + ((icos(ak) * RAD[i]) >> 15), 120 + ((isin(ak) * RAD[i]) >> 15), 2, 2,
@@ -568,7 +578,7 @@ static void vis_sloop(void)
     end = vs.vu[4] * 768 / 1000;
     for (x = 0; x <= 768; x += 6) {
         uint32_t a = (uint32_t)(384 + x) & 1023u;
-        vis_ellipse(120 + ((icos(a) * 99) >> 15), 112 + ((isin(a) * 99) >> 15), 5, 5, x <= end && vs.vu[4] ? C_WHITE : RGB(40, 40, 46));
+        vis_ellipse(120 + ((icos(a) * 99) >> 15), 112 + ((isin(a) * 99) >> 15), 5, 5, x <= end && vs.vu[4] ? C_WHITE : vis_color(RGB(40, 40, 46)));
     }
     /* the mast */
     ROT(1443, 627, 0); ROT(1571, 627, 1); ROT(1571, 2507, 2); ROT(1443, 2507, 3);
@@ -579,7 +589,7 @@ static void vis_sloop(void)
                 xr1 = 1659 + (BAND[i][3] - 1659) * g / 256;
         uint16_t col = vs.flash[i] ? mix565(TE_COL[i], C_WHITE, vs.flash[i] * 13) : TE_COL[i];
         ROT(1659, BAND[i][0], 0); ROT(BAND[i][2], BAND[i][0], 1); ROT(BAND[i][3], BAND[i][1], 2); ROT(1659, BAND[i][1], 3);
-        vis_poly(px, py, 4, DIMC[i]);
+        vis_poly(px, py, 4, vis_color(DIMC[i]));
         ROT(1659, BAND[i][0], 0); ROT(xr0, BAND[i][0], 1); ROT(xr1, BAND[i][1], 2); ROT(1659, BAND[i][1], 3);
         vis_poly(px, py, 4, col);
     }
@@ -591,7 +601,7 @@ static void vis_sloop(void)
     for (x = 0; x < 240; x++) {
         int32_t s = x ? (vis_l[x - 1] + 2 * vis_l[x] + vis_l[x + 1]) / 4 : vis_l[0];   /* (smoothed: a sea, not a hiss) */
         int32_t y = 182 + s * 5 / sc + ((isin((uint32_t)(x * 9) + bq) * 3) >> 15);
-        cv_rect(x, y, 1, 240 - y, RGB(12, 34, 76));
+        cv_rect(x, y, 1, 240 - y, vis_color(RGB(12, 34, 76)));
         cv_rect(x, y, 1, 2, TE_COL[0]);
     }
 }

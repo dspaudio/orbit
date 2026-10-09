@@ -163,6 +163,37 @@ int main(int argc, char **argv)
     orbit_tape.first=8; orbit_tape.last=11; tap(B_OCTDN);
     check(orbit_tape.count==4 && trk[0].step[8].time==ST_REST,"OCT- lift goes through panel input");
     orbit_tape.cursor=0; tap(B_OCTUP); check(trk[0].step[0].n==3,"OCT+ drops via panel input");
+    /* LIFT와 Undo/Redo가 스텝 메타데이터와 활성 lock의 원래 값을 보존한다. */
+    trk[0].micro[1]=-12; step_fill_set(&trk[0],1,FC_FILL);
+    lock_set(&trk[0],1,P_TFLT,22);
+    {
+        step_t original[NSTEP]; int8_t micro[NSTEP]; uint8_t fill[NSTEP/4]; plock_t locks[NLOCK];
+        memcpy(original,trk[0].step,sizeof original); memcpy(micro,trk[0].micro,sizeof micro);
+        memcpy(fill,trk[0].fill,sizeof fill); memcpy(locks,trk[0].lock,sizeof locks);
+        orbit_tape.first=0; orbit_tape.last=3; orbit_tape.lift=1; tap(B_OCTDN);
+        check(undo_swap(0) && !memcmp(original,trk[0].step,sizeof original) &&
+              !memcmp(micro,trk[0].micro,sizeof micro) && !memcmp(fill,trk[0].fill,sizeof fill) &&
+              !memcmp(locks,trk[0].lock,sizeof locks),"LIFT Undo restores notes, micro, fill and lock table");
+        trk[0].p[P_TFLT]=7; lock_step(&trk[0],1);
+        check(trk[0].p[P_TFLT]==22 && trk[0].lk_n,"restored lock applies before Redo");
+        check(undo_swap(1) && trk[0].step[0].time==ST_REST && !trk[0].micro[1] &&
+              step_fill(&trk[0],1)==FC_NORM && lock_find(&trk[0],1,P_TFLT,0)<0 &&
+              !trk[0].lk_n && trk[0].p[P_TFLT]==7,"LIFT Redo clears metadata and restores active lock base");
+        undo_swap(0);
+    }
+    /* Visualizer에서 OCT±는 숨겨진 Tape와 클립보드를 바꾸지 않는다. */
+    tap(B_HOME);
+    {
+        step_t original[NSTEP]; uint32_t revision=orbit_tape.revision; int octave=song.octave;
+        memcpy(original,trk[0].step,sizeof original);
+        tap(B_OCTDN);
+        check(song.octave==octave-1,"Visualizer OCT- lowers octave");
+        tap(B_OCTUP);
+        check(vis_shown() && orbit_tape.revision==revision && !memcmp(original,trk[0].step,sizeof original),
+              "Visualizer OCT buttons preserve Tape and clipboard");
+        check(song.octave==octave,"Visualizer OCT buttons retain octave controls");
+    }
+    tap(B_HOME);
     ui.msg_t=0; frame(); ppm("orbit-edited");
     open_family(FAM_EDIT); frame(); ppm("orbit-synth");
     open_family(FAM_ENV); frame(); ppm("orbit-envelope");
@@ -236,6 +267,20 @@ int main(int argc, char **argv)
         check(i!=4u || (TE_COL[0]>>11)==((TE_COL[0]>>5)&63u)/2u,"MONO uses gray track colors");
         ui.menu=1; ui.menu_sel=MI_COLOR; ui.force=1; frame(); ui.menu=0;
     }
+    /* 실제 활성 오디오 프레임의 모든 픽셀을 RGB565 양자화 오차 안에서 검사한다. */
+    settings.palette=4; palette_set(4); go_home(); vis_open(); fm1_in.notes=1;
+    for(i=0;i<VIS_N;i++) {
+        unsigned j, colored=0, visible=0; char label[100];
+        vis_style=(uint8_t)i; ui.force=1; frames(6);
+        for(j=0;j<240*240;j++) {
+            uint16_t p=swap16(screen[j]); int r=(p>>11)*255/31, g=((p>>5)&63)*255/63, b=(p&31)*255/31;
+            colored+=abs(r-g)>8 || abs(r-b)>8 || abs(g-b)>8; visible+=p!=0;
+        }
+        snprintf(label,sizeof label,"MONO Visualizer %u active framebuffer is grayscale",i);
+        check(!colored && visible>100,label);
+    }
+    fm1_in.notes=0; vis_on=0;
+    printf("Undo storage: %zu bytes\n",sizeof undo);
     palette_set(5); settings.palette=5;
     printf("ORBIT checks: %d failures\n",fails);
     return fails ? 1 : 0;

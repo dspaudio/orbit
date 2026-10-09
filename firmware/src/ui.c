@@ -146,12 +146,26 @@ static int undo_swap(int redo)
         return 0;
     t = &trk[undo.trk % NTRK];
     fm1_irq_off();
+    locks_restore(t); /* 교환 전 활성 lock이 덮어쓴 원래 값을 복구한다. */
     {
         uint32_t i;
         for (i = 0; i < NSTEP; i++) {
             step_t x = t->step[i];
             t->step[i] = undo.st[i];
             undo.st[i] = x;
+            int8_t m = t->micro[i];
+            t->micro[i] = undo.micro[i];
+            undo.micro[i] = m;
+        }
+        for (i = 0; i < NSTEP / 4; i++) {
+            uint8_t f = t->fill[i];
+            t->fill[i] = undo.fill[i];
+            undo.fill[i] = f;
+        }
+        for (i = 0; i < NLOCK; i++) {
+            plock_t l = t->lock[i];
+            t->lock[i] = undo.lock[i];
+            undo.lock[i] = l;
         }
     }
     len = t->p[P_SLEN];

@@ -391,6 +391,9 @@ static struct {
     int16_t len;
     uint32_t sess;
     step_t st[NSTEP];
+    int8_t micro[NSTEP];
+    uint8_t fill[NSTEP / 4];
+    plock_t lock[NLOCK];
 } undo;
 static uint32_t undo_sess = 1;           /* UI sessions (seq.c: recording passes use the track's pass) */
 static void undo_mark(const track_t *t, uint32_t sess)
@@ -399,6 +402,9 @@ static void undo_mark(const track_t *t, uint32_t sess)
     if (undo.valid && !undo.undone && undo.trk == i && undo.sess == sess)
         return;                                          /* (this session is marked already) */
     memcpy(undo.st, t->step, sizeof undo.st);
+    memcpy(undo.micro, t->micro, sizeof undo.micro);
+    memcpy(undo.fill, t->fill, sizeof undo.fill);
+    memcpy(undo.lock, t->lock, sizeof undo.lock);
     undo.len = t->p[P_SLEN];
     undo.trk = (uint8_t)i;
     undo.sess = sess;

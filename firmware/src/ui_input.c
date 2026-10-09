@@ -891,7 +891,7 @@ static void ui_input(void)
             break;
         case B_OCTDN:
         case B_OCTUP: {
-            if (ui.home) { orbit_edit(b == B_OCTUP); break; }
+            if (ui.home && !vis_shown()) { orbit_edit(b == B_OCTUP); break; }
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
             if (is_drum(TSEL))
                 break;                                  /* the drum track: ghost / hard while held (seq.c) */
