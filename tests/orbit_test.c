@@ -112,6 +112,7 @@ int main(int argc, char **argv)
     uint32_t i;
     outdir = argc > 1 ? argv[1] : "build/host";
     panel = PANEL_DEFAULT; layers_init(); palette_set(5); fm6_init(); host_tracks_init();
+    orbit_splash(); ppm("orbit-boot");
     for (i=0;i<NPART;i++) {
         set_engine_of(&trk[i], TRK_DEF[i][0]); apply_preset_to(&trk[i], TRK_DEF[i][1]);
         trk[i].engine=trk[i].eng_req;
@@ -227,7 +228,21 @@ int main(int argc, char **argv)
     set_engine_of(TSEL,0); apply_preset_to(TSEL,0); TSEL->engine=TSEL->eng_req;
     go_home(); open_family(FAM_SEQ); cursor_set(3); frame(); ppm("orbit-sequencer");
     open_family(FAM_SEQ); frame(); ppm("orbit-pattern");
-    studio_open(SC_TRK); frame(); ppm("orbit-mixer");
+    go_home(); tap(B_GLO);
+    check(!ui.home && cur_page()->scope==SC_TRK,"Tape GLO opens the actual mixer");
+    frame(); ppm("orbit-mixer");
+    tap(B_GLO);
+    check(!ui.home && cur_page()->fam==FAM_GLO,"mixer GLO opens global settings");
+    song.sel=TRK_DRUM; go_home(); tap(B_SEQ);
+    check(on_drum_page() && drum_page==0,"drum Tape SEQ opens the drum grid");
+    frame(); ppm("orbit-drum-grid");
+    tap(B_EDIT);
+    check(on_drum_page() && drum_page==1,"drum EDIT switches the grid to kit controls");
+    tap(B_HOME);
+    check(ui.home,"drum HOME returns to Tape");
+    tap(B_EDIT);
+    check(on_drum_page(),"drum Tape EDIT reaches drum controls");
+    song.sel=0;
     go_home();
     for(i=0;i<2000;i++) {
         song.sel=i%NTRK; trk[song.sel].p[P_SLEN]=(int16_t)(1+i%NSTEP);

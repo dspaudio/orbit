@@ -531,7 +531,7 @@ static void layer_tap(uint32_t layer)
             ui.force = 1;
             break;
         }
-        if (!ui.home && cur_page()->scope == SC_TRK && is_drum(TSEL)) {
+        if ((ui.home || cur_page()->scope == SC_TRK) && is_drum(TSEL)) {
             studio_open(SC_DRUM);
             break;
         }
@@ -551,7 +551,10 @@ static void layer_tap(uint32_t layer)
         open_family(FAM_SCL);
         break;
     case LY_MIX:
-        open_family(FAM_GLO);
+        if (ui.home)
+            studio_open(SC_TRK);
+        else
+            open_family(FAM_GLO);
         break;
     case LY_SONG:                                         /* SAVE tapped: TRACKS -> the song, else the SAVE pages */
         if (on_song_page())

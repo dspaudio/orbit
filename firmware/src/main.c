@@ -4,6 +4,7 @@
  * vectors, guards; then LCD, input (TIMER5 IRQ, 10 kHz), audio (ALNK0 IRQ). */
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
+static uint32_t boot_logo_ms;
 
 
 /* TIMER5 outranks ALNK0 (timer5_start): the scan keeps its pace while a half buffer renders. Nested in
@@ -136,7 +137,8 @@ static void fm1_main(void)
 #endif
     settings_init();
     lcd_init();
-    sloop_splash();                                     /* the SLOOP logo (splash.c) */
+    orbit_splash();                                     /* Orbit 부트 워드마크 (splash.c) */
+    boot_logo_ms = fm1_ms;
     if (felucca_dbg.magic != DBG_MAGIC) {
         memset(&felucca_dbg, 0, sizeof felucca_dbg);
         felucca_dbg.magic = DBG_MAGIC;
@@ -263,7 +265,8 @@ static void fm1_main(void)
         ui_input();
         felucca_dbg.stage = 2;
         ui_leds();
-        ui_draw();
+        if (fm1_ms - boot_logo_ms >= 750u)
+            ui_draw();
         felucca_dbg.stage = 8;
         autosave_tick();                                /* the working project into flash, when quiet */
 #if FELUCCA_ARRANGER

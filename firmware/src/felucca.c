@@ -189,6 +189,6 @@ static void ota_commit(const uint8_t *parm)
 #if FELUCCA_OTA
 #include "recovery.c"        /* early, polled USB updater; no synth or settings */
 #endif
-#include "splash.c"          /* SLOOP boot logo (build/gen/sloop_logo.h) */
+#include "splash.c"          /* ORBIT 부트 화면 */
 #include "main.c"
 
