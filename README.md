@@ -4,7 +4,7 @@
 
 ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current release version: **0.4.1**.
 
-> 현재 상태: pi32v2 타깃 빌드와 `build/orbit.fwsc` 생성·설치 형식 검증을 완료했습니다. 기존 PHASE CPU·ALNK0 ISR 예산 초과는 원인 수정으로 해결했으며 기준과 허용치를 유지했습니다. 실제 FM-1은 연결되지 않았으므로 실기기 부트·USB·오디오 타이밍은 미검증입니다. [검증 기록](docs/VALIDATION.md)에 실행 결과와 환경 한계를 구분합니다. Bluetooth 헤드폰 기능은 구현되지 않았습니다.
+> 현재 상태: pi32v2 타깃 빌드와 `build/orbit.fwsc` 생성·설치 형식 검증을 완료했습니다. **2026-10-09 실제 FM-1에 ORBIT 0.4.1을 설치하고 재부팅, USB INFO/PING 응답, 화면 표시와 버튼·노브 조작 반응을 확인했습니다.** 실기기 오디오 타이밍·장시간 안정성·복구 경로는 아직 검증하지 않았습니다. 기존 PHASE CPU·ALNK0 ISR 예산 초과는 원인 수정으로 해결했으며 기준과 허용치를 유지했습니다. 아래 [실기기 설치 테스트](#실기기-설치-테스트-2026-10-09)와 [검증 기록](docs/VALIDATION.md)에 확인 범위와 한계를 구분합니다. Bluetooth 헤드폰 기능은 구현되지 않았습니다.
 
 웹 화면은 영어로 시작하며 Sloop 로고 대신 ultrathin `Orbit` 워드마크를 표시합니다. 펌웨어도 1픽셀 스트로크의 `Orbit` 부트 화면을 먼저 표시하고, 최소 750 ms 뒤 일반 UI를 그립니다. 새 framebuffer나 PCM 버퍼는 추가하지 않았습니다.
 
@@ -103,7 +103,7 @@ The existing SLOOP piano-roll sequencer is retained. The capture below shows a 1
 | Native preview | Implemented; host tested | Browser controls backed by the firmware's actual C DSP, sequencer and UI |
 | Divide-by-zero trap mitigation | Applied; host register test passed | Explicitly clears EMU_CON bit 2 during IRQ initialisation |
 | Target firmware build | Build and package verified | pi32v2 compile, ELF memory and static ISR budgets checked |
-| Real FM-1 validation | Pending | Boot, IRQ timing, controls, USB and sample upload still need hardware checks |
+| Real FM-1 validation | 설치·재부팅 테스트 완료 (2026-10-09) | ORBIT 0.4.1 설치, USB INFO/PING, 화면 및 조작 반응 확인; 오디오·IRQ 타이밍, 장시간 안정성, 복구와 sample upload는 미검증 |
 | Bluetooth headphones | Not implemented | Pairing, reconnect and Bluetooth audio require further SDK integration and device testing |
 | PCM audio Tape | Not implemented | Tape edits note/drum events; it does not record long audio or provide tape-speed pitch changes |
 
@@ -175,6 +175,12 @@ python tests/orbit_preview_test.py
 Linux amd64에서 `tools/orbit_check.py`의 **19개 호스트 프로그램**과 Node 24 환경의 `sh tests/run_tests.sh`가 통과했습니다. macOS의 새 counted CPU·golden 실행도 117 renders unchanged, CPU 초과 0건으로 통과했습니다. ALNK0 정적 비용은 기존 기준 174에 대해 138입니다. 기준이나 허용치를 완화하지 않았습니다. 웹·설치 CLI·네이티브 HTTP 검사와 실제 브라우저 1440px / 390px 조작을 확인했습니다. 패키지 검사는 `orbit.fwsc`의 CRC, 로더 마커, Python/JavaScript logical image 일치를 포함합니다.
 
 See [validation details](docs/VALIDATION.md) for evidence and limitations. Host results do not establish target boot safety, RAM/flash usage or real-time audio performance.
+
+### 실기기 설치 테스트 (2026-10-09)
+
+SLOOP 2.4.1이 정상 동작하던 실제 FM-1에 소스 커밋 `3074510`에서 빌드한 ORBIT 0.4.1 패키지 `build/orbit.fwsc`를 `python tools/fm1_install.py build/orbit.fwsc --port Felucca --yes`로 설치했습니다. 설치 전 패키지 CRC를 확인했으며, 쓰기 100%와 자동 재부팅 후 설치 도구가 종료 코드 0을 반환했습니다. 재부팅한 기기의 INFO 응답은 `FELUCCA ORBIT 0.4.1`, PING 응답은 `[0]`이었고, 사용자가 ORBIT 화면 표시와 버튼·노브 조작 반응을 확인했습니다. 이번 설치에서 먹통 증상은 관찰되지 않았습니다.
+
+테스트한 패키지의 SHA-256은 `40f238815bcd0864fbfdfee53854c58f7641d0ef20e350855e7f5d73389ff39b`입니다. 이 결과는 해당 패키지와 기기의 설치·부팅 확인이며, 모든 FM-1의 동작을 보장하지 않습니다. 오디오 출력·실시간 오디오/IRQ 타이밍, 장시간 안정성, sample upload와 실패 시 복구는 이번 테스트로 검증하지 않았습니다. OCT−를 누른 채 전원을 켜는 복구 진입 시도에서는 일반 화면이 나왔으므로, 실기기 복구 성공으로 기록하지 않습니다.
 
 ### Boot exception mitigation
 
