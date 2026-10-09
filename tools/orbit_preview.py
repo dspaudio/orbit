@@ -71,11 +71,13 @@ def main():
                 else:
                     raise ValueError('invalid operation')
                 process.stdin.write(command + '\n'); process.stdin.flush()
-                if process.stdout.readline().strip() != 'OK':
+                reply = process.stdout.readline().split()
+                if len(reply) != 4 or reply[0] != 'OK':
                     raise RuntimeError('native preview stopped')
                 image = Image.open(OUT / 'screen.ppm')
                 png = io.BytesIO(); image.save(png, format='PNG')
-                result = {'screen': base64.b64encode(png.getvalue()).decode()}
+                result = {'screen': base64.b64encode(png.getvalue()).decode(),
+                          'state': {'track': int(reply[1]), 'view': reply[2], 'module': int(reply[3])}}
                 if op == 'render':
                     result['audio'] = base64.b64encode((OUT / 'chunk.wav').read_bytes()).decode()
                 body = json.dumps(result).encode()

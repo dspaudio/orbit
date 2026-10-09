@@ -109,10 +109,10 @@ The 11 black keys are F#3, G#3, A#3, C#4, D#4, F#4, G#4, A#4, C#5, D#5, F#5. The
 | --- | --- | --- | --- |
 | **1** | blue | a synth (3 synth tracks share 8 voices) | KNOB 1 |
 | **2** | green | a synth | KNOB 2 |
-| **3** | yellow | a synth | KNOB 3 |
+| **3** | white | a synth | KNOB 3 |
 | **4** | orange | the drum machine: 16 sounds, one per white key | KNOB 4 |
 
-**ALGORITHM** picks the track you play, record and edit, on every screen. The screen and the whole editor take the colour of the selected track. **White** on the screen always means *what you are touching*; **red** always means *recording*.
+**ALGORITHM** picks the track you play, record and edit, on every screen. The screen and the whole editor take the colour of the selected track. 기본 ORBIT 팔레트의 네 역할은 blue / green / white / orange이며, 선택 상태는 강조·테두리·표시로도 구분합니다. PASTEL·NEON·단색 팔레트 선택은 유지합니다. **Red** means *recording*.
 
 ### Tap and hold
 
@@ -146,12 +146,14 @@ The layers are **FX** (punch-in effects), **EDIT** (erase), **ARP** (note repeat
 
 ## 5. Every button, alone
 
+ORBIT의 주요 화면은 **Synth / Drum / Event Tape / Mixer**입니다. 오리지널 OP-1의 T1 engine / T2 envelope / T3 effect / T4 LFO는 **EDIT / ENV / FX / LFO**로 엽니다. 같은 버튼의 반복 입력과 SELECT로 기존 세부 페이지에 접근합니다. Event Tape는 sequencer 이벤트의 view/edit layer이며 오디오 녹음이 아닙니다.
+
 | Control | Tap / turn | Hold |
 | --- | --- | --- |
 | **PLAY** | start / stop all tracks (in song mode: play the song). Works inside every layer | — |
 | **REC** | playing: record now / stop recording · stopped: arm (*rec ready*) · free take: close the loop · count-in: cancel | ~2 s: **clear the selected track** (a ring fills; let go before it is full and nothing happens) |
 | **SAVE** | on TRACKS or DRUMS: the **SONG** screen · on the SONG screen: save the song · elsewhere: the **SAVE pages** | the **song layer** (sections A–D, chain, song mode, SONG REC) |
-| **HOME** | the **TRACKS** screen · on TRACKS: the **visualiser** (HOME again closes it) | 0.7 s: the **menu** (SCREEN, LIGHTS, AUDIO, SYSTEM); hold again to leave it |
+| **HOME** | **Event Tape** · Tape에서 다시 누르면 **visualiser**, 한 번 더 누르면 Tape | 0.7 s: the **menu** (SCREEN, LIGHTS, AUDIO, SYSTEM); hold again to leave it |
 | **ENV** | ENV pages (ENV, ENV DEST) | — |
 | **LFO** | LFO pages (LFO, LFO DEST) | — |
 | **FX** | FX pages (FX, FILTER, SLICER, DLY, REV/CHO) | punch-in layer |
@@ -159,13 +161,15 @@ The layers are **FX** (punch-in effects), **EDIT** (erase), **ARP** (note repeat
 | **EDIT** | EDIT pages (EDIT 1, EDIT 2, VOICE, VOICE 2) · on TRACKS with the drum track: the **DRUMS** screen · on DRUMS: grid ↔ kit · on the STEP page: clear the step | erase layer |
 | **ARP** | ARP pages (ARP, ARP 2) | note-repeat layer |
 | **SEQ** | SEQ pages (STEP, PATTERN, SONG) · on TRACKS with the drum track: the **DRUMS** screen · on DRUMS: grid ↔ kit | step layer |
-| **GLO** | GLO pages (GLOBAL, MASTER, SYSTEM, DRUMS) | mix layer |
+| **GLO** | Tape에서는 **Mixer**, Mixer에서 다시 누르면 GLOBAL · 그 외에는 기존 GLO pages (GLOBAL, MASTER, SYSTEM, DRUMS) | mix layer |
 | **OCT− / OCT+** | synth track: octave down / up (−3 … +3) · both together: octave 0 | drum track: **ghost** (OCT−) / **hard** (OCT+) hits while held |
 | **ALGORITHM** | select track 1–4, on every screen (inside a layer it waits; not during a free take, on the SONG screen or in the menu) | — |
 | **PRESETS** | on TRACKS, HOME and the PRESETS page: the selected track's **sound** (all factory sounds by kind, then your user presets) · drum track: the **kit** · on the DRUMS screen: the kit | — |
 | **SELECT** | on TRACKS, inside a layer and on the REC screen: the **tempo** · on a page: previous / next page of its button (stops at the ends) · DRUMS screen: grid ↔ kit · visualiser: the style · menu: the section | — |
 | **KNOB 1–4** | the four dials at the bottom of the screen | — |
 | **MASTER** | output volume (the visualiser ignores it) | — |
+
+Mixer에서 **SELECT**로 LEVEL / PAN / TRACK을 순회합니다. LEVEL은 KNOB 1–4로 트랙 1–4의 level을, PAN은 같은 순서로 pan을 조절합니다. 드럼 level은 실제 `G_DRLVL`입니다. TRACK은 기존 SWING / 선택 트랙 LEVEL / LEN / PAN을 보존합니다.
 
 ### Combinations at power-on and while stopped
 

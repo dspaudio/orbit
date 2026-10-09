@@ -754,6 +754,34 @@ int main(int argc, char **argv)
         go_home(); frame(); SEL(-1);
         check(song.g[G_BPM] < bpm, "back on HOME: SELECT is the tempo again");
         song.g[G_BPM] = bpm;
+        /* 믹서(GLO)의 페이지도 SELECT가 오간다: TRACKS(트랙 1..4 level) -> PAN(트랙 1..4 pan) -> TRACK(예전 경로 그대로: 전역 SWING,
+         * 선택 트랙의 LEVEL / LEN / PAN). 템포는 바뀝지 않는다. 같은 knob의 연속 회전은 accel()을 피하려고 frames(5)로 띄운다 */
+        {
+            int16_t sw = song.g[G_SWING], len = TSEL->p[P_SLEN], lv1 = trk[1].p[P_LEVEL], pan1 = trk[1].p[P_PAN];
+            tap(B_GLO); frame();
+            check(!ui.home && cur_page()->scope == SC_TRK && !strcmp(PT(), "TRACKS"), "GLO tapped on HOME: the mixer's level page");
+            trk[1].p[P_MUTE] = 0; frames(5);
+            encs[panel.enc[EN_K2]] = 2; frame();
+            check(trk[1].p[P_LEVEL] == lv1 + 2 && song.g[G_SWING] == sw, "mixer TRACKS: KNOB 2 is track 2's level, not the swing");
+            SEL(1);
+            check(!strcmp(PT(), "PAN") && song.g[G_BPM] == bpm, "SELECT on the mixer: the PAN page, the tempo untouched");
+            frames(5);
+            encs[panel.enc[EN_K2]] = -5; frame();
+            check(trk[1].p[P_PAN] == pan1 - 5 && trk[1].p[P_LEVEL] == lv1 + 2, "mixer PAN: KNOB 2 is track 2's pan");
+            SEL(1);
+            check(!strcmp(PT(), "TRACK"), "SELECT again: the TRACK page (swing, level, steps, pan of the selected track)");
+            frames(5);
+            encs[panel.enc[EN_K1]] = 4; frame();
+            encs[panel.enc[EN_K3]] = 1; frame();
+            check(song.g[G_SWING] == sw + 4 && TSEL->p[P_SLEN] == len + 1 && song.g[G_BPM] == bpm,
+                  "mixer TRACK: KNOB 1 the swing (global), KNOB 3 the pattern length, as before");
+            SEL(1);
+            check(!strcmp(PT(), "TRACK"), "SELECT: stops at the last mixer page");
+            SEL(-9);
+            check(!strcmp(PT(), "TRACKS") && song.g[G_BPM] == bpm, "SELECT left: back to the level page");
+            song.g[G_SWING] = sw; TSEL->p[P_SLEN] = len; trk[1].p[P_LEVEL] = lv1; trk[1].p[P_PAN] = pan1;
+            go_home(); frame();
+        }
         #undef SEL
         #undef PT
     }

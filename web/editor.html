@@ -17,7 +17,7 @@
   @font-face { font-family: "Fukiai"; src: url("fukiai.ttf") format("truetype"); font-display: block; unicode-range: U+EA00-EB09; }
   :root {
     --bg: #000; --s1: #0b0b0e; --s2: #1a1a1e; --s3: #36363c; --line: #232329; --dim: #76767e; --fg2: #c4c4cc; --fg: #f2f2f2;
-    --red: #ff2c34; --t1: #287cff; --t2: #1ecc70; --t3: #ffc618; --t4: #ff621a; --trk: var(--t1);
+    --red: #ff2c34; --t1: #287cff; --t2: #1ecc70; --t3: #ffffff; --t4: #ff621a; --trk: var(--t1);
     --font: "SLOOP Terminus", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
     color-scheme: dark;
   }
@@ -41,7 +41,7 @@
   button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--trk); outline-offset: 1px; }
   button:disabled { color: var(--s3); background: var(--s1); cursor: default; }
   button.pri { background: var(--trk); color: #000; }
-  button.pri:hover:not(:disabled) { background: var(--fg); }
+  button.pri:hover:not(:disabled) { background: var(--fg2); }   /* (--trk가 흰색인 트랙 3에서도 hover가 보이도록) */
   button.pri:disabled { background: var(--s2); color: var(--s3); }
   button.warn:hover:not(:disabled) { background: var(--red); color: #000; }
   select, input[type=text], input[type=number], input[type=search] {
@@ -95,6 +95,21 @@
   .tabs { display: flex; flex-direction: column; gap: 2px; }
   .tabs .navh { color: var(--s3); margin: 14px 0 4px 12px; text-transform: lowercase; }
   .tabs .navh:first-child { margin-top: 0; }
+  /* OP-1 주요 모드(사이드바)와 네 sound 모듈(헤더): 같은 크기의 실제 버튼, 선택은 aria-pressed (DESIGN.md §5) */
+  .opmodes { display: flex; flex-direction: column; gap: 4px; }   /* (.modes는 samples 패널이 이미 쓴다) */
+  .opmodes .navh { color: var(--s3); margin: 0 0 0 12px; text-transform: lowercase; }
+  .modebar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; }
+  .modebar button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px; min-width: 0;
+                    background: var(--s2); color: var(--dim); text-transform: none; white-space: normal; text-align: left; }
+  .modebar button b { font-weight: 400; color: var(--fg2); }
+  .modebar button small { font-size: 16px; line-height: 16px; }
+  .modebar button:hover:not(:disabled):not([aria-pressed="true"]),
+  .modebar button:hover:not(:disabled):not([aria-pressed="true"]) b { background: var(--s3); color: var(--fg); }
+  .modebar button[aria-pressed="true"], .modebar button[aria-pressed="true"] b { background: var(--trk); color: #000; }
+  .modebar button:disabled, .modebar button:disabled b { background: var(--s1); color: var(--s3); }
+  .modules { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 14px; }
+  .modules button { padding: 8px 12px; }
+  .group:focus { outline: 2px solid var(--trk); outline-offset: 1px; }
   .tabs button { background: none; color: var(--dim); text-align: left; padding: 6px 12px; border-left: 4px solid transparent; }
   .tabs button:hover { color: var(--fg); background: var(--s1); }
   .tabs button[aria-selected="true"] { color: var(--fg); background: var(--s2); border-left-color: var(--trk); }
@@ -328,7 +343,7 @@
   .dest button[aria-checked="true"] b { color: var(--trk); }
   .dest button:disabled { opacity: .35; }
   .destnote { color: var(--fg2); margin: 0 0 10px; }
-  .destnote .warn, .warn-t { color: var(--t3); }
+  .destnote .warn, .warn-t { color: var(--t4); }   /* (경고는 흰색이 된 셋째 색 대신 주황) */
 
   /* ---- samples: the slots, files or CHOP, send ---- */
   .dest.slots4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -380,6 +395,9 @@
     .tabs .navh { display: none; }
     .tabs button { border-left: 0; border-bottom: 3px solid transparent; }
     .tabs button[aria-selected="true"] { border-bottom-color: var(--trk); }
+    .opmodes { order: 4; width: 100%; }
+    .opmodes .navh { display: none; }
+    .modebar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .devcard { margin: 0 0 0 auto; padding: 0; border: 0; flex-direction: row; flex-wrap: wrap; align-items: center; }
     #connect { width: auto; }
     .main { padding: 0 16px 24px; }
@@ -397,6 +415,9 @@
     .frow > :nth-child(4), .frow > :nth-child(5) { display: none; }
     .dest button.big { grid-column: 1 / -1; }
   }
+  @media (max-width: 480px) {
+    .modebar, .modules { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* 390px: 가로 스크롤 없이 2×2 */
+  }
 </style>
 </head>
 <body>
@@ -406,6 +427,11 @@
       <strong>Orbit</strong>
       <span>editor</span>
     </a>
+    <!-- 오리지널 OP-1의 주요 모드 키: 기존 탭과 트랙 선택 경로만 호출한다 (renderModes) -->
+    <div class="opmodes" id="opmodes" role="group" aria-labelledby="modesh">
+      <div class="navh" id="modesh" data-t="navModes"></div>
+      <div class="modebar" id="modebar"></div>
+    </div>
     <nav class="tabs" id="tabs" role="tablist" aria-orientation="vertical">
       <div class="navh" data-t="navTrack"></div>
       <button role="tab" data-tab="sound" data-t="sound" data-ic="symbol_audio"></button>
@@ -430,9 +456,11 @@
   </aside>
 
   <main class="main">
-    <header class="top">
+    <header class="top" id="top">
       <div class="titlebar"><h1 id="pagetitle"></h1><div id="status" role="status" aria-live="polite"></div></div>
       <div class="trackbar" id="trackbar" hidden><span class="dim" data-t="track"></span><span class="seg" id="trackbtns" role="group"></span></div>
+      <!-- T1–T4 sound 모듈: Sound 탭의 기존 EDIT / ENV / FX / LFO 카드로 이동 (renderModules) -->
+      <div class="modebar modules" id="modules" role="group" hidden></div>
     </header>
     <p class="hint" id="hint" hidden></p>
 
@@ -2823,6 +2851,11 @@ const TEXT = {
     badEngine: "このファームウェアにないエンジンです: ", flashFail: "書き込みに失敗しました（rc {rc}）",
     installer: "インストールガイド",
     tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
+    navModes: "モード", modeSynth: "シンセ", modeDrum: "ドラム", modeTape: "イベントテープ", modeMixer: "ミキサー",
+    modeSynthT: "選択中のシンセトラックの音色・本体: EDIT", modeDrumT: "ドラムトラックのパターンとキット・本体: トラック 4 で EDIT",
+    modeTapeT: "選択中のシンセトラックのステップ（テープのイベント）・本体: HOME", modeMixerT: "4 トラックのレベル・パン・ミュート・本体: テープで GLO",
+    modulesLabel: "サウンドモジュール", modEngine: "T1 エンジン", modEnv: "T2 エンベロープ", modFx: "T3 エフェクト", modLfo: "T4 LFO",
+    modT: "このカードへ移動・本体の同じキーをもう一度押すと次のページ",
     navTrack: "トラック", navSounds: "サウンド", navDevice: "本体", tabKits: "ドラムキット", fm1: "FM-1",
     stepList: "ステップ一覧（音名を入力）", stepsOf: "{n} ステップ", fontCredit: "フォント: Terminus（SIL OFL 1.1）",
     ctlDrag: "値を上下にドラッグでも変更できます。",
@@ -2970,6 +3003,11 @@ const TEXT = {
     badEngine: "This firmware has no such engine: ", flashFail: "Write failed (rc {rc})",
     installer: "Installation guide",
     tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",
+    navModes: "Mode", modeSynth: "Synth", modeDrum: "Drum", modeTape: "Event Tape", modeMixer: "Mixer",
+    modeSynthT: "Sound of the selected synth track · FM-1: EDIT", modeDrumT: "Pattern and kit of the drum track · FM-1: EDIT on track 4",
+    modeTapeT: "Steps of the selected synth track, the Tape's events · FM-1: HOME", modeMixerT: "Level, pan and mute of the four tracks · FM-1: GLO on the Tape",
+    modulesLabel: "Sound modules", modEngine: "T1 engine", modEnv: "T2 envelope", modFx: "T3 effect", modLfo: "T4 LFO",
+    modT: "Jump to this card · on the device the same key pressed again opens its next page",
     navTrack: "Track", navSounds: "Sounds", navDevice: "Device", tabKits: "Drum kit", fm1: "FM-1",
     stepList: "Step list (type note names)", stepsOf: "{n} steps", fontCredit: "Font: Terminus (SIL OFL 1.1)",
     ctlDrag: "You can also drag a value up or down.",
@@ -3127,6 +3165,8 @@ function renderPanels() {
   const nb = $("tabs").querySelector(`button[data-tab="${want}"]`);   /* the page's title: its name in the side bar */
   $("pagetitle").textContent = nb ? t(nb.dataset.t) : "";
   if (want === "kits") renderKits();
+  shownTab = want;
+  renderModes();
 }
 $("tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
 $("tabs").addEventListener("keydown", (e) => {          /* arrow keys move between the tabs */
@@ -3196,6 +3236,81 @@ const gDrLvl = () => { const i = dev.gdesc.findIndex((d, k) => d && k > gEng() &
 const isDrum = () => !!dev && !!dev.dump && dev.dump.engine >= dev.info.nengines;
 /* v5 (SLOOP 2.0): the drum track is edited as its 16 lanes (DRUM_STEP); older firmware: as GM notes */
 const drumGrid = () => isDrum() && !!dev.info.proto && dev.info.proto >= 5;
+
+/* ------------------------------------------- OP-1 주요 모드와 sound 모듈 --- */
+/* 오리지널 OP-1의 Synth / Drum / Tape / Mixer 키 (DESIGN.md §5). 각 모드는 기존 탭 전환과 트랙 선택 경로만 호출하고,
+   눌린 상태는 보이는 탭과 선택 트랙에서 되읽는다(modeOf). 에디터에는 테이프 화면이 없으므로 Event Tape는 테이프가
+   편집하는 이벤트 그 자체인 시퀀서 스텝이고, Drum은 드럼 트랙의 시퀀서(그리드와 킷), Mixer는 Tracks 탭이다 */
+const MODES = ["synth", "drum", "tape", "mixer"];
+const MODE_TAB = { synth: "sound", drum: "sequencer", tape: "sequencer", mixer: "tracks" };
+const MODE_KEY = { synth: "EDIT", drum: "track 4 + EDIT", tape: "HOME", mixer: "GLO" };   /* 같은 화면을 여는 FM-1 키 */
+const MODE_LABELS = {
+  synth: () => [t("modeSynth"), t("modeSynthT")], drum: () => [t("modeDrum"), t("modeDrumT")],
+  tape: () => [t("modeTape"), t("modeTapeT")], mixer: () => [t("modeMixer"), t("modeMixerT")],
+};
+function modeOf(tab, drum) {
+  if (tab === "tracks") return "mixer";
+  if (tab === "sequencer") return drum ? "drum" : "tape";
+  return tab === "sound" && !drum ? "synth" : null;
+}
+let shownTab = tab;                                     /* renderPanels가 실제로 보여 준 탭 */
+let lastSynth = 0;                                      /* Drum에서 돌아올 synth track */
+async function goMode(m) {
+  if (hasTracks()) {
+    const drumTrk = dev.info.ntrk - 1;
+    if (m === "drum" && !isDrum()) await selectTrack(drumTrk);
+    if ((m === "synth" || m === "tape") && isDrum()) await selectTrack(Math.min(lastSynth, drumTrk - 1));
+  }
+  showTab(MODE_TAB[m]);
+}
+function renderModes(focusEl) {
+  const box = $("modebar");
+  if (box.dataset.lang !== lang) {
+    box.dataset.lang = lang;
+    box.replaceChildren(...MODES.map((m) => {
+      const [name, title] = MODE_LABELS[m]();
+      return el("button", { type: "button", "data-mode": m, title, onclick: () => goMode(m) },
+        el("b", { text: name }), el("small", { text: MODE_KEY[m] }));
+    }));
+  }
+  const cur = modeOf(shownTab, isDrum());
+  const fourTracks = !dev || !dev.info || hasTracks();        /* (1트랙 펌웨어: Tracks 탭처럼 드럼·믹서는 없다) */
+  for (const b of box.children) {
+    b.setAttribute("aria-pressed", b.dataset.mode === cur ? "true" : "false");
+    b.disabled = !fourTracks && (b.dataset.mode === "drum" || b.dataset.mode === "mixer");
+  }
+  renderModules(focusEl);
+}
+/* T1–T4 sound 모듈: Sound 탭의 기존 EDIT / ENV / FX / LFO 카드로 이동한다(펌웨어의 같은 이름 키). 눌린 상태는
+   포커스가 들어 있는 카드이며, 드럼 트랙에는 이 카드들이 없으므로 행을 숨긴다 */
+const MODULES = [["engine", "EDIT"], ["env", "ENV"], ["fx", "FX"], ["lfo", "LFO"]];   /* [id, LAYOUT 카드 제목] */
+const MODULE_LABELS = { engine: () => t("modEngine"), env: () => t("modEnv"), fx: () => t("modFx"), lfo: () => t("modLfo") };
+const moduleCard = (fam) => $("groups").querySelector(`.group[data-fam="${fam}"]`);
+function goModule(fam) {
+  if (shownTab !== "sound") showTab("sound");
+  const card = moduleCard(fam);
+  if (!card) return;
+  const top = card.getBoundingClientRect().top + window.scrollY - $("top").getBoundingClientRect().height - 16;
+  window.scrollTo({ top, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  card.focus({ preventScroll: true });
+}
+function renderModules(focusEl) {
+  const box = $("modules");
+  const show = shownTab === "sound" && !!dev && !!dev.dump && !isDrum();
+  box.hidden = !show;
+  if (!show) return;
+  if (box.dataset.lang !== lang) {
+    box.dataset.lang = lang;
+    box.setAttribute("aria-label", t("modulesLabel"));
+    box.replaceChildren(...MODULES.map(([id, fam]) => el("button", { type: "button", "data-fam": fam, title: t("modT"), onclick: () => goModule(fam) },
+      el("b", { text: MODULE_LABELS[id]() }), el("small", { text: fam }))));
+  }
+  const card = focusEl === undefined ? document.activeElement : focusEl;
+  const fam = card && card.closest ? (card.closest(".group") || {}).dataset?.fam : undefined;
+  for (const b of box.children) b.setAttribute("aria-pressed", fam && b.dataset.fam === fam ? "true" : "false");
+}
+document.addEventListener("focusin", (e) => renderModules(e.target));
+document.addEventListener("focusout", (e) => renderModules(e.relatedTarget));
 
 /* -------------------------------------------------------------- MIDI --- */
 async function connect() {
@@ -3411,10 +3526,12 @@ function renderTrackbar() {
     b.title = `${t("track")} ${i + 1}`;
   }
   document.documentElement.style.setProperty("--trk", TCOL[(dev.sel || 0) % 4]);
+  if (!isDrum()) lastSynth = dev.sel || 0;
+  renderModes();
 }
 function selectTrack(i) {
   if (!dev || !hasTracks() || i === dev.sel) return;
-  op(async () => {
+  return op(async () => {
     dev.sel = parse[CMD.TRACK](await rq(req.track(i))).sel;
     await afterSoundChange();
   });
@@ -3469,7 +3586,7 @@ function buildGroups() {
   if (info.pcount === EXPECT.pcount && info.gcount === EXPECT.gcount && info.pe0 === EXPECT.pe0) {
     for (const g of LAYOUT(info.pe0)) {
       /* a card per button of the device (ENV, LFO, EDIT ...), its pages as rows of four knobs, one colour per knob */
-      const div = el("div", { class: "group" }, el("h2", { ic: HEAD_IC[g.t] },
+      const div = el("div", { class: "group", "data-fam": g.t, tabindex: "-1" }, el("h2", { ic: HEAD_IC[g.t] },
         g.engine ? `EDIT ${info.engines[dev.dump.engine] || ""}` : g.t));
       let pages = 0;
       for (const [title, s, ids] of g.pages) {

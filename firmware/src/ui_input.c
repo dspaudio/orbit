@@ -260,35 +260,32 @@ static int32_t accel(uint32_t role, int32_t s, int32_t range)
     return s;
 }
 
-/* TRACKS page: KNOB 1 SWING (the groove of every track, MPC 50..75 %), 2 LEVEL (0 = mute; the drum
- * track: GLO > DRUMS LEVEL), 3 LEN of its pattern, 4 PAN. A track muted with MUTE (GLO + key, the
- * editor): the first turn of KNOB 2 unmutes it */
+/* 믹서(GLO) 화면. TRACKS 페이지: 오리지널 OP-1 Mixer T1처럼 KNOB 1..4가 트랙 1..4의 level을 편집한다(0 = mute; 드럼
+ * 트랙은 GLO > DRUMS LEVEL, G_DRLVL). MUTE(GLO + key, 에디터)로 꺼진 트랙은 첫 회전이 mute만 푼다. PAN 페이지(SELECT):
+ * 네 트랙의 pan. TRACK 페이지(SELECT 한 번 더): 예전 경로 그대로, KNOB 1 SWING(모든 트랙의 groove, MPC 50..75 %),
+ * 2 선택 트랙의 LEVEL, 3 그 패턴의 LEN, 4 PAN */
 static void tracks_edit(uint32_t slot, int32_t steps)
 {
-    track_t *t = TSEL;
+    uint32_t kind = mixer_kind();
+    track_t *t = kind == MX_TRACK ? TSEL : &trk[slot % NTRK];
     int16_t *vp;
     const param_desc_t *d;
-    switch (slot) {
-    case 0:
+    if (kind == MX_PAN || (kind == MX_TRACK && slot == 3u)) {
+        vp = &t->p[P_PAN];
+        d = &TP[P_PAN];
+    } else if (kind == MX_TRACK && slot == 0u) {
         vp = &song.g[G_SWING];
         d = &GP[G_SWING];
-        break;
-    case 1:
+    } else if (kind == MX_TRACK && slot == 2u) {
+        vp = &t->p[P_SLEN];
+        d = &TP[P_SLEN];
+    } else {
         if (t->p[P_MUTE]) {
             t->p[P_MUTE] = 0;
             return;
         }
         vp = is_drum(t) ? &song.g[G_DRLVL] : &t->p[P_LEVEL];
         d = is_drum(t) ? &GP[G_DRLVL] : &TP[P_LEVEL];
-        break;
-    case 2:
-        vp = &t->p[P_SLEN];
-        d = &TP[P_SLEN];
-        break;
-    default:
-        vp = &t->p[P_PAN];
-        d = &TP[P_PAN];
-        break;
     }
     *vp = (int16_t)clamp(*vp + accel(EN_K1 + slot, steps, d->max - d->min), d->min, d->max);
 }

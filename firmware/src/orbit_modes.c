@@ -1,9 +1,24 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Graphic-first sound pages. Included after ui_draw.c graph helpers. */
+/* 그래픽 우선 사운드 페이지: T1 EDIT(엔진 1/2) · T2 ENV · T3 FX(첫 페이지) · T4 LFO. VOICE · FILTER · SLICER 등 나머지
+ * 서브페이지는 기존 열 레이아웃으로 그린다(같은 키를 다시 누르면 family의 다음 페이지) */
 static int orbit_sound_page(void)
 {
     const page_t *pg=cur_page();
-    return !is_drum(TSEL) && (pg->scope==SC_ENGINE || pg->fam==FAM_ENV || pg->fam==FAM_LFO);
+    return !is_drum(TSEL) && (pg->scope==SC_ENGINE || pg->fam==FAM_ENV || pg->fam==FAM_LFO || pg->graph==GR_FX);
+}
+/* 현재 페이지가 속한 오리지널 OP-1 모듈: 0 T1 engine(EDIT), 1 T2 envelope(ENV), 2 T3 effect(FX), 3 T4 LFO(LFO) */
+static uint32_t orbit_module_of(const page_t *pg)
+{
+    return pg->scope==SC_ENGINE ? 0u : pg->fam==FAM_ENV ? 1u : pg->fam==FAM_FX ? 2u : 3u;
+}
+/* 헤더 둘째 줄: 네 모듈과 FM-1 키 이름. 현재 모듈은 흰색, 나머지는 회색. 오리지널의 T3/T4 반복(FX/LFO enable 전환)은
+ * ORBIT에 없으므로 표시하지 않는다 */
+static void orbit_module_strip(uint32_t active)
+{
+    static const char *const MOD[4]={"T1 edit","T2 env","T3 fx","T4 lfo"};
+    uint32_t k;
+    for(k=0;k<4;k++) cv_text(8+(int32_t)k*58,20,&FONT_S,MOD[k],k==active?C_WHITE:TE_G3);
 }
 static void orbit_sound_draw(void)
 {
@@ -39,7 +54,7 @@ static void orbit_sound_draw(void)
     else if(ui.hot_t && label[ui.hot_col][0]) {
         cv_text(8,20,&FONT_S,label[ui.hot_col],TE_COL[ui.hot_col]);
         cv_text(72,20,&FONT_S,value[ui.hot_col],C_WHITE);
-    } else cv_text(8,20,&FONT_S,"sound / four controls",TE_G3);
+    } else orbit_module_strip(orbit_module_of(pg));
     cv_blit(0,0);
     lcd_fill(0,36,240,4,C_BLACK);
     cv_begin(240,124,C_BLACK);
@@ -69,6 +84,15 @@ static void orbit_sound_draw(void)
             cv_line(cx,cy,cx+((SINE[(angle+256)&1023]*r)>>15),cy+((SINE[angle]*r)>>15),TE_COL[k]);
             te_disc(cx,cy,3,C_WHITE);
         }
+    } else if(pg->graph==GR_FX) {
+        /* T3 effect: 네 send(DST CHO DLY REV)를 encoder 색의 얇은 세로 게이지로 그린다. 파라미터 값이며 오디오 측정이 아니다 */
+        for(k=0;k<4;k++) {
+            int32_t gx=30+(int32_t)k*60,h=ratio[k]*88/1000;
+            cv_rect(gx,16,1,92,TE_G2);
+            if(h) cv_rect(gx,108-h,1,h,TE_COL[k]);
+            cv_rect(gx-8,108-h,17,1,TE_COL[k]);
+        }
+        cv_line(12,110,228,110,TE_G2);
     } else {
         /* Four coloured oscillator curves, driven by the active page values. */
         for(k=0;k<4;k++) {
@@ -93,48 +117,72 @@ static void orbit_sound_draw(void)
     cv_blit(0,196);
 }
 
+/* 믹서(GLO): 오리지널 OP-1 Mixer T1처럼 네 개의 색 level 바와 네 knob = 트랙 1..4 level(드럼은 G_DRLVL). SELECT로
+ * PAN 페이지: 네 트랙의 pan을 가로 눈금 위의 마커로. 한 번 더 SELECT: TRACK 페이지, 예전 경로 그대로(전역 swing / 선택 트랙의
+ * level / steps / pan). 화면의 도해와 하단 다이얼은 tracks_edit이 실제로 바꾸는 값이다 */
 static void orbit_mixer_draw(void)
 {
     static uint32_t cache,footer;
-    uint32_t k,sig=song.sel+song.solo*31u+song.g[G_BPM]*71u;
-    char b[16];
-    for(k=0;k<NTRK;k++) sig=sig*31u+trk[k].p[P_LEVEL]+trk[k].p[P_MUTE]*521u+trk[k].p[P_PAN]*17u;
+    uint32_t k,kind=mixer_kind(),pan=kind==MX_PAN,sig=song.sel+song.solo*31u+song.g[G_BPM]*71u+kind*7u;
+    char b[16],hint[32];
+    for(k=0;k<NTRK;k++) sig=sig*31u+trk[k].p[P_LEVEL]+trk[k].p[P_MUTE]*521u+trk[k].p[P_PAN]*17u+trk[k].eng_req*97u;
     sig=sig*31u+song.g[G_DRLVL];
     if(ui.force || sig!=cache) {
         cache=sig;
         cv_begin(240,36,C_BLACK);
         cv_text(8,2,&FONT_S,"mixer",C_WHITE); fmt_int(b,song.g[G_BPM]); cv_text(192,2,&FONT_S,b,TE_G3);
-        cv_text(8,20,&FONT_S,"levels / selected track",TE_G3); cv_blit(0,0);
+        if(kind==MX_TRACK) {                        /* 둘째 줄: 이 페이지의 네 knob과 SELECT가 가는 곧 */
+            str_cpy(hint,"track ",sizeof hint); fmt_int(hint+6,(int32_t)song.sel+1);
+            str_cpy(hint+str_len(hint)," / select: pan",sizeof hint-str_len(hint));
+        } else str_cpy(hint,pan?"pan 1-4 / select: level":"level 1-4 / select: pan",sizeof hint);
+        cv_text(8,20,&FONT_S,hint,TE_G3); cv_blit(0,0);
         cv_begin(240,124,C_BLACK);
         for(k=0;k<NTRK;k++) {
-            int32_t cx=30+(int32_t)k*60,level=is_drum(&trk[k])?song.g[G_DRLVL]:trk[k].p[P_LEVEL];
-            int32_t y=108-level*82/127,j;
+            int32_t cx=30+(int32_t)k*60,level=(int32_t)trk_level(k),j;
             uint16_t col=trk_silent(&trk[k])?TE_DIM[k]:TE_COL[k];
-            for(j=0;j<6;j++) cv_line(cx-18,26+j*16,cx+18,26+j*16,TE_G1);
-            cv_rect(cx-2,25,4,86,TE_G2); cv_rect(cx-2,y,4,109-y,col);
-            cv_rect(cx-17,y-3,34,8,col); cv_line(cx-12,y,cx+12,y,C_BLACK);
-            fmt_int(b,k+1); cv_text(cx-4,2,&FONT_S,b,col);
+            fmt_int(b,(int32_t)k+1); cv_text(cx-4,2,&FONT_S,b,col);
             if(k==song.sel) orbit_ring(cx,11,10,C_WHITE);
+            if(pan) {
+                /* pan: L..R 눈금과 가운데 표시 위에 트랙 색 마커 */
+                int32_t px=cx-18+(trk[k].p[P_PAN]+64)*36/127;
+                cv_line(cx-18,64,cx+18,64,TE_G2); cv_rect(cx-18,60,1,9,TE_G2); cv_rect(cx+18,60,1,9,TE_G2);
+                cv_rect(cx,58,1,13,TE_G3); cv_rect(px-1,52,3,25,col);
+            } else {
+                int32_t y=108-level*82/127;
+                for(j=0;j<6;j++) cv_line(cx-18,26+j*16,cx+18,26+j*16,TE_G1);
+                cv_rect(cx-2,25,4,86,TE_G2); cv_rect(cx-2,y,4,109-y,col);
+                cv_rect(cx-17,y-3,34,8,col); cv_line(cx-12,y,cx+12,y,C_BLACK);
+            }
             if(trk_silent(&trk[k])) cv_line(cx-8,113,cx+8,113,TE_G3);
         }
         cv_blit(0,36);
         cv_begin(240,24,C_BLACK);
-        for(k=0;k<NTRK;k++) {
-            uint32_t level=is_drum(&trk[k])?song.g[G_DRLVL]:trk[k].p[P_LEVEL];
-            fmt_int(b,trk_silent(&trk[k])?0:level*100/127);
-            te_text_c(30+(int32_t)k*60,2,b,TE_COL[k]);
+        for(k=0;k<NTRK;k++) {                       /* 열의 이름: 트랙의 엔진(드럼 트랙은 drum) */
+            te_lower(b,is_drum(&trk[k])?"DRUM":ENGINES[trk[k].eng_req%NENGINES]->name,8);
+            te_text_c(30+(int32_t)k*60,2,b,k==song.sel?TE_G4:TE_G3);
         }
         cv_blit(0,160);
     }
-    {
-        track_t *t=TSEL;
+    {   /* 하단 다이얼: KNOB 1..4가 실제로 편집하는 네 트랙의 level(mute는 첫 회전이 푸는 것을 알린다) 또는 pan,
+         * TRACK 페이지에서는 예전 경로의 swing / level / steps / pan */
+        static const char *const LAB_LVL[4]={"level 1","level 2","level 3","level 4"};
+        static const char *const LAB_PAN[4]={"pan 1","pan 2","pan 3","pan 4"};
+        static const char *const LAB_TRK[4]={"swing","level","steps","pan"};
         char v[4][8]; const char *val[4]={v[0],v[1],v[2],v[3]};
-        const char *const lab[4]={"swing","level","steps","pan"};
-        int32_t ratio[4],level=is_drum(t)?song.g[G_DRLVL]:t->p[P_LEVEL];
-        swing_str(v[0],song.g[G_SWING]); fmt_int(v[1],t->p[P_MUTE]?0:level*100/127);
-        fmt_int(v[2],t->p[P_SLEN]); fmt_int(v[3],t->p[P_PAN]);
-        ratio[0]=song.g[G_SWING]*10; ratio[1]=t->p[P_MUTE]?0:level*1000/127;
-        ratio[2]=(t->p[P_SLEN]-1)*1000/63; ratio[3]=(t->p[P_PAN]+64)*1000/127;
-        te_dials(184,lab,val,ratio,sig,&footer);
+        int32_t ratio[4];
+        if(kind==MX_TRACK) {
+            const track_t *t=TSEL; int32_t level=(int32_t)trk_level(song.sel);
+            swing_str(v[0],song.g[G_SWING]); ratio[0]=song.g[G_SWING]*10;
+            if(t->p[P_MUTE]) { str_cpy(v[1],"mute",sizeof v[1]); ratio[1]=0; }
+            else { fmt_int(v[1],level*100/127); ratio[1]=level*1000/127; }
+            fmt_int(v[2],t->p[P_SLEN]); ratio[2]=(t->p[P_SLEN]-1)*1000/63;
+            fmt_int(v[3],t->p[P_PAN]); ratio[3]=(t->p[P_PAN]+64)*1000/127;
+        } else for(k=0;k<NTRK;k++) {
+            int32_t level=(int32_t)trk_level(k);
+            if(pan) { fmt_int(v[k],trk[k].p[P_PAN]); ratio[k]=(trk[k].p[P_PAN]+64)*1000/127; }
+            else if(trk[k].p[P_MUTE]) { str_cpy(v[k],"mute",sizeof v[k]); ratio[k]=0; }
+            else { fmt_int(v[k],level*100/127); ratio[k]=level*1000/127; }
+        }
+        te_dials(184,kind==MX_TRACK?LAB_TRK:pan?LAB_PAN:LAB_LVL,val,ratio,sig,&footer);
     }
 }

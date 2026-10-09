@@ -27,11 +27,22 @@ try:
         return json.load(urllib.request.urlopen(request))
     api({'op':'button','button':'PLAY'})
     value=api({'op':'render','notes':0})
+    assert value['state'] == {'track': 0, 'view': 'tape', 'module': -1}
     wav=wave.open(io.BytesIO(base64.b64decode(value['audio'])))
     assert wav.getnchannels()==2 and wav.getframerate()==44100
     assert any(wav.readframes(wav.getnframes())), 'sequencer is silent'
     (ROOT/'build/host/preview-audio.wav').write_bytes(base64.b64decode(value['audio']))
     (ROOT/'build/host/preview-screen.png').write_bytes(base64.b64decode(value['screen']))
+    state=api({'op':'button','button':'EDIT'})['state']
+    assert state == {'track': 0, 'view': 'synth', 'module': 0}
+    assert api({'op':'button','button':'ENV'})['state']['module'] == 1
+    assert api({'op':'button','button':'HOME'})['state']['view'] == 'tape'
+    assert api({'op':'button','button':'HOME'})['state']['view'] == 'visualizer'
+    assert api({'op':'button','button':'HOME'})['state']['view'] == 'tape'
+    assert api({'op':'button','button':'GLO'})['state']['view'] == 'mixer'
+    assert api({'op':'knob','role':0,'delta':1})['state']['view'] == 'mixer'
+    assert api({'op':'knob','role':1,'delta':1})['state']['track'] == 1
+    assert api({'op':'knob','role':1,'delta':-1})['state']['track'] == 0
     api({'op':'button','button':'EDIT'})
     api({'op':'knob','role':3,'delta':1})
     api({'op':'render','notes':1}); api({'op':'render','notes':0})
@@ -57,7 +68,12 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 const nodes = new Map();
 function element() {
-  return { children: [], style: { setProperty() {} }, append(child) { this.children.push(child); },
+  return { children: [], dataset: {}, attributes: new Map(), style: { setProperty() {} },
+    setAttribute(name, value) { this.attributes.set(name, value); },
+    getAttribute(name) { return this.attributes.get(name); },
+    set innerHTML(value) { if (value.startsWith("<b>")) this.children = [element(), element()]; },
+    get firstChild() { return this.children[0]; }, get lastChild() { return this.children.at(-1); },
+    append(child) { this.children.push(child); },
     querySelectorAll() { return [element(), element()]; }, setPointerCapture() {} };
 }
 const document = {
@@ -65,6 +81,7 @@ const document = {
   createElement: element,
 };
 const requests = [], events = new Map();
+const state = { track: 0, view: "tape", module: -1 };
 let resolveRendered;
 const rendered = new Promise(resolve => { resolveRendered = resolve; });
 let context;
@@ -80,13 +97,52 @@ context = vm.createContext({
   document, AudioContext, atob, Uint8Array, setTimeout,
   window: { addEventListener(name, handler) { events.set(name, handler); } },
   fetch: async (_, options) => {
-    requests.push(JSON.parse(options.body));
-    return { ok: true, json: async () => ({ screen: "", audio: "" }) };
+    const request = JSON.parse(options.body);
+    requests.push(request);
+    if (request.op === "knob" && request.role === 1)
+      state.track = Math.max(0, Math.min(3, state.track + Math.sign(request.delta)));
+    if (request.op === "button") {
+      if (request.button === "HOME") { state.view = state.view === "tape" ? "visualizer" : "tape"; state.module = -1; }
+      else if (request.button === "GLO") { state.view = state.view === "tape" ? "mixer" : "other"; state.module = -1; }
+      else if (["EDIT", "ENV", "FX", "LFO"].includes(request.button)) {
+        state.view = state.track === 3 ? "drum" : "synth";
+        state.module = ["EDIT", "ENV", "FX", "LFO"].indexOf(request.button);
+      }
+    }
+    return { ok: true, json: async () => ({ screen: "", audio: "", state: { ...state } }) };
   },
 });
 vm.runInContext(readFileSync("build/host/preview-script.js", "utf8"), context);
+assert(nodes.get("keys-more").children.some(button => button.textContent === "SCL"));
+const mode = id => nodes.get("modes").children.find(button => button.dataset.id === id);
+const homeBefore = requests.filter(request => request.op === "button" && request.button === "HOME").length;
+await mode("tape").onclick();
 await vm.runInContext("queue", context);
-assert(nodes.get("modes").children.some(button => button.textContent === "SCL"));
+assert.equal(state.view, "tape");
+assert.equal(requests.filter(request => request.op === "button" && request.button === "HOME").length, homeBefore);
+const toDrum = mode("drum").onclick();
+const toSynth = mode("synth").onclick();
+await Promise.all([toDrum, toSynth]);
+await vm.runInContext("queue", context);
+assert.notEqual(state.track, 3);
+assert.equal(state.view, "synth");
+await mode("drum").onclick();
+await vm.runInContext("queue", context);
+assert.equal(state.track, 3);
+assert.equal(state.view, "drum");
+await mode("synth").onclick();
+await vm.runInContext("queue", context);
+assert.notEqual(state.track, 3);
+assert.equal(state.view, "synth");
+await mode("mixer").onclick();
+await vm.runInContext("queue", context);
+assert.equal(state.view, "mixer");
+await mode("tape").onclick();
+await vm.runInContext("queue", context);
+assert.equal(state.view, "tape");
+await mode("tape").onclick();
+await vm.runInContext("queue", context);
+assert.equal(state.view, "tape");
 const key = nodes.get("keys").children[0];
 key.onpointerdown({ preventDefault() {}, pointerId: 1 });
 key.onpointerup();

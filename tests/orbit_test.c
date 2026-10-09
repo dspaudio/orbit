@@ -106,6 +106,13 @@ static void tap(uint32_t b) { press(b); release(b); }
 static void key(uint32_t k) { fm1_in.notes |= 1u << k; frame(); fm1_in.notes &= ~(1u << k); frame(); }
 static int fails;
 static void check(int ok, const char *what) { printf("ui: %-74s %s\n", what, ok ? "ok" : "FAIL"); fails += !ok; }
+/* 사운드 페이지 헤더 둘째 줄(y 20..35)의 모듈 칸 cell(x 8 + 58 cell 부터 56 px)에 있는 순백 픽셀 수: 현재 모듈 칸만 흰색이다 */
+static uint32_t strip_white(uint32_t cell)
+{
+    uint32_t x, y, n = 0;
+    for (y = 20; y < 36u; y++) for (x = 8 + cell * 58u; x < 8 + cell * 58u + 56u; x++) n += screen[y * 240u + x] == 0xFFFFu;
+    return n;
+}
 
 int main(int argc, char **argv)
 {
@@ -197,13 +204,30 @@ int main(int argc, char **argv)
     tap(B_HOME);
     ui.msg_t=0; frame(); ppm("orbit-edited");
     open_family(FAM_EDIT); frame(); ppm("orbit-synth");
+    /* 오리지널 OP-1의 네 모듈 T1 engine / T2 envelope / T3 effect / T4 LFO와 FM-1 키 EDIT / ENV / FX / LFO: 헤더 둘째 줄에서
+     * 현재 모듈 칸만 흰색이다 */
+    check(orbit_sound_page() && orbit_module_of(cur_page())==0 && strip_white(0) && !strip_white(1) && !strip_white(2) && !strip_white(3),
+          "EDIT shows T1 engine as the active module");
     open_family(FAM_ENV); frame(); ppm("orbit-envelope");
+    check(orbit_module_of(cur_page())==1 && strip_white(1) && !strip_white(0) && !strip_white(2) && !strip_white(3),
+          "ENV shows T2 envelope as the active module");
+    check(cur_page()->id[0]==P_ATK && cur_page()->id[1]==P_DEC && cur_page()->id[2]==P_SUS && cur_page()->id[3]==P_REL,
+          "ENV default page is A / D / S / R on the four encoders");
+    open_family(FAM_FX); frame(); ppm("orbit-fx");
+    check(orbit_sound_page() && orbit_module_of(cur_page())==2 && strip_white(2) && !strip_white(1) && !strip_white(3),
+          "FX shows T3 effect as the active module");
+    open_family(FAM_FX); frame();
+    check(!orbit_sound_page() && str_eq(cur_page()->title,"FILTER"),"FX again walks to the FILTER subpage, not an enable toggle");
     open_family(FAM_LFO); frame(); ppm("orbit-lfo");
     check(cur_page()->graph==GR_LFO,"LFO opens source page");
     open_family(FAM_LFO); frame(); ppm("orbit-lfo-dest");
     check(cur_page()->id[0]==P_LD_PIT && cur_page()->id[3]==P_LD_AMP,"LFO second press opens audible modulation destinations");
+    check(orbit_module_of(cur_page())==3 && strip_white(3) && !strip_white(0),"LFO DEST shows T4 LFO as the active module");
     encs[panel.enc[EN_K1+3]]=30; frame();
     check(TSEL->p[P_LD_AMP]>0,"LFO DEST KNOB4 updates the actual amplitude depth");
+    /* depth가 있으면 SOURCE 페이지도 NO DEPTH 힌트 대신 모듈 안내를 보인다 */
+    open_family(FAM_LFO); frame();
+    check(cur_page()->graph==GR_LFO && strip_white(3) && !strip_white(2),"LFO SOURCE with a depth set shows T4 LFO as the active module");
     set_engine_of(TSEL,1); apply_preset_to(TSEL,0); TSEL->engine=TSEL->eng_req;
     open_family(FAM_EDIT); frame(); ppm("orbit-digital");
     set_engine_of(TSEL,4); apply_preset_to(TSEL,0); TSEL->engine=TSEL->eng_req;
@@ -231,6 +255,53 @@ int main(int argc, char **argv)
     go_home(); tap(B_GLO);
     check(!ui.home && cur_page()->scope==SC_TRK,"Tape GLO opens the actual mixer");
     frame(); ppm("orbit-mixer");
+    /* 믹서 level 화면: KNOB 1..4가 트랙 1..4의 level을 편집하고(드럼은 G_DRLVL) swing·LEN은 그대로다. 같은 knob의 연속 회전은
+     * accel()의 가속을 피하려고 frames(5)로 띄운다. 도해의 픽셀은 knob이 바꾼 값에서 나온다 */
+    {
+        int16_t swing=song.g[G_SWING], len=trk[0].p[P_SLEN], bpm=song.g[G_BPM], dl=TDRUM->p[P_LEVEL];
+        uint32_t k;
+        for(k=0;k<NTRK;k++) { trk[k].p[P_MUTE]=0; trk[k].p[P_PAN]=0; if(k<NPART) trk[k].p[P_LEVEL]=100; }
+        song.g[G_DRLVL]=100; frames(5);
+        encs[panel.enc[EN_K1]]=2; frame();
+        check(trk[0].p[P_LEVEL]==102 && trk[1].p[P_LEVEL]==100 && trk[2].p[P_LEVEL]==100 && song.g[G_DRLVL]==100 &&
+              song.g[G_SWING]==swing && trk[0].p[P_SLEN]==len,"mixer KNOB 1 edits track 1 level only");
+        encs[panel.enc[EN_K1+1]]=-3; frame();
+        check(trk[1].p[P_LEVEL]==97 && trk[0].p[P_LEVEL]==102,"mixer KNOB 2 edits track 2 level");
+        encs[panel.enc[EN_K1+2]]=4; frame();
+        check(trk[2].p[P_LEVEL]==104,"mixer KNOB 3 edits track 3 level");
+        encs[panel.enc[EN_K1+3]]=5; frame();
+        check(song.g[G_DRLVL]==105 && TDRUM->p[P_LEVEL]==dl,"mixer KNOB 4 edits the drum level G_DRLVL");
+        trk[1].p[P_MUTE]=1; frames(5);
+        encs[panel.enc[EN_K1+1]]=4; frame();
+        check(!trk[1].p[P_MUTE] && trk[1].p[P_LEVEL]==97,"a muted track: the first turn of its knob only unmutes it");
+        trk[0].p[P_LEVEL]=127; trk[1].p[P_LEVEL]=0; ui.force=1; frame();
+        check(screen[96*240+30]==swap16(TE_COL[0]) && screen[96*240+90]==swap16(TE_G2),
+              "mixer faders are drawn from the levels the knobs edit");
+        encs[panel.enc[EN_SELECT]]=1; frame();
+        check(cur_page()->scope==SC_TRK && mixer_kind()==MX_PAN && song.g[G_BPM]==bpm,"mixer SELECT opens the PAN page, not the tempo");
+        frames(5);
+        encs[panel.enc[EN_K1]]=-6; frame();
+        check(trk[0].p[P_PAN]==-6 && trk[0].p[P_LEVEL]==127,"PAN page KNOB 1 edits track 1 pan, not its level");
+        encs[panel.enc[EN_K1+3]]=7; frame();
+        check(TDRUM->p[P_PAN]==7 && song.g[G_DRLVL]==105,"PAN page KNOB 4 edits the drum track pan");
+        trk[2].p[P_PAN]=63; ui.force=1; frame(); ppm("orbit-mixer-pan");
+        check(screen[100*240+168]==swap16(TE_COL[2]) && screen[100*240+132]==swap16(TE_G2),
+              "pan markers are drawn from the pans the knobs edit");
+        /* 예전 경로는 TRACK 페이지 뒤에 그대로: KNOB 1 전역 SWING, 2 선택 트랙 level, 3 LEN, 4 PAN */
+        encs[panel.enc[EN_SELECT]]=1; frame();
+        check(mixer_kind()==MX_TRACK && str_eq(cur_page()->title,"TRACK") && song.g[G_BPM]==bpm,"mixer SELECT again opens the TRACK page with the old knob paths");
+        frames(5);
+        encs[panel.enc[EN_K1]]=3; frame();
+        encs[panel.enc[EN_K1+2]]=2; frame();
+        check(song.g[G_SWING]==swing+3 && trk[0].p[P_SLEN]==len+2 && trk[0].p[P_LEVEL]==127 && trk[0].p[P_PAN]==-6,
+              "TRACK page KNOB 1 edits the global swing and KNOB 3 the selected track's length, as before");
+        frame(); ppm("orbit-mixer-track");
+        song.g[G_SWING]=swing; trk[0].p[P_SLEN]=len;
+        encs[panel.enc[EN_SELECT]]=-9; frame();
+        check(mixer_kind()==MX_LEVEL && cur_page()->scope==SC_TRK,"mixer SELECT left returns to the level page");
+        for(k=0;k<NTRK;k++) { trk[k].p[P_PAN]=0; if(k<NPART) trk[k].p[P_LEVEL]=TP[P_LEVEL].def; }
+        song.g[G_DRLVL]=GP[G_DRLVL].def; frame();
+    }
     tap(B_GLO);
     check(!ui.home && cur_page()->fam==FAM_GLO,"mixer GLO opens global settings");
     song.sel=TRK_DRUM; go_home(); tap(B_SEQ);
@@ -242,6 +313,8 @@ int main(int argc, char **argv)
     check(ui.home,"drum HOME returns to Tape");
     tap(B_EDIT);
     check(on_drum_page(),"drum Tape EDIT reaches drum controls");
+    open_family(FAM_FX); frame();
+    check(!orbit_sound_page(),"the drum track keeps its own pages, no synth module strip");
     song.sel=0;
     go_home();
     for(i=0;i<2000;i++) {
@@ -280,6 +353,10 @@ int main(int argc, char **argv)
         settings.palette=i; palette_set(i); ui.force=1; frame();
         if(i>=4u) { char n[40]; snprintf(n,sizeof n,"orbit-style-%s",PALETTES[i].name); ppm(n); }
         check(i!=4u || (TE_COL[0]>>11)==((TE_COL[0]>>5)&63u)/2u,"MONO uses gray track colors");
+        /* 기본 ORBIT 팔레트는 오리지널 OP-1의 encoder 순서 blue / green / white / orange; PASTEL·NEON은 자기 셋째 색을 지킨다 */
+        check(i!=5u || (TE_COL[0]==RGB(40,124,255) && TE_COL[1]==RGB(30,204,112) && TE_COL[2]==C_WHITE && TE_COL[3]==RGB(255,98,26)),
+              "ORBIT encoders are blue, green, white, orange");
+        check((i!=6u && i!=7u) || TE_COL[2]!=C_WHITE,"PASTEL and NEON keep their own third colour");
         ui.menu=1; ui.menu_sel=MI_COLOR; ui.force=1; frame(); ui.menu=0;
     }
     /* 실제 활성 오디오 프레임의 모든 픽셀을 RGB565 양자화 오차 안에서 검사한다. */

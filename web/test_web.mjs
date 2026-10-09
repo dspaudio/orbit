@@ -829,6 +829,23 @@ function editorTabs() {
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   ok(/localStorage\.setItem\(TAB_KEY/.test(html) && /try \{ localStorage/.test(html) && /history\.replaceState\([^)]*"#" \+ name\)/.test(html)
     && /addEventListener\("hashchange"/.test(html), "editor: last tab in localStorage (try/catch) and in the URL hash");
+  {
+    const modes = vm.runInNewContext("(" + ((/const MODE_TAB = (\{[^}]+\});/.exec(html) || [])[1] || "{}") + ")");
+    const modeKeys = vm.runInNewContext("(" + ((/const MODE_KEY = (\{[^}]+\});/.exec(html) || [])[1] || "{}") + ")");
+    const preview = readFileSync(join(HERE, "../preview/index.html"), "utf8");
+    const nativeModes = vm.runInNewContext((/const MODES=(\[[\s\S]*?\n\]);/.exec(preview) || [])[1] || "[]");
+    const modules = vm.runInNewContext((/const MODULES = (\[[^;]+\]);/.exec(html) || [])[1] || "[]");
+    const src = (html.match(/function modeOf\(tab, drum\) \{[\s\S]*?\n\}/) || [])[0];
+    const modeOf = src ? vm.runInNewContext(`(${src})`) : () => null;
+    ok(js(modes) === js({ synth: "sound", drum: "sequencer", tape: "sequencer", mixer: "tracks" })
+      && js(modeKeys) === js(Object.fromEntries(nativeModes.map(({ id, key }) => [id, key])))
+      && js(modules) === js([["engine", "EDIT"], ["env", "ENV"], ["fx", "FX"], ["lfo", "LFO"]])
+      && modeOf("sound", false) === "synth" && modeOf("sequencer", false) === "tape"
+      && modeOf("sequencer", true) === "drum" && modeOf("tracks", false) === "mixer"
+      && /\.modebar button:hover:not\(:disabled\):not\(\[aria-pressed="true"\]\)/.test(html)
+      && /id="modebar"/.test(html) && /id="modules" role="group"/.test(html),
+      "editor: OP-1 modes and T1..T4 modules map to existing editor state");
+  }
   /* every string key in both languages */
   const tb = html.slice(html.indexOf("const TEXT = {"), html.indexOf("\n};", html.indexOf("const TEXT = {")) + 2);
   const TEXT = vm.runInNewContext(tb.replace("const TEXT =", "(") + ")");
@@ -846,10 +863,10 @@ function editorTabs() {
   {   /* 2.4: the device's palette as tokens (:root), used through var(--...); outside them only #000 (text on a colour) */
     const css = html.slice(html.indexOf("<style>"), html.indexOf("</style>")).replace(/:root\s*\{[^}]*\}/g, "");
     const hex = [...css.matchAll(/#[0-9a-f]{3,6}\b/gi)].map((m) => m[0].toLowerCase()).filter((c) => c !== "#000");
-    ok(!hex.length && /--t1: #287cff; --t2: #1ecc70; --t3: #ffc618; --t4: #ff621a;/.test(html),
+    ok(!hex.length && /--t1: #287cff; --t2: #1ecc70; --t3: #ffffff; --t4: #ff621a;/.test(html),
       "editor: the track colours of the device (ui_studio.c TE_COL), colours only as tokens" + (hex.length ? ` (${hex.join(" ")})` : ""));
     const te = readFileSync(join(HERE, "../firmware/src/gfx.c"), "utf8").replaceAll(",", ", ");
-    ok(te.replace(/\s+/g, "").includes("{RGB(40,124,255),RGB(30,204,112),RGB(255,198,24),RGB(255,98,26)}"),
+    ok(te.replace(/\s+/g, "").includes("{RGB(40,124,255),RGB(30,204,112),RGB(255,255,255),RGB(255,98,26)}"),
       "editor: default ORBIT track colors match the firmware TRACK_STYLES");
     ok(/SLOOP-FONT\*\/url\(data:font\/ttf;base64,[A-Za-z0-9+\/=]{20000,}\)/.test(html), "editor: the device's Terminus font inlined (tools/gen_webfont.py)");
   }

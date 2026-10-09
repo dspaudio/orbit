@@ -318,7 +318,9 @@ static const page_t PAGES[] = {
     {"STEP", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}},
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},
     {"SONG", FAM_SEQ, SC_SONG, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},
-    {"TRACKS", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},   /* REC button; TRACK LEVEL LEN PAN */
+    {"TRACKS", FAM_TRK, SC_TRK, GR_TRK, {P_LEVEL, P_LEVEL, P_LEVEL, P_LEVEL}},   /* GLO: 믹서 level 화면, KNOB 1..4 = 트랙 1..4 level (드럼은 G_DRLVL) */
+    {"PAN", FAM_TRK, SC_TRK, GR_TRK, {P_PAN, P_PAN, P_PAN, P_PAN}},   /* SELECT: 네 트랙의 pan */
+    {"TRACK", FAM_TRK, SC_TRK, GR_TRK, {0xFF, 0xFF, 0xFF, 0xFF}},   /* SELECT 한 번 더: 예전 경로, 전역 SWING / 선택 트랙의 LEVEL / LEN / PAN */
     {"DRUMS", FAM_TRK, SC_DRUM, GR_NONE, {0xFF,0xFF,0xFF,0xFF}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))

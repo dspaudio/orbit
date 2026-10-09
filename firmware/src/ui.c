@@ -89,6 +89,14 @@ static struct {
 } ui;
 
 static const page_t *cur_page(void) { return &PAGES[ui.page]; }
+/* 믹서(GLO)의 페이지, SELECT로 오간다: TRACKS(네 knob = 트랙 1..4 level) -> PAN(트랙 1..4 pan) -> TRACK(예전 경로 그대로:
+ * 전역 SWING, 선택 트랙의 LEVEL / LEN / PAN). 페이지는 id[0]으로 구분한다(P_LEVEL, P_PAN, 0xFF) */
+enum { MX_LEVEL, MX_PAN, MX_TRACK };
+static uint32_t mixer_kind(void)
+{
+    const page_t *pg = cur_page();
+    return pg->scope != SC_TRK ? MX_LEVEL : pg->id[0] == P_PAN ? MX_PAN : pg->id[0] == 0xFFu ? MX_TRACK : MX_LEVEL;
+}
 static int32_t accel(uint32_t role, int32_t s, int32_t range);   /* ui_input.c */
 static void layer_screen_draw(void);                            /* ui_layers.c */
 static void hold_screen_draw(void);

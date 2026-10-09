@@ -41,8 +41,10 @@ static const palette_t PALETTES[] = {
 };
 #define NPALETTES (sizeof(PALETTES) / sizeof(PALETTES[0]))
 static uint16_t pal[5], TE_COL[4], TE_MID[4], TE_DIM[4], te_alert;
+/* ORBIT(기본): 오리지널 OP-1의 encoder 순서 blue / green / white / orange. 셋째 색은 노랑이 아니라 흰색이다.
+ * PASTEL과 NEON은 사용자가 고르는 팔레트로 자기 색을 유지한다 */
 static const uint16_t TRACK_STYLES[3][4] = {
-    {RGB(40,124,255), RGB(30,204,112), RGB(255,198,24), RGB(255,98,26)},
+    {RGB(40,124,255), RGB(30,204,112), RGB(255,255,255), RGB(255,98,26)},
     {RGB(142,182,255), RGB(140,224,176), RGB(255,222,140), RGB(255,166,150)},
     {RGB(52,210,255), RGB(114,255,100), RGB(244,255,60), RGB(255,86,194)},
 };

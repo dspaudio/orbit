@@ -25,7 +25,14 @@ int main(int argc, char **argv)
             for(i=0;i<n;i+=CTL) { uint32_t k; mix_block(mix,CTL); for(k=0;k<CTL;k++) { wav_put(f,mix[k*2],mix[k*2+1]); scope_bufr[scope_w&(SCOPE_N-1u)]=vis_tap[k*2+1]; scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[k*2]; } }
             fclose(f); fm1_ms+=n*1000u/FS; ui_leds(); ui_draw();
         }
-        ppm("screen"); puts("OK"); fflush(stdout);
+        /* HTTP 조작 행의 선택 상태는 추측하지 않고 실제 C 화면 상태로 돌려준다. */
+        {
+            const page_t *pg=cur_page();
+            int module=pg->fam==FAM_EDIT?0:pg->fam==FAM_ENV?1:pg->fam==FAM_FX?2:pg->fam==FAM_LFO?3:-1;
+            const char *view=ui.home?(vis_on?"visualizer":"tape"):pg->scope==SC_TRK?"mixer":
+                pg->scope==SC_DRUM?"drum":module>=0?(is_drum(TSEL)?"drum":"synth"):"other";
+            ppm("screen"); printf("OK %u %s %d\n",(unsigned)song.sel,view,module); fflush(stdout);
+        }
     }
     return 0;
 }

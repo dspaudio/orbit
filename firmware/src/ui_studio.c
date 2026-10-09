@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* LIVE screens, 240 x 240, in a teenage-engineering-like style: black, four colours (one per
- * track and per knob: blue, green, yellow, orange), white for what you touch, red for recording,
+ * track and per knob: blue, green, white, orange), white for what you touch, red for recording,
  * big numbers, lowercase labels, four dials at the bottom that show what KNOB 1..4 do.
  * Screens: TRACKS (the performance view), DRUMS (GRID / KIT, pads that flash on each hit), the
  * LAYERS (a function button held: what the 16 white keys and the knobs do now), HOLD (a hold to
