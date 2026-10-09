@@ -4,7 +4,9 @@
 
 ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current development version: **0.4.0**.
 
-> Development status: host tests pass, but the pi32v2 target build and real FM-1 validation are pending. No installable firmware package is provided. Bluetooth headphone pairing and audio output are not implemented.
+> 현재 상태: pi32v2 타깃 빌드와 `build/orbit.fwsc` 생성·설치 형식 검증을 완료했습니다. 실제 FM-1은 연결되지 않았으므로 실기기 부트·USB·오디오 타이밍은 미검증입니다. 전체 검사의 기존 CPU·ISR 예산 초과 두 건은 [검증 기록](docs/VALIDATION.md)에 남겨 두었습니다. Bluetooth 헤드폰 기능은 구현되지 않았습니다.
+
+웹 화면은 영어로 시작하며 Sloop 로고 대신 ultrathin `Orbit` 워드마크를 표시합니다. 펌웨어도 1픽셀 스트로크의 `Orbit` 부트 화면을 먼저 표시하고, 최소 750 ms 뒤 일반 UI를 그립니다. 새 framebuffer나 PCM 버퍼는 추가하지 않았습니다.
 
 ## Color styles and SLOOP 2.4.1 integration (0.4.0)
 
@@ -126,6 +128,8 @@ Open http://127.0.0.1:8080 and press the audio-start button. The preview include
 
 The preview uses the firmware DSP but buffers approximately 250–550 ms of browser audio, so it cannot establish device performance or playing latency. Its project save/load doubles are nonpersistent. Uploading user samples into the preview process is not supported.
 
+미리보기는 버튼 탭만 지원합니다. HOME 길게 누르기와 레이어 조합은 실기기에서 사용합니다. SCL과 SELECT를 포함한 컨트롤, 짧은 건반 입력, Visualizer의 좌우 tap을 실제 C 입력·출력 경로에 연결했습니다.
+
 ## FM-1 controls
 
 | Control | HOME / event Tape action |
@@ -142,6 +146,8 @@ The preview uses the firmware DSP but buffers approximately 250–550 ms of brow
 | EDIT / SEQ / GLO | Sound editing / step sequencer / mixer |
 | Hold HOME | Existing settings menu |
 
+Tape에서 GLO를 누르면 실제 트랙 믹서가 열리고, 믹서에서 다시 GLO를 누르면 글로벌 설정으로 이동합니다. 드럼 트랙의 Tape에서 EDIT 또는 SEQ를 누르면 DRUMS 페이지가 열립니다.
+
 Synth clips can move between synth tracks. Drum clips can only be dropped onto the drum track. Synth LIFT participates in the existing EDIT+OCT− undo path. A lifted drum region can be restored by dropping the clipboard; copying another region replaces that clipboard. Visualizer에서도 OCT±는 옥타브를 조절하며 Tape나 클립보드를 수정하지 않습니다. Outside HOME, the existing OCT± controls remain available.
 
 For sample import and CHOP editing, use `web/editor.html`. Device communication uses the original SLOOP Web MIDI workflow and browser requirements; see [the upstream README](README-SLOOP.md).
@@ -155,7 +161,7 @@ python tools/orbit_preview.py --port 8080
 python tests/orbit_preview_test.py
 ```
 
-The 0.4.0 host checks passed **19 test programs**, covering IRQ initialisation, recovery, Tape editing, panel input, sequencer behaviour, projects, storage, drums, recording, song audio and UI bounds. Native HTTP preview integration, non-silent 44.1 kHz stereo output, input rejection and JavaScript syntax checks passed during preview development. The existing web editor suite also passed; package checks were skipped because no target firmware package exists.
+Linux amd64에서 `tools/orbit_check.py`의 **19개 호스트 프로그램**이 통과했습니다. 웹 에디터·설치 CLI·네이티브 HTTP 미리보기 검사도 통과했고, 실제 브라우저에서 C 엔진의 무음이 아닌 스테레오 오디오와 파형을 확인했습니다. 패키지 검사는 생성된 `orbit.fwsc`의 CRC, 로더 마커, Python/JavaScript logical image 일치를 포함합니다. `sh tests/run_tests.sh`는 기존 PHASE CPU 예산과 ALNK0 ISR 정적 예산 초과로 exit 1이며, 기준이나 허용치를 완화하지 않았습니다.
 
 See [validation details](docs/VALIDATION.md) for evidence and limitations. Host results do not establish target boot safety, RAM/flash usage or real-time audio performance.
 
@@ -163,7 +169,7 @@ See [validation details](docs/VALIDATION.md) for evidence and limitations. Host 
 
 Following the upstream Felucca #61 / #111 mitigation, `fm1_irq_init` explicitly clears EMU_CON bit 2, including a stale setting from a previous boot. Other register bits, exception configuration, vectors and branch tracing are preserved.
 
-The test runs the actual initialisation function against RAM-backed MMIO on Linux and checks cold/warm states and repeated initialisation. Disabling the trap does not fix arithmetic errors or guarantee safe boot on hardware; target compiler and device validation are still pending.
+The test runs the actual initialisation function against RAM-backed MMIO on Linux amd64 and checks cold/warm states and repeated initialisation. 타깃 컴파일은 완료했지만 이 호스트 테스트는 실제 기기 부트 안전성을 보장하지 않습니다. macOS의 MMIO 테스트 컴파일 한계와 실기기 미검증 범위는 검증 기록에 구분합니다.
 
 ## Build for FM-1
 
@@ -175,7 +181,7 @@ export AC79_SDK=/path/to/AC79_SDK
 python tools/build.py
 ```
 
-The inherited output filename is `build/felucca.fwsc`. No such installable package is included in this repository. The target toolchain and SDK were unavailable in the development environment.
+The installable output filename is `build/orbit.fwsc`. Generated packages are not committed to this repository.
 
 ## Origin and licensing
 

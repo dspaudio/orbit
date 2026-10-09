@@ -64,7 +64,7 @@ An absent status byte retains the original reply format.
 | 10 NAMES | engine | engine, count, count preset-name strings, then the two edit-page titles |
 | 11 SMP_BEGIN | slot 0..2 | slot, rc (0 ok). Erases the slot's header sector: the slot is empty from now on |
 | 12 SMP_WRITE | slot, offset (3 × 7 bit, LSB first), pack7 data (≤ 256 bytes) | slot, offset, rc: 0 ok, 1 arguments, 2 erase, 3 write, 4 slot in use (send SMP_BEGIN first). Offset ≥ 512 and a multiple of 256; writes go in increasing order (a write at a 4 KiB boundary erases that sector) |
-| 13 SMP_END | slot, pack7 header (480 bytes) | slot, rc: 0 ok, 1 size, 2 header, 3 data CRC, 4 flash, 5 zones |
+| 13 SMP_END | slot, pack7 header (480 bytes) | slot, rc: 0 ok, 1 size, 2 header, 3 data CRC, 4 flash, 5 zones, 6 no SMP_BEGIN first |
 | 14 SMP_ERASE | slot | slot, rc (erases the whole slot, ~1 s) |
 | 15 SMP_INFO | — | slots, slot KiB, then per slot: zone count (0 = empty), name string, data KiB |
 | 16 UP_LIST | start, count (1..16) | start, count, total slots, then per slot: used (0/1), engine, name string ("" if unused) |
@@ -276,7 +276,7 @@ empty). Numbers are 5 × 7 bit (u35, LSB first); data is pack7.
 | --- | --- | --- |
 | 34 BK_LIST | — | rc (0 ok, 4 no flash), count, then per object: id, length u35, CRC-32 u35 (zlib). Takes a snapshot of the working project and the settings for GET |
 | 35 BK_GET | id, offset u35, count (2 × 7 bit, 1..256) | id, rc (0 ok, 1 arguments, 5 the snapshot is gone: LIST again), offset u35, count, pack7 data |
-| 36 BK_PUT | op 0 begin: id 0..7, length u35, CRC-32 u35 · op 1 data: id, offset u35, pack7 (≤ 256 bytes, in order) · op 2 commit: id · op 3 abort: id | op, id, rc: 0 ok, 1 arguments, 2 not a valid object (CRC, magic, sizes, ranges), 3 stop the song first (projects and preset banks), 4 flash, 5 no begin for this object (or more than 15 s ago) |
+| 36 BK_PUT | op 0 begin: id 0..8, length u35, CRC-32 u35 · op 1 data: id, offset u35, pack7 (≤ 256 bytes, in order) · op 2 commit: id · op 3 abort: id | op, id, rc: 0 ok, 1 arguments, 2 not a valid object (CRC, magic, sizes, ranges), 3 stop the song first (projects and preset banks), 4 flash, 5 no begin for this object (or more than 15 s ago) |
 
 A restore stages one object in RAM (the project load buffer), checks it at the commit as a load checks it
 (projects: magic, size and sum, older formats converted; banks: magic, record size, slot count; settings:
@@ -300,8 +300,8 @@ device while a lock is in force wins: the value found is kept as the new base. S
 
 - **Lockable parameters** (firmware `seq.c p_lockable`): `P_LEVEL` .. `P_LD_AMP` (ids 0..16: level, the envelope,
   its destinations, the LFO and its destinations), `P_SGATE` (32), the sends `P_DIST` .. `P_REV` (33..36),
-  `P_GLIDE` (38), `P_PAN` (39), `P_DETUNE` (44), the SLICER `P_SLCR` .. `P_SLDEPTH` (45..48) and the engine's
-  `P_E0` .. `P_E7` (50..57). Not lockable: the pattern (`LEN DIV SWG`), the arp, the key (`ROOT SCL QNT TRN CHORD`),
+  `P_GLIDE` (38), `P_PAN` (39), `P_DETUNE` (44), the SLICER `P_SLCR` .. `P_SLDEPTH` (45..48), the track filter
+  `P_TFLT` (50) and the engine's `P_E0` .. `P_E7` (53..60). Not lockable: the pattern (`LEN DIV SWG`), the arp, the key (`ROOT SCL QNT TRN CHORD`),
   the voice mode and its options (`VCE GLMOD PRIO ALLOC`), `MUTE`. `LOCK_SET` on one answers rc 2 and writes nothing.
 - **Values** are clamped to the parameter's range on that track (the engine parameters to the engine's; the drum
   track's `P_E0` to the kits), as `TRACK_PARAM`. A load clamps them again and frees locks on a parameter that is

@@ -29,7 +29,7 @@ orbit/
 ├── tools/        # build.py, 생성기, 미리보기, 설치 - 하위 AGENTS.md
 ├── tests/        # 호스트 테스트, 러너, 기준값 - 하위 AGENTS.md
 ├── web/          # editor.html, EDITOR_PROTOCOL.md, fm1ota.js, fm1pkg.js (루트가 담당)
-├── preview/      # index.html: 네이티브 미리보기 UI (한국어)
+├── preview/      # index.html: 네이티브 미리보기 UI (영어 기본)
 ├── docs/         # VALIDATION.md, OP1-ENGINES.md, 이미지, mp3
 ├── assets/       # fonts, samples-cc0, icons
 ├── LICENSES/, LICENSE, LICENSING.md
@@ -91,15 +91,15 @@ orbit/
 python tools/orbit_check.py                 # SDK 없이 가능: build.generate() 후 CASES 19개 → build/host/orbit-checks.txt
 python tools/orbit_preview.py --port 8080   # cc로 tools/orbit_host.c 빌드 (--host, --no-build)
 python tests/orbit_preview_test.py          # 미리보기를 먼저 빌드한 뒤 실행
-./build.sh [--release X.Y]                  # 툴체인/SDK/Pillow 검사 후 tools/build.py, macOS는 Docker 필요
-tests/run_tests.sh                          # build/felucca.fwsc가 없으면 즉시 종료
+sh build.sh [--release X.Y]                 # 툴체인/SDK/Pillow 검사 후 tools/build.py, macOS는 Docker 필요
+sh tests/run_tests.sh                       # build/orbit.fwsc가 없으면 즉시 종료
 python3 tests/target_budget.py build/felucca.dis tests/target_budget.txt
 node web/test_web.mjs
 ```
 환경변수: `JIELI_TOOLCHAIN`(기본 ~/.jieli/toolchain), `AC79_SDK`(기본 ~/fw-AC79_AIoT_SDK).
 
 ## NOTES
-- 현재 상태: 호스트 검사 19개 PASS(README 기준). 타깃 빌드, target_budget, FM-1 검증은 수행하지 않았고 .fwsc도 없습니다.
-- BUILDING.md가 언급하는 `web/make_site.py`는 저장소에서 추적되지 않습니다.
+- 현재 상태: pi32v2 빌드와 `build/orbit.fwsc` 생성은 검증했습니다. 실기기 검증과 CPU 예산 실패의 상세 상태는 `docs/VALIDATION.md`를 확인합니다.
+- `web/make_site.py`와 독립 웹 설치 페이지는 저장소에 없습니다. 설치에는 `tools/fm1_install.py`를 사용합니다.
 - 미리보기 오디오 버퍼는 250~550 ms입니다.
 - 핫스팟: seq.c 2262줄, usb.c 1142줄, editor.c 1110줄, web/editor.html 6079줄, web/test_web.mjs 1102줄.

@@ -13,7 +13,7 @@
 | 러너 | 전제 | 범위 |
 |------|------|------|
 | `python tools/orbit_check.py` | 벤더 SDK 불필요. `build.generate()`로 `build/gen` 생성 | `CASES`의 19개 프로그램, 3병렬, 로그 `build/host/<name>.log`, 요약 `build/host/orbit-checks.txt` |
-| `tests/run_tests.sh` | `build/felucca.fwsc`가 없으면 즉시 종료("run ./build.sh first"), 즉 타깃 빌드가 필요 | 전체: storage/recovery/OTA/loader, regress, `target_budget.py`, `install_test.py`, `node web/test_web.mjs`(node가 있을 때) |
+| `tests/run_tests.sh` | `build/orbit.fwsc`가 없으면 즉시 종료("run sh build.sh first"), 즉 타깃 빌드가 필요 | 전체: storage/recovery/OTA/loader, regress, `target_budget.py`, `install_test.py`, `node web/test_web.mjs`(node가 있을 때) |
 | `python tests/orbit_preview_test.py` | 먼저 미리보기를 한 번 빌드(`--no-build`로 서버 기동) | HTTP 브리지와 네이티브 오디오 |
 
 - 개별 빌드 형식: `cc -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o build/host/<t> tests/<t>.c -lm`. 예외로 `uac_test`는 `-DHALF_FRAMES=256 -DT_CDC=1`이 필요하고, `orbit_test`는 출력 디렉터리 인자를 받습니다.

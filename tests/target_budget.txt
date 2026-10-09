@@ -4,9 +4,8 @@
 # SLOOP 2.0 (reviewed): analog +9 % (drive crossfade, phase reset), lofi +4 % (input clamp), slicer on
 # the sample-accurate clock (its divides are per step / per block, not per sample: the per-sample
 # loop has none), the mix out of the ISR into its own function (fm1_alnk0_irq calls it).
-# SLOOP 2.4: FM6 (fm6_op_run, fm6_op_fb: the per-sample operator loops; fm6_render: the voice's output loop)
-# are in FUNCS without a budget yet: the engine was ported on a host without the pi32v2 toolchain; the
-# next ./build.sh + BUDGET_UPDATE=1 adds their lines (until then they print "no budget", not a failure).
+# ORBIT/FM6 첫 타깃 측정: 2026-10-09, jieli-linux-toolchains-20250324.1.
+# 새 엔진의 기준만 추가하며 기존 ISR 기준과 허용치는 유지한다. 정적 비용은 실기기 사이클 측정이 아니다.
 analog_render 638
 digital_render 333
 phase_render 79
@@ -19,7 +18,13 @@ drawbar_render 267
 drawbar_block 102
 grain_render 1734
 grain_block 138
+swarm_render 204
+orbit_pulse_render 83
+orbit_fm4_render 227
 slicer_track 825
 drums_mix 6153
+fm6_op_run 72
+fm6_op_fb 26
+fm6_render 372
 fm1_alnk0_irq 174
 

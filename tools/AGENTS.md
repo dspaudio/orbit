@@ -8,7 +8,7 @@
 |------|------|------|
 | 타깃 빌드 | `build.py` (`./build.sh`가 Pillow·툴체인·SDK·Docker를 확인한 뒤 exec) | `--release X.Y`; `FELUCCA_*` 플래그와 `FELUCCA_VERSION`(기본값은 `firmware/src/ui.c`) |
 | Windows 빌드 | `build_windows.py` | `build.generate()` 재사용 |
-| 생성 헤더 | `build.py` `generate()` | `build/gen/`에 `felucca_font.h`, `felucca_icons.h`, `felucca_tables.h`, `felucca_samples.h`, `felucca_drumkits.h`, `felucca_fm6.h`, `sloop_logo.h`를 병렬 생성 |
+| 생성 헤더 | `build.py` `generate()` | `build/gen/`에 `felucca_font.h`, `felucca_icons.h`, `felucca_tables.h`, `felucca_samples.h`, `felucca_drumkits.h`, `felucca_fm6.h`를 병렬 생성 |
 | 개별 생성기 | `gen_font.py`, `gen_icons.py`, `gen_tables.py`, `gen_samples.py`, `gen_drumkits.py`, `gen_fm6_patches.py`, `gen_logo.py`, `gen_waves.py`, `gen_webfont.py`, `gen_builtin_hiphop.py`, `gen_hiphop_pack.py` | |
 | 레벨 보정 | `level_drumkits.py`, `level_presets.py`, `drumkit_levels.json`(579줄 생성 데이터) | |
 | 호스트 검사 | `orbit_check.py` | 19개 `CASES`; 내용은 `tests/AGENTS.md` 참고 |

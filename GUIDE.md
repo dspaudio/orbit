@@ -2,8 +2,6 @@
 
 This is the retained upstream reference. For ORBIT color styles, event Tape controls, engine IDs and demo loading, use [README.md](README.md). HOME knobs in ORBIT edit event Tape; tapping HOME opens the visualizer.
 
-<p align="center"><img src="assets/logo/sloop-logo.png" alt="SLOOP" width="420"></p>
-
 # SLOOP 2.4.1 — The Complete Guide
 
 Everything SLOOP does, every button, every combination, every page, in one place. This guide is written to be read from the top the first time, then used as a reference: the [cheat sheet](#26-cheat-sheet) at the end has every combination on one page.
@@ -462,7 +460,7 @@ A **lock** gives one sound parameter another value **for that step only** (Elekt
 3. Turn **PRESETS**: the first click makes the lock, one click away from the track's value; the next ones move it. The title line shows it (*lock dst 14*; *lock flt --* = no lock yet).
 4. **ALGORITHM** (step still held) steps through the other parameters, wrapping round.
 
-At the next step without a lock on that parameter, it comes back to its base value (notes still ringing follow). A knob turned on the page while a lock is in force wins: that value becomes the new base. Several locks can sit on one step (one per parameter), **24 per track**. The sound parameters of the track can be locked (and the PATTERN page's GATE); the arp, key / scale / chord, STRUM / VLEAD, voice-mode, MUTE, LEN / DIV / SWG and the global pages cannot (*NOT LOCKABLE*; *NO LOCK LEFT* when the 24 are used). A locked step shows the same dot as a nudged one; **SEQ + step + OCT−** clears both. Undo (EDIT + OCT−) is for steps: it does not bring nudges and locks back.
+At the next step without a lock on that parameter, it comes back to its base value (notes still ringing follow). A knob turned on the page while a lock is in force wins: that value becomes the new base. Several locks can sit on one step (one per parameter), **24 per track**. The sound parameters of the track can be locked (and the PATTERN page's GATE); the arp, key / scale / chord, STRUM / VLEAD, voice-mode, MUTE, LEN / DIV / SWG and the global pages cannot (*NOT LOCKABLE*; *NO LOCK LEFT* when the 24 are used). A locked step shows the same dot as a nudged one; **SEQ + step + OCT−** clears both. In ORBIT, Undo (EDIT + OCT−) restores the steps together with their nudges, fill conditions and locks.
 
 ### Fill conditions
 
