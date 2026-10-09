@@ -22,7 +22,7 @@ int main(int argc, char **argv)
             fm1_in.notes=(uint32_t)b & 0xFFFFFFu; ui_input();
             snprintf(path,sizeof path,"%s/chunk.wav",outdir); FILE *f=fopen(path,"wb"); if(!f) return 2;
             wav_hdr(f,n);
-            for(i=0;i<n;i+=CTL) { uint32_t k; mix_block(mix,CTL); for(k=0;k<CTL;k++) { wav_put(f,mix[k*2],mix[k*2+1]); scope_bufr[scope_w&(SCOPE_N-1u)]=vis_tap[k*2+1]; scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[k*2]; } }
+            for(i=0;i<n;i+=CTL) { uint32_t k; mix_block(mix,CTL); for(k=0;k<CTL;k++) { wav_put(f,mix[k*2],mix[k*2+1]); if(k&1u) { scope_bufr[scope_w&(SCOPE_N-1u)]=vis_tap[k*2+1]; scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[k*2]; } } }
             fclose(f); fm1_ms+=n*1000u/FS; ui_leds(); ui_draw();
         }
         /* HTTP 조작 행의 선택 상태는 추측하지 않고 실제 C 화면 상태로 돌려준다. */

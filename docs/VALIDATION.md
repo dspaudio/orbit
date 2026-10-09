@@ -17,6 +17,11 @@
 
 로그는 `build/host/release-0.4.1-build.log`, `release-0.4.1-tests.log`, `release-0.4.1-counted-preview.log`입니다. Linux timed CPU의 21개 참고 메모는 실패 판정이 아니며, 엄격한 CPU 판정은 별도 macOS instruction counter 결과입니다. 기존 독자 엔진 12개 preset의 golden·CPU baseline 부재는 유지합니다.
 
+Wasm 검증에서 `mix_block`이 홀수 sample에만 만드는 tap 사이에 0을 끼우면 lissajous가 중앙점만 그리는 문제를 확인했습니다. 브라우저 HAL과 native scope bridge가 하드웨어처럼 홀수 sample의 좌우 pre-master tap만 넣도록 맞췄습니다. 실제 Wasm의 MASTER 0·오른쪽 pan framebuffer 회귀는 수정 전 실패, 수정 후 통과했습니다.
+sampling 수정 뒤 Linux 호스트 19개를 다시 통과했고 native C host를 재빌드한 HTTP/DOM·stereo scope 검사도 exit 0입니다. 로그는 `build/host/release-0.4.1-sampling-preview.log`입니다. 타깃 펌웨어 소스와 패키지 SHA-256은 이 adapter 수정 전후 동일합니다.
+
+추가 발견: native HTTP preview에서 재생 중 Mixer의 SELECT·트랙 전환 직후 HOME을 연속 입력하면 상태가 Mixer에 남는 사례가 있습니다. 타깃·Wasm 동작으로 일반화하지 않으며 이번 버전 배포에서 입력 체계를 재설계하지 않았습니다. 이번 배포의 Aside 브라우저 화면·Web Audio 조작은 macOS 화면 기록·손쉬운 사용 권한 거부 때문에 미검증입니다.
+
 웹 에뮬레이터의 소스 pin과 생성 결과는 별도 [저장소](https://github.com/dspaudio/orbit-web-emu)의 `ORBIT_REVISION`·`build-info.json` 및 검증 기록에서 확인합니다. FM-1 실기기 플래싱·부트·USB·오디오 타이밍과 Dots 배포는 수행하지 않았습니다.
 
 ## 오리지널 OP-1 조작·기존 예산 원인 수정 — 2026-10-09

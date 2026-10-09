@@ -97,7 +97,7 @@ static void frame(void)
     for (q = 0; q < 22u; q++) {
         uint32_t sample;
         mix_block(o,CTL);
-        for(sample=0;sample<CTL;sample++) { scope_bufr[scope_w&(SCOPE_N-1u)]=vis_tap[sample*2+1]; scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[sample*2]; }
+        for(sample=1;sample<CTL;sample+=2u) { scope_bufr[scope_w&(SCOPE_N-1u)]=vis_tap[sample*2+1]; scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[sample*2]; }
     }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
 }

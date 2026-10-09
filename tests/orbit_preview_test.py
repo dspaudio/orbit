@@ -183,11 +183,12 @@ int main(int argc, char **argv)
     rewind(commands); stdin=commands;
     assert(orbit_preview_main(2,args)==0);
     stdin=saved; fclose(commands);
-    base=scope_w-CTL;
-    for(k=0;k<CTL;k++) {{
+    base=scope_w-CTL/2u;
+    for(k=0;k<CTL/2u;k++) {{
         uint32_t pos=(base+k)&(SCOPE_N-1u);
-        assert(scope_buf[pos]==vis_tap[k*2]);
-        assert(scope_bufr[pos]==vis_tap[k*2+1]);
+        uint32_t sample=k*2u+1u;
+        assert(scope_buf[pos]==vis_tap[sample*2u]);
+        assert(scope_bufr[pos]==vis_tap[sample*2u+1u]);
     }}
     for(k=0;k<SCOPE_N;k++) nonzero+=scope_bufr[k]!=0;
     assert(nonzero);
