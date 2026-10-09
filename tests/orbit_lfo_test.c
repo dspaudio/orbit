@@ -29,7 +29,7 @@ static double difference(void)
 int main(void)
 {
     uint32_t e; int d;
-    for(e=ORBIT_SWARM;e<NENGINES;e++) {
+    for(e=ORBIT_SWARM;e<=ORBIT_FM4;e++) {
         render_lfo(e,-1,60,0,0,0,reference);
         render_lfo(e,-1,95,3,32,100,actual);
         assert(difference()==0);

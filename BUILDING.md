@@ -1,4 +1,6 @@
-# Building SLOOP
+# Building ORBIT
+
+ORBIT integrates SLOOP v2.4.1. The pi32v2 toolchain and AC79 SDK are required for a device build; the current development validation covers native host and wasm32 only. No prebuilt installable ORBIT package is shipped. The output filenames remain inherited.
 
 The build makes three files in `build/`:
 
@@ -7,14 +9,6 @@ The build makes three files in `build/`:
 | `felucca.bin` | the firmware app |
 | `loader/ota.bin` | the update loader |
 | `felucca.fwsc` | the installable package (app + loader) |
-
-## Windows (WSL)
-
-`INSTALL-SLOOP.bat` builds in a WSL distribution and opens the installer on
-`http://localhost:8766/webapp/installer/`. It needs Python 3 with Pillow on Windows, a WSL
-distribution with the JieLi toolchain, and the three SDK files (below) in `build/deps/ac79`.
-Set `SLOOP_WSL_DISTRO` (default `Ubuntu`) and `SLOOP_TOOLCHAIN` (a Linux path, default
-`/root/.jieli/toolchain`) if yours differ.
 
 ## Prerequisites (macOS)
 
@@ -82,14 +76,15 @@ the command-line installer) and, with Node.js, the web page tests. Run it after 
 
 The regression suite (`tests/regress.c`) renders every engine and preset and compares a
 hash of each render with `tests/golden.txt`; it also checks levels, voices and the CPU
-cost (`tests/cpu_baseline.txt`, `tests/target_budget.txt`). After an intended change of
-the sound, `GOLDEN_UPDATE=1 sh tests/run_tests.sh` rewrites the hashes; `BUDGET_UPDATE=1`
-does the same for the cost files.
+cost (`tests/cpu_baseline.txt`, `tests/target_budget.txt`). The host CPU cost is relative
+to the idle + drums mix, counted by the kernel on macOS and under callgrind on Linux when
+valgrind is installed (exact, about 45 s more); without either it is timed, a rough check.
+After an intended change of the sound, `GOLDEN_UPDATE=1 sh tests/run_tests.sh` rewrites
+the hashes; `BUDGET_UPDATE=1` does the same for the cost files.
 
 ## Install
 
-On Windows, `INSTALL-SLOOP.bat` builds and opens the web installer (Chrome or Edge). The
-`.fwsc` of each release is on the GitHub releases page.
+On Windows, use WSL for the command-line build. Installer automation from upstream is not included in ORBIT.
 
 From the command line (needs `pip3 install mido python-rtmidi`):
 

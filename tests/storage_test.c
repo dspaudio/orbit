@@ -88,14 +88,14 @@ int main(void)
     nor[st_sector(OBJ_PROJECT0 + 2, 1) + 8] ^= 0x01;
     bad += check("both headers broken -> nothing", st_load(OBJ_PROJECT0 + 2, got, sizeof got) < 0);
     {   /* every copy of every object in the Felucca regions, off the sample slots (0xA0000..0xDBFFF) and
-         * the update staging (0xE0000..), and no two sectors shared */
+         * the update staging (0xE0000..0xE4FFF; the FM6 bank's two sectors follow it), and no two sectors shared */
         uint32_t o, c, o2, c2, inside = 1, apart = 1;
         for (o = 0; o < OBJ_COUNT; o++)
             for (c = 0; c < 2u; c++) {
                 uint32_t a = st_sector(o, c);
                 int data = a >= 0x97000u && a + 4096u <= 0xA0000u, ups = a >= 0xDC000u && a + 4096u <= 0xE0000u;
-                int glob = a >= 0xFC000u && a + 4096u <= 0xFF000u;
-                inside &= (data || ups || glob) && !(a & 0xFFFu);
+                int glob = a >= 0xFC000u && a + 4096u <= 0xFF000u, fm6 = a >= 0xE5000u && a + 4096u <= 0xE7000u;
+                inside &= (data || ups || glob || fm6) && !(a & 0xFFFu);
                 for (o2 = 0; o2 < OBJ_COUNT; o2++)
                     for (c2 = 0; c2 < 2u; c2++)
                         if ((o2 != o || c2 != c) && st_sector(o2, c2) == a)

@@ -44,7 +44,7 @@ static int32_t fm1_adc_read(int c) { (void)c; return -1; }
 static struct { uint32_t magic, stage, page, home, ui_frames; } felucca_dbg;
 #define FELUCCA_ICONS 1
 #define SCOPE_N 512u
-static int16_t scope_buf[SCOPE_N];
+static int16_t scope_buf[SCOPE_N], scope_bufr[SCOPE_N];
 static uint32_t scope_w;
 #include "../firmware/src/panel.c"
 #include "../firmware/src/ui.c"
@@ -60,6 +60,7 @@ static void song_restore(void) {}
 static uint32_t sec_stores, sec_loads;
 static void section_store(uint32_t s) { sec_stores++; live_sec = (int8_t)s; }
 static void section_load(uint32_t s) { sec_loads++; live_sec = (int8_t)s; }
+static uint32_t section_bars(uint32_t s) { (void)s; return 1u; }
 static int up_used(uint32_t k) { return k < 2; }
 static int up_load(uint32_t k) { (void)k; return 0; }
 static uint32_t up_count(void) { return 2; }
@@ -73,6 +74,7 @@ static void settings_save(void) {}
 #include "../firmware/src/ui_studio.c"
 #include "../firmware/src/icons.c"
 #include "../firmware/src/ui_draw.c"
+#include "../firmware/src/ui_vis.c"
 #include "../firmware/src/ui_layers.c"
 #include "../firmware/src/ui_menu.c"
 #include "../firmware/src/ui_input.c"
@@ -92,7 +94,7 @@ static void frame(void)
     for (q = 0; q < 22u; q++) {
         uint32_t sample;
         mix_block(o,CTL);
-        for(sample=0;sample<CTL;sample++) scope_buf[scope_w++&(SCOPE_N-1u)]=(int16_t)clamp((o[sample*2]+o[sample*2+1])/2,-32768,32767);
+        for(sample=0;sample<CTL;sample++) { scope_bufr[scope_w&(SCOPE_N-1u)]=vis_tap[sample*2+1]; scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[sample*2]; }
     }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
 }

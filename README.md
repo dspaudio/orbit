@@ -2,9 +2,35 @@
 
 **An experimental groovebox firmware for the FM-1, built on SLOOP/Felucca.**
 
-ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current development version: **0.3.1**.
+ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current development version: **0.4.0**.
 
 > Development status: host tests pass, but the pi32v2 target build and real FM-1 validation are pending. No installable firmware package is provided. Bluetooth headphone pairing and audio output are not implemented.
+
+## Color styles and SLOOP 2.4.1 integration (0.4.0)
+
+Issue [#1](https://github.com/dspaudio/orbit/issues/1) proposed a cleaner display and newer SLOOP/Felucca features. ORBIT keeps its four-color identity and makes monochrome optional. Hold HOME, leave it released, select **SCREEN** with SELECT, and turn **KNOB1 / STYLE**. **ORBIT** is the fresh-device default; **PASTEL**, **NEON**, **MONO**, GREEN, AMBER, CYAN and RED are available. Track and knob colors change together; labels, track numbers and position markers remain visible in every style. Close with OCT− to save the setting. Existing saved style selections are preserved.
+
+![Actual firmware color styles](docs/orbit-styles-0.4.png)
+
+Integrated from upstream tag **v2.4.1**, commit `a1c5d68767ae10fafb6821dc63b9b1fc490342d2`:
+
+| Feature | ORBIT 0.4.0 status |
+|---|---|
+| FM6 | Six operators, 32 algorithms, eight factory patches, 27 bank slots; 2.4.1 AMS fix included |
+| DX7 patches | Single-voice / 32-voice SysEx import and operator editing through the Web MIDI editor |
+| Sequencer | 24 parameter locks per track, micro timing (−32…31), fill / no-fill conditions, longer step divisions |
+| Chords | Live chord modifiers, inversions, ±60 ms strum and voice leading |
+| Performance | Quick pattern chains, LP/HP track filter, dotted delays, MIDI SEQ output and clock-only input |
+| Samples and drums | USR4 and four user drum-kit slots; combined USR3+4 kits through the editor |
+| Display and controls | 12 audio visualizers, SELECT page navigation, larger readouts, grouped settings and ALL KEYS lighting |
+| Editor | Updated pixel interface, drum-kit builder, locks, nudges, fills and FM6 patch tools |
+| USB | Upstream USB SERIAL default OFF and count-in / note-off fixes |
+
+Tap HOME while on the event Tape to open the visualizer; turn SELECT for its style, then tap HOME to return. SAVE tapped from HOME opens SONG; from an editing page it opens SAVE / PRESETS. Hold SAVE for the section/chain layer. The first twelve PRESETS entries remain the independent ORBIT sounds; the complete factory bank now has 88 entries.
+
+ORBIT engine IDs 0…11 remain unchanged; FM6 is appended as **12** (13 with the optional SLICE engine). Existing ORBIT 0.3 FUN4 projects migrate to FUN5 while retaining engine IDs, notes and sound parameters. Tape COPY / LIFT / DROP also carries nudges, fill conditions and remapped parameter locks. A drop that would exceed the 24-lock limit fails without changing the destination. The inherited undo buffer covers note events; use the clipboard to restore lifted step metadata.
+
+**Save a backup before downgrading:** FUN5 files cannot be loaded by ORBIT 0.3 / SLOOP 2.3. SLOOP 2.4 uses a different engine registry (FM6=9), so its raw project/backup images are not interchangeable with ORBIT 0.4. The editor discovers engine IDs by name for patch-library conversion. USB/editor transfers and custom sample uploads are implemented for the firmware but remain unavailable in the emulator HAL.
 
 ## Independent sound engines (0.3.0)
 
@@ -30,7 +56,7 @@ SHP now modulates harmonic balance in SWARM, pulse width in PULSE, and operator 
 
 ## Built-in demo song: FIRST LIGHT
 
-Load it through **hold HOME → DEMO SONG → OCT+ → OCT+ again**, then press **PLAY**. Stop playback first. The first confirmation shows AGAIN; OCT− cancels. Loading replaces the current working patterns and sounds, so save work you want to keep beforehand. Numbered project slots are not written by the loader; normal working-project autosave still applies.
+Load it through **hold HOME → SELECT: SYSTEM → PRESETS: DEMO SONG → OCT+ → OCT+ again**, then press **PLAY**. Stop playback first. The first confirmation shows AGAIN; OCT− cancels. Loading replaces the current working patterns and sounds, so save work you want to keep beforehand. Numbered project slots are not written by the loader; normal working-project autosave still applies.
 
 FIRST LIGHT is an original four-bar, 64-step loop at 108 BPM: Am7 → Fmaj7 → Cmaj7 → G7. It combines FM4 / ORBIT ROUND bass, SWARM / ORBIT HAZE sustained chords, PULSE / ORBIT PIN melody and the existing synthesised 808 drums. The notes, dynamics, chords and ties remain fully editable. It is not a prerecorded backing track or a multi-section arrangement.
 
@@ -59,9 +85,9 @@ The existing SLOOP piano-roll sequencer is retained. The capture below shows a 1
 | Area | Status | Details |
 |---|---|---|
 | Event Tape | Implemented; host tested | Four-track event timeline, transport position, inclusive region selection, COPY / LIFT / DROP |
-| Tape editing | Implemented; host tested | Preserves chords, ties, velocity and ratchets; clips at the pattern boundary and checks synth/drum compatibility |
+| Tape editing | Implemented; host tested | Preserves chords, ties, velocity, ratchets, nudges, fills and locks; clips at the pattern boundary and checks synth/drum compatibility |
 | Synths | Three independent ORBIT engines added | SWARM, PULSE and FM4, with 12 original presets; nine legacy engines retained for compatibility |
-| Sampler | Existing functionality retained | Three user slots; sample import, CHOP and device upload through the original web editor |
+| Sampler | Existing functionality retained | Four user slots; sample import, CHOP and device upload through the original web editor |
 | Sequencer | Existing functionality retained | Up to 64 steps, live recording, chords, ratchets, drum lanes and song arrangement |
 | Graphics | Implemented; host tested | Two Tape reels, coloured synth graphics, envelope curves and four mixer faders |
 | Mixer | Existing functionality retained | Track levels, pan, mute, solo and effects |
@@ -129,7 +155,7 @@ python tools/orbit_preview.py --port 8080
 python tests/orbit_preview_test.py
 ```
 
-The 0.2.1 host checks passed **11 test programs**, covering IRQ initialisation, recovery, Tape editing, panel input, sequencer behaviour, projects, storage, drums, recording, song audio and UI bounds. Native HTTP preview integration, non-silent 44.1 kHz stereo output, input rejection and JavaScript syntax checks passed during preview development. The existing web editor suite also passed; package checks were skipped because no target firmware package exists.
+The 0.4.0 host checks passed **19 test programs**, covering IRQ initialisation, recovery, Tape editing, panel input, sequencer behaviour, projects, storage, drums, recording, song audio and UI bounds. Native HTTP preview integration, non-silent 44.1 kHz stereo output, input rejection and JavaScript syntax checks passed during preview development. The existing web editor suite also passed; package checks were skipped because no target firmware package exists.
 
 See [validation details](docs/VALIDATION.md) for evidence and limitations. Host results do not establish target boot safety, RAM/flash usage or real-time audio performance.
 
@@ -153,6 +179,6 @@ The inherited output filename is `build/felucca.fwsc`. No such installable packa
 
 ## Origin and licensing
 
-Based on [isod89/sloop-fm1](https://github.com/isod89/sloop-fm1) at commit `d691ba7b2d922f1a1f41a3622cffe29ce41c5506`. This is an independent repository created from a pinned source snapshot, rather than a fork containing the full upstream Git history.
+Based on [isod89/sloop-fm1](https://github.com/isod89/sloop-fm1), originally commit `d691ba7b2d922f1a1f41a3622cffe29ce41c5506` (v2.3), with the v2.4.1 changes integrated in ORBIT 0.4.0. This is an independent repository created from a pinned source snapshot, rather than a fork containing the full upstream Git history.
 
 Software is **GPL-3.0-only**. Original copyright notices and licence files are retained. Fonts and sample assets have their own licensing terms; see [LICENSING.md](LICENSING.md) and the notices in the asset directories. The original project documentation is preserved in [README-SLOOP.md](README-SLOOP.md).

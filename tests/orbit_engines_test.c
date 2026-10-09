@@ -35,7 +35,7 @@ int main(void)
 {
     uint32_t e, p, note, hashes[3];
     assert(ENGINES[0] == &ENG_ANALOG && ENGINES[8] == &ENG_GRAIN);
-    for (e = ORBIT_SWARM; e < NENGINES; e++) {
+    for (e = ORBIT_SWARM; e <= ORBIT_FM4; e++) {
         for (p = 0; p < ENGINES[e]->npresets; p++) {
             uint32_t h = render_case(e, p, 60, 0);
             assert(h == render_case(e, p, 60, 0));

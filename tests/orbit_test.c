@@ -44,7 +44,7 @@ static int32_t fm1_adc_read(int c) { (void)c; return -1; }
 static struct { uint32_t magic, stage, page, home, ui_frames; } felucca_dbg;
 #define FELUCCA_ICONS 1
 #define SCOPE_N 512u
-static int16_t scope_buf[SCOPE_N];
+static int16_t scope_buf[SCOPE_N], scope_bufr[SCOPE_N];
 static uint32_t scope_w;
 #include "../firmware/src/panel.c"
 #include "../firmware/src/ui.c"
@@ -60,6 +60,7 @@ static void song_restore(void) {}
 static uint32_t sec_stores, sec_loads;
 static void section_store(uint32_t s) { sec_stores++; live_sec = (int8_t)s; }
 static void section_load(uint32_t s) { sec_loads++; live_sec = (int8_t)s; }
+static uint32_t section_bars(uint32_t s) { (void)s; return 1u; }
 static int up_used(uint32_t k) { return k < 2; }
 static int up_load(uint32_t k) { (void)k; return 0; }
 static uint32_t up_count(void) { return 2; }
@@ -73,6 +74,7 @@ static void settings_save(void) {}
 #include "../firmware/src/ui_studio.c"
 #include "../firmware/src/icons.c"
 #include "../firmware/src/ui_draw.c"
+#include "../firmware/src/ui_vis.c"
 #include "../firmware/src/ui_layers.c"
 #include "../firmware/src/ui_menu.c"
 #include "../firmware/src/ui_input.c"
@@ -92,7 +94,7 @@ static void frame(void)
     for (q = 0; q < 22u; q++) {
         uint32_t sample;
         mix_block(o,CTL);
-        for(sample=0;sample<CTL;sample++) scope_buf[scope_w++&(SCOPE_N-1u)]=(int16_t)clamp((o[sample*2]+o[sample*2+1])/2,-32768,32767);
+        for(sample=0;sample<CTL;sample++) { scope_bufr[scope_w&(SCOPE_N-1u)]=vis_tap[sample*2+1]; scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[sample*2]; }
     }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
 }
@@ -109,7 +111,7 @@ int main(int argc, char **argv)
 {
     uint32_t i;
     outdir = argc > 1 ? argv[1] : "build/host";
-    panel = PANEL_DEFAULT; layers_init(); palette_set(4); host_tracks_init();
+    panel = PANEL_DEFAULT; layers_init(); palette_set(5); fm6_init(); host_tracks_init();
     for (i=0;i<NPART;i++) {
         set_engine_of(&trk[i], TRK_DEF[i][0]); apply_preset_to(&trk[i], TRK_DEF[i][1]);
         trk[i].engine=trk[i].eng_req;
@@ -119,6 +121,8 @@ int main(int argc, char **argv)
     trk[0].step[1]=(step_t){.time=ST_TIE};
     trk[0].step[3]=(step_t){.note={72},.n=1,.time=ST_NOTE,.vel=110};
     trk[0].p[P_SLEN]=16; trk[1].p[P_SLEN]=16;
+    trk[0].micro[1]=-12; step_fill_set(&trk[0],1,FC_FILL);
+    check(lock_set(&trk[0],1,P_TFLT,22),"create Tape source parameter lock");
     check(orbit_capture(0,0,3,0),"copy event range");
     check(trk[0].step[0].n==3 && orbit_tape.count==4,"copy preserves source / clipboard length");
     check(orbit_drop(1,14)==2,"drop clips to destination pattern boundary");
@@ -127,6 +131,15 @@ int main(int argc, char **argv)
     check(!orbit_capture(NTRK,0,3,0) && !orbit_capture(0,4,3,0),"reject invalid track and selection");
     check(orbit_capture(0,0,3,1) && trk[0].step[0].time==ST_REST,"lift removes source events");
     check(orbit_drop(0,8)==4 && trk[0].step[8].vel==100,"lifted events recover on drop");
+    check(trk[0].micro[9]==-12 && step_fill(&trk[0],9)==FC_FILL && lock_find(&trk[0],9,P_TFLT,0)>=0,"Tape preserves micro timing, fill conditions and remapped locks");
+    check(!trk[0].micro[1] && step_fill(&trk[0],1)==FC_NORM && lock_find(&trk[0],1,P_TFLT,0)<0,"Tape lift clears source metadata");
+    {
+        step_t before = trk[1].step[8];
+        uint32_t k;
+        for(k=0;k<NLOCK;k++) trk[1].lock[k]=(plock_t){.step=(uint8_t)(k/6),.param=(uint8_t)(P_E0+k%6),.val=1};
+        check(!orbit_drop(1,8) && !memcmp(&before,&trk[1].step[8],sizeof before),"Tape lock capacity failure leaves destination events untouched");
+        locks_clear(&trk[1]);
+    }
     TDRUM->dstep[0].on[1]=128; TDRUM->dstep[0].rat[3]=192;
     check(orbit_capture(NPART,0,0,0) && orbit_drop(NPART,2)==1,"drum clipboard copy/drop");
     check(TDRUM->dstep[2].on[1]==128 && TDRUM->dstep[2].rat[3]==192,"drum lane 16 / ratchet bits preserved");
@@ -216,6 +229,14 @@ int main(int argc, char **argv)
     ui.menu=1; ui.menu_sel=MI_DEMO; menu_input(BT(B_OCTUP));
     check(!orbit_demo_pending && song.playing,"demo loader rejects replacement while playing");
     menu_close(); tap(B_PLAY);
+    go_home(); ui.msg_t=0;
+    for (i=0;i<NPALETTES;i++) {
+        settings.palette=i; palette_set(i); ui.force=1; frame();
+        if(i>=4u) { char n[40]; snprintf(n,sizeof n,"orbit-style-%s",PALETTES[i].name); ppm(n); }
+        check(i!=4u || (TE_COL[0]>>11)==((TE_COL[0]>>5)&63u)/2u,"MONO uses gray track colors");
+        ui.menu=1; ui.menu_sel=MI_COLOR; ui.force=1; frame(); ui.menu=0;
+    }
+    palette_set(5); settings.palette=5;
     printf("ORBIT checks: %d failures\n",fails);
     return fails ? 1 : 0;
 }

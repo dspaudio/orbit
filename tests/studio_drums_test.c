@@ -24,7 +24,7 @@ int main(int argc,char **argv)
     for(i=0;i<DRUM_LANES;i++)assert(lane_of_note(LANE_NOTE[i])==i);
     /* Render the same hits through all five kits; each must be distinct,
      * finite and silent after its one-shots have finished. */
-    for(i=0;i<DRUM_KITS;i++) {
+    for(i=0;i<DRUM_USR;i++)   /* (the built-in kits: USR1..3 are the user slots) */ {
         memset(&drums,0,sizeof drums);drums.set=-2;
         TDRUM->p[P_E0]=(int16_t)i;
         drum_on(36,110);drum_on(38,100);drum_on(46,80);

@@ -13,7 +13,7 @@
  * 5. demos into DEMO_DIR: every preset with its pattern, BREAK re-sequenced, the user loop sliced AUTO. */
 #include <stdarg.h>
 #include <stdint.h>
-static uint32_t host_slots[3u * 0x14000u / 4u];          /* USR1..3, as the flash at 0xA0000 */
+static uint32_t host_slots[4u * 0x14000u / 4u];          /* USR1..4 (a RAM image: the flash has USR4 elsewhere) */
 #define SMP_USER_XIP(k) ((const uint8_t *)host_slots + (k) * SMP_USER_SIZE)
 #define main hostsim_main
 #include "hostsim.c"

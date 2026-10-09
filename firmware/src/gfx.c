@@ -7,6 +7,7 @@ typedef struct {               /* proportional, see tools/gen_font.py */
     uint8_t h;
     uint8_t pad;               /* bitmap starts this many pixels left of the pen */
     uint8_t first, last;
+    uint8_t sh;                /* 1: the bitmaps are another font's, drawn at 2x (L = S at 2x, no copy) */
     const uint8_t *adv;        /* advance per glyph */
     const uint8_t *bw;         /* bitmap width per glyph (starts FONT_PAD left of the pen) */
     const uint16_t *off;       /* byte offset of each glyph */
@@ -34,9 +35,22 @@ static const palette_t PALETTES[] = {
     {"CYAN", {RGB(0, 30, 50), RGB(0, 62, 96), RGB(16, 112, 160), RGB(56, 172, 222), RGB(140, 222, 255)}},
     {"RED", {RGB(52, 8, 8), RGB(100, 18, 14), RGB(170, 36, 26), RGB(226, 64, 48), RGB(255, 112, 92)}},
     {"MONO", {RGB(40, 40, 40), RGB(80, 80, 80), RGB(130, 130, 130), RGB(186, 186, 186), RGB(226, 226, 226)}},
+    {"ORBIT", {RGB(38, 38, 44), RGB(86, 86, 98), RGB(140, 140, 152), RGB(196, 196, 208), RGB(230, 230, 240)}},
+    {"PASTEL", {RGB(38, 38, 46), RGB(90, 90, 108), RGB(150, 150, 170), RGB(202, 202, 220), RGB(236, 236, 248)}},
+    {"NEON", {RGB(30, 32, 44), RGB(76, 86, 106), RGB(132, 148, 172), RGB(188, 210, 226), RGB(226, 246, 255)}},
 };
 #define NPALETTES (sizeof(PALETTES) / sizeof(PALETTES[0]))
-static uint16_t pal[5];
+static uint16_t pal[5], TE_COL[4], TE_MID[4], TE_DIM[4], te_alert;
+static const uint16_t TRACK_STYLES[3][4] = {
+    {RGB(40,124,255), RGB(30,204,112), RGB(255,198,24), RGB(255,98,26)},
+    {RGB(142,182,255), RGB(140,224,176), RGB(255,222,140), RGB(255,166,150)},
+    {RGB(52,210,255), RGB(114,255,100), RGB(244,255,60), RGB(255,86,194)},
+};
+static uint16_t color_scale(uint16_t c, uint32_t n)
+{
+    return (uint16_t)(((((c >> 11) & 31u) * n / 255u) << 11) |
+        ((((c >> 5) & 63u) * n / 255u) << 5) | ((c & 31u) * n / 255u));
+}
 #define C_LINE pal[0]                /* 1 rules, separators */
 #define C_DIM pal[1]                 /* 2 inactive, empty steps, units */
 #define C_GRAY pal[2]                /* 3 labels */
@@ -46,8 +60,15 @@ static uint16_t pal[5];
 static void palette_set(uint32_t i)
 {
     uint32_t k;
+    i %= NPALETTES;
     for (k = 0; k < 5u; k++)
-        pal[k] = PALETTES[i % NPALETTES].c[k];
+        pal[k] = PALETTES[i].c[k];
+    for (k = 0; k < 4u; k++) {
+        TE_COL[k] = i >= 5u ? TRACK_STYLES[i - 5u][k] : pal[4u - (k & 1u)];
+        TE_MID[k] = color_scale(TE_COL[k], 170u);
+        TE_DIM[k] = color_scale(TE_COL[k], 86u);
+    }
+    te_alert = i == 4u ? C_WHITE : RGB(255,44,52);
 }
 
 static inline uint16_t swap16(uint32_t c) { return (uint16_t)(((c >> 8) & 0xFFu) | ((c & 0xFFu) << 8)); }
@@ -142,12 +163,12 @@ static int32_t cv_text(int32_t x, int32_t y, const felucca_font_t *f, const char
         uint32_t gi = glyph(f, (uint8_t)*s), gx, gy, w, bpr;
         const uint8_t *gd;
         w = f->bw[gi];
-        bpr = (w + 1u) / 2u;
+        bpr = ((w >> f->sh) + 1u) / 2u;
         gd = f->data + f->off[gi];
         for (gy = 0; gy < f->h; gy++)
             for (gx = 0; gx < w; gx++) {
-                uint32_t v = gd[gy * bpr + gx / 2u];
-                v = (gx & 1u) ? (v & 15u) : (v >> 4);
+                uint32_t sx = gx >> f->sh, v = gd[(gy >> f->sh) * bpr + sx / 2u];
+                v = (sx & 1u) ? (v & 15u) : (v >> 4);
                 if (v)
                     cv_pset(x - f->pad + (int32_t)gx, y + (int32_t)gy, ramp[v]);
             }

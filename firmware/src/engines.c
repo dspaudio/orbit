@@ -11,6 +11,7 @@
 #include "eng_trio.c"
 #include "eng_drawbar.c"
 #include "eng_grain.c"
+#include "eng_fm6.c"            /* FM6: 6-operator FM, msfa ported (fm6_core.c, Apache-2.0); SLOOP 2.4 */
 #if FELUCCA_SLICE
 #include "eng_slice.c"
 #endif
@@ -21,14 +22,17 @@ static const engine_t *const ENGINES[NENGINES] = {&ENG_ANALOG, &ENG_DIGITAL, &EN
 #if FELUCCA_SLICE
                                                     &ENG_SLICE,
 #endif
-    &ENG_SWARM, &ENG_ORBIT_PULSE, &ENG_FM4,
+    &ENG_SWARM, &ENG_ORBIT_PULSE, &ENG_FM4, &ENG_FM6,
 };
+_Static_assert(ENGI_FM6 == ORBIT_FM4 + 1u, "ENGINES[ENGI_FM6] is FM6");
 
 /* every factory sound as loud as the others: a level trim per preset, 1/2 dB, measured on a phrase
  * that fits the sound (tools/level_presets.py writes preset_trim.h); a track keeps it in P_ED_FX */
 #include "preset_trim.h"
 static int16_t preset_trim(uint32_t e, uint32_t pi)
 {
+    if (e == ENGI_FM6) e = 9u;
+    else if (e >= 9u) return 0;
     return e < PT_ENGINES && pi < PT_MAX ? PRESET_TRIM[e][pi] : 0;
 }
 

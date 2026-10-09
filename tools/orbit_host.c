@@ -5,7 +5,7 @@ int main(int argc, char **argv)
 {
     char cmd[64], path[512]; int a=0,b=0; uint32_t i;
     outdir=argc>1 ? argv[1] : "build/host";
-    panel=PANEL_DEFAULT; layers_init(); palette_set(4); host_tracks_init();
+    panel=PANEL_DEFAULT; layers_init(); palette_set(5); host_tracks_init();
     for(i=0;i<NPART;i++) { set_engine_of(&trk[i],TRK_DEF[i][0]); apply_preset_to(&trk[i],TRK_DEF[i][1]); trk[i].engine=trk[i].eng_req; }
     TDRUM->p[P_E0]=DRUM_DEFAULT_KIT;
     /* Demo is preview-only: the firmware still boots into an empty project. */

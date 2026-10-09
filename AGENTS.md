@@ -1,6 +1,6 @@
 # ORBIT development
 
-Read README.md and BUILDING.md before changing firmware. Source is derived from SLOOP commit d691ba7b2d922f1a1f41a3622cffe29ce41c5506; retain GPL notices and asset licences.
+Read README.md and BUILDING.md before changing firmware. Source is derived from SLOOP commit d691ba7b2d922f1a1f41a3622cffe29ce41c5506 with upstream v2.4.1 (a1c5d68767ae10fafb6821dc63b9b1fc490342d2) integrated; retain GPL notices and asset licences.
 
 Firmware uses one C translation unit and a small strip canvas. Do not allocate a full framebuffer or PCM tape without checking the target memory budget. Event tape is a view/edit layer over sequencer steps; do not describe it as audio recording.
 
