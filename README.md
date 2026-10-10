@@ -2,13 +2,53 @@
 
 **An experimental groovebox firmware for the FM-1, built on SLOOP/Felucca.**
 
-ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current release version: **0.5.0**.
+ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current release version: **0.6.0**.
 
-> Current status: the pi32v2 target build, `build/orbit.fwsc` generation and installation format checks are complete. **On 2026-10-10, ORBIT 0.5.0 was installed on a physical FM-1; automatic reboot, USB INFO/PING and unchanged existing backup data were confirmed, and the user reported normal operation.** Hardware audio timing, USB 48 kHz transfer, long-term stability and recovery remain unverified. Existing PHASE CPU and ALNK0 ISR budget overruns were resolved without changing baselines or tolerances. See the [validation record](docs/VALIDATION.md) for the current results and the [earlier 0.4.1 installation](#hardware-installation-test-2026-10-09) for its historical scope. Bluetooth headphones are not implemented.
+> **ORBIT 0.6.0 was installed on a physical FM-1 on 2026-10-10.** Automatic reboot, INFO/PING, protocol 11, 16 engines, all 16 CLUSTER raw presets and preservation of all 14 backup objects were confirmed. A short recording of the actual 48 kHz stereo USB output was non-silent and had no full-scale clipping. Actual ISR timing, worst-case audio underruns, subjective listening, long-term stability and recovery remain unverified. See the [validation record](docs/VALIDATION.md) for the scope. Bluetooth headphones are not implemented.
 
 The web interface starts in English and displays an ultrathin `Orbit` wordmark instead of the Sloop logo. The firmware first displays an `Orbit` boot screen with 1-pixel strokes, then draws the normal UI after at least 750 ms. No new framebuffer or PCM buffer was added.
 
-## 0.5.0 release
+## 0.6.0 release
+
+Download [`orbit.fwsc`](https://github.com/dspaudio/orbit/releases/download/v0.6.0/orbit.fwsc)
+and [`SHA256SUMS`](https://github.com/dspaudio/orbit/releases/download/v0.6.0/SHA256SUMS)
+from the [ORBIT 0.6.0 release](https://github.com/dspaudio/orbit/releases/tag/v0.6.0).
+The [0.6.0 release notes](docs/releases/0.6.0.md) cover changes, installation, compatibility and validation limits.
+
+### Changes
+
+- **CLUSTER engine and 16 presets:** the default build has 16 engines and 181 factory sounds.
+  CLUSTER is appended as ID 15; existing engine IDs 0..14 and preset order are preserved.
+- **Editor protocol v11:** transfers signed16 raw values without truncation.
+  Existing v14 commands and the FUN5 storage format are retained.
+- **Synthesized FLUTE/SCRCH replacements:** `LOFI FLUTE`, `SCRATCH` and `FLUTE DUST`
+  play through the existing SAMPLE/GRAIN engines. Original IDs, roots and key zones are preserved,
+  while reclaiming 45,040 B of flash.
+- **Hardware checks:** installation, automatic reboot, INFO/PING, all 16 raw presets,
+  preservation of 14/14 backup objects and a short 48 kHz stereo USB recording were verified.
+- **Budgets and regression:** target image 548,960/581,564 B, RAM 85,908/98,304 B,
+  pool 333,948/344,064 B. All 33 static cost checks and 210 strict DSP renders passed.
+
+### CLUSTER core and sound scope
+
+CLUSTER uses a verified C translation of the official original OP-1 #246 cluster oscillator,
+with 16 patches retaining their original names and signed16 raw knobs.
+Its default engine ID is 15; existing IDs 0..14 and the FUN5 layout are unchanged.
+Pitch, ADSR, velocity and FX belong to ORBIT, so this is not a complete reproduction of the original patches.
+Original full-patch JSON, provenance and rights are preserved in the [core asset record](assets/op1-cluster/README.md).
+
+To make room in flash, the original 54,284 B of FLUTE/SCRCH ADPCM was replaced with
+9,244 B of synthesized waveforms: harmonic flute loops and noise/frequency-sweep scratch one-shots.
+`LOFI FLUTE`, `SCRATCH` and `FLUTE DUST` remain audible through the existing SAMPLE/GRAIN path.
+Sample, zone, factory preset and USR IDs, roots and key zones are preserved.
+The editor uses v11 for raw signed16 values and still accepts legacy v14 commands.
+The source, native preview and web mock report 0.6.0.
+This package is separate from the previous 0.5.0 package below.
+Installation package SHA256:
+`460042548a8b915ee11063c9f0df67d9c6c1a79a73c48b6cefac1eb91180b11e`.
+The separate web emulator is not updated automatically by this firmware release.
+
+## 0.5.0 release (previous version)
 
 Get [`orbit.fwsc`](https://github.com/dspaudio/orbit/releases/download/v0.5.0/orbit.fwsc) and [`SHA256SUMS`](https://github.com/dspaudio/orbit/releases/download/v0.5.0/SHA256SUMS) from the [ORBIT 0.5.0 release](https://github.com/dspaudio/orbit/releases/tag/v0.5.0). The [0.5.0 release notes](docs/releases/0.5.0.md) cover the new engines, the 77 new sounds, SYN, USB 48 kHz, the web editing features, installation and validation limits. The separate web emulator isn't deployed as part of this firmware release.
 
@@ -106,7 +146,7 @@ The existing SLOOP piano-roll sequencer is retained. The capture below shows a 1
 |---|---|---|
 | Event Tape | Implemented; host tested | Four-track event timeline, transport position, inclusive region selection, COPY / LIFT / DROP |
 | Tape editing | Implemented; host tested | Preserves chords, ties, velocity, ratchets, nudges, fills and locks; clips at the pattern boundary and checks synth/drum compatibility |
-| Synths | 15 engines in the default build | SWARM, PULSE and FM4 with 12 original presets, plus the retained engines, FM6, PHYS and NOISE; 165 factory sounds total |
+| Synths | 16 engines in the default build | SWARM, PULSE and FM4 with 12 original presets, plus the retained engines, FM6, PHYS, NOISE and CLUSTER; 181 factory sounds total |
 | Sampler | Existing functionality retained | Four user slots; sample import, CHOP and device upload through the original web editor |
 | Sequencer | Existing functionality retained | Up to 64 steps, live recording, chords, ratchets, drum lanes and song arrangement |
 | Graphics | Implemented; host tested | Two Tape reels, coloured synth graphics, envelope curves and four mixer faders |
@@ -115,7 +155,7 @@ The existing SLOOP piano-roll sequencer is retained. The capture below shows a 1
 | Native preview | Implemented; host tested | Browser controls backed by the firmware's actual C DSP, sequencer and UI |
 | Divide-by-zero trap mitigation | Applied; host register test passed | Explicitly clears EMU_CON bit 2 during IRQ initialisation |
 | Target firmware build | Build and package verified | pi32v2 compile, ELF memory and static ISR budgets checked |
-| Real FM-1 validation | 0.5.0 installation and reboot tested (2026-10-10) | USB INFO/PING and unchanged existing data confirmed, plus user confirmation of normal operation; audio/IRQ timing, long-term stability, recovery and sample upload remain unverified |
+| Real FM-1 validation | 0.6.0 installation and reboot tested (2026-10-10) | INFO/PING, 16 CLUSTER raw presets, preservation of 14/14 objects and a short 48 kHz stereo USB recording confirmed; actual ISR timing, worst-case load, subjective listening, long-term stability, recovery and sample upload remain unverified |
 | Bluetooth headphones | Not implemented | Pairing, reconnect and Bluetooth audio require further SDK integration and device testing |
 | PCM audio Tape | Not implemented | Tape edits note/drum events; it does not record long audio or provide tape-speed pitch changes |
 
@@ -133,6 +173,7 @@ HOME now briefly displays the loaded engine and preset after turning PRESETS. It
 - **0.3.0:** Added independent SWARM, PULSE and FM4 engines, 12 original patches and independent defaults; verified native DSP and wasm32 integration.
 - **0.4.1:** Original OP-1 control roles, Orbit branding, preview input fixes and PHASE/ISR budget fixes; install package and updated WebAssembly emulator.
 - **0.5.0:** SLOOP 2.5 integration: PHYS/NOISE, 77 sounds, SYN kits, USB 48 kHz, drum delay/CC/click and web piano roll/MIDI/Song/DX7; hardware installation and data preservation confirmed.
+- **0.6.0:** Official CLUSTER oscillator, 16 raw presets, editor v11 signed16 transport and synthesized FLUTE/SCRCH replacements; actual FM-1 installation, data preservation and a short 48 kHz stereo USB recording verified.
 - **Next:** Measure hardware audio/IRQ timing, 48 kHz transfers, long-term stability and recovery.
 
 ## Try the native preview
@@ -185,7 +226,15 @@ python tools/orbit_preview.py --port 8080
 python tests/orbit_preview_test.py
 ```
 
-On Linux amd64, the **21 host programs** in `tools/orbit_check.py` and the full `sh tests/run_tests.sh` under Node 24 passed. The macOS instruction-counted CPU/golden run passed with 194 renders, no changed or missing references and no CPU budget overruns. ALNK0's static cost is 138 against the existing baseline of 174. Neither CPU baselines nor tolerances were relaxed. Web, installation CLI and native HTTP checks, plus actual browser interactions at 1440px / 390px, were verified. Package checks cover the CRC, loader marker and matching Python/JavaScript logical images for `orbit.fwsc`.
+After the 0.6.0 version bump, Linux amd64 `tools/orbit_check.py` passed **24/24**,
+along with the web, installer and native HTTP/stereo preview checks.
+The strict macOS CPU/golden regression passed **210 renders** with **0**
+changed/missing references, health failures, voice/routing failures, CPU overruns or crashes.
+All **33 static target cost checks** passed without relaxing existing baselines or tolerances.
+The macOS host runner passed **23/24**; the existing IRQ Mach-O/MMIO compilation limitation remains.
+The full Linux runner and original core oracle/UBSan checks passed during integration.
+Package CRC, loader, identity and hardware installation results are recorded in the
+[0.6.0 release notes](docs/releases/0.6.0.md) and [validation record](docs/VALIDATION.md).
 
 See [validation details](docs/VALIDATION.md) for evidence and limitations. Host results do not establish target boot safety, RAM/flash usage or real-time audio performance.
 

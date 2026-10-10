@@ -1,5 +1,125 @@
 # ORBIT validation record
 
+## ORBIT 0.6.0 release preparation, 2026-10-10
+
+README, release notes, public technical documentation and new comments are in English.
+After translating generator comments and diagnostics, the pi32v2 rebuild and all
+33 static target cost checks passed again. The rebuilt `orbit.fwsc` is byte-identical
+to the installed package below, retaining SHA256
+`460042548a8b915ee11063c9f0df67d9c6c1a79a73c48b6cefac1eb91180b11e`.
+The public source uses only its checked-in cluster assets for generation, not private
+extraction records. The generated header is identical across two runs, SHA256
+`299bb466d856e220b978ac848d83ff49212fa2ebd45bc2f44d0854299278b429`.
+The earlier header hash below records the generation before this prose-only translation.
+Private backups, recordings and work journals are excluded from commits and release assets.
+The release assets are `orbit.fwsc` and `SHA256SUMS`; hardware verification scope remains
+the installation and short USB test described below.
+
+## ORBIT 0.6.0 hardware install and USB audio check, 2026-10-10
+
+At the user's request, the source, native preview and web mock versions were bumped to 0.6.0 and installed on the user's `FM-1_900`, which was running ORBIT 0.5.0.
+Package transfer reached 100%, and the automatic reboot and installer exit 0 were confirmed.
+The current source includes the official CLUSTER oscillator, its 16 raw presets, editor v11 and the synthesized FLUTE/SCRCH replacement sounds.
+
+| Check | Result of a direct run |
+|---|---|
+| Real reboot | INFO `FELUCCA ORBIT 0.6.0`, protocol **11**, engines **16**, globals **33**, PING PASS |
+| Data preservation | Backups taken before install, after install and after the sound check: **14/14 objects bit-identical**, every object's CRC PASS. Existing patterns, settings and user bank data preserved |
+| Real CLUSTER | NAMES matches all **16** original names. Applying each PRESET reads back **8 signed16 raw values** that all match the original factory JSON |
+| Real MIDI | A 3-note phrase on channel 1 sent to **19 sounds** (the 16 CLUSTER presets plus LOFI FLUTE / SCRATCH / FLUTE DUST), PING PASS after each phrase. Afterwards, track 1's original engine/preset/61 parameters and the selected track were restored and compared, PASS |
+| Real USB output | QuickTime input explicitly set to **Felucca**, recording **38.164 s at 48,000 Hz stereo**. After PCM conversion: **1,831,872 frames**, left/right peak **2,574 / 2,574**, RMS **273.92 / 275.31**, full-scale clipped samples **0**. This is the device's USB output, not a host DSP render |
+| pi32v2 build | image **548,960/581,564 B**, RAM **85,908/98,304 B**, pool **333,948/344,064 B**, package **610,019 B**, identity `FM-1_900`, exit 0 |
+| Static target cost | **33 PASS**, existing baselines and tolerances kept, exit 0 |
+| Strict macOS regression | **210 renders**, changed/gone, health, voice/routing, CPU overrun and crash all **0**, exit 0 |
+| Required host checks | Standalone Linux amd64 `tools/orbit_check.py` **24/24 PASS**. macOS gives **23/24 PASS** because of the existing IRQ Mach-O/MMIO compile limit; that failure wasn't hidden and the test wasn't changed |
+| Preview, web and installer | `tests/orbit_preview_test.py`, `node web/test_web.mjs` and `tests/install_test.py` all exit 0. Native stereo/HTTP/panel checks PASS |
+
+Installed `build/orbit.fwsc` SHA256:
+`460042548a8b915ee11063c9f0df67d9c6c1a79a73c48b6cefac1eb91180b11e`.
+
+Private backups, check JSON and the hardware recording are kept locally in
+`.omo/evidence/orbit-0.6.0-install-20261010/`.
+`fm1-060-usb-audio.m4a` and the converted `.wav` are the real USB recording of the MIDI check above.
+Because the input device was selected explicitly, the host microphone wasn't recorded. The recording and playback windows were closed afterwards.
+
+This check confirms a short 48 kHz USB output, control responses and data preservation.
+It doesn't cover per-sound quality judged from separate files, listening by the user, headphone/line output,
+real ISR execution time, audio dropouts under worst-case load, long-term stability, power-cycling or recovery. No commit, tag, public release, or web emulator/Dots deployment was made.
+Earlier full Linux and sanitizer results stay in the work-stage entries below,
+kept apart from the checks rerun after this version change.
+
+## FLUTE/SCRCH synthesized replacement sounds, 2026-10-10
+
+At the user's request, the silent entries were restored with replacement sounds.
+FLUTE is a periodic synthesized loop of a fundamental plus weak harmonics.
+SCRCH is a one-shot of fixed-seed noise with a frequency sweep.
+Both are synthesized at build time and stored as IMA ADPCM; no new runtime synth engine was written.
+`LOFI FLUTE`, `SCRATCH` and `FLUTE DUST` play through their original SAMPLE/GRAIN paths.
+The original bank/zone/preset/USR numbers, roots/key zones and the FUN5 layout are kept.
+
+| Check | Result of a direct run |
+|---|---|
+| Data and compatibility | FLUTE 6,172 B + SCRCH 3,072 B = **9,244 B**, a net saving of **45,040 B** against the original 54,284 B. ADPCM hashes of the kept banks, 8 sets/51 zones, preset/USR numbers and roots/key zones preserved |
+| Real SAMPLE/GRAIN | Both banks are non-silent on all 128 MIDI notes, output bounds guard PASS. FLUTE's valid loop and SCRCH's one-shot confirmed |
+| Strict macOS DSP | **210 renders**, changed/gone, health, voice/routing, CPU overrun and crash all **0**, exit 0. CPU baselines and tolerances unchanged, 3 informational faster-item notes |
+| Three presets | peak **18,457 / 21,339 / 19,095**, DC **1.3 / 0.0 / 1.9**, tail peak/DC after release **0**. Order: LOFI FLUTE / SCRATCH / FLUTE DUST |
+| Real pi32v2 | image **548,960/581,564 B** (32,604 B free), RAM **85,908/98,304 B**, pool **333,948/344,064 B**, package **610,019 B**, identity `FM-1_900`, exit 0 |
+| Static cost | **33 PASS** including the new CLUSTER, existing baselines/tolerances kept, exit 0 |
+| Web and latest native preview | `node web/test_web.mjs` and `tests/orbit_preview_test.py` (after building the latest C host) both exit 0. Real 44.1 kHz stereo PCM and panel/HTTP checks PASS |
+| Required host checks | Linux amd64 `tools/orbit_check.py` **24/24 PASS**, exit 0. On macOS only the one IRQ check fails, from the existing Mach-O/MMIO limit, giving 23/24 PASS |
+| Full Linux runner | Native ARM64 `sh tests/run_tests.sh` on a read-only copy including the real SDK and the new target outputs: **ALL HOST TESTS PASSED**, exit 0. The 108 timed CPU notes weren't used for the strict verdict, and macOS instruction-count overruns are 0 |
+
+`build/orbit.fwsc` SHA256 before the 0.6.0 version change:
+`42449d4bc553b8976d97c0c2bc743eacbb0d01ad8a5db1eb58fb8fd19b03cd44`.
+Two-second example WAVs from the real C render are `build/host/lofi-flute-replacement.wav`,
+`scratch-replacement.wav` and `flute-dust-replacement.wav`.
+
+Only the three silent goldens were replaced, with reviewed new output hashes:
+`6b00494918cd5c5b`, `63b3781856e18118` and `77577e91d32879d4`.
+The other 207 render hashes didn't change. The normal non-silent health check was reapplied to every factory preset.
+No existing CC0 file was deleted; only generated data changed.
+A separate native ARM64 `orbit_check.py` run also hit the existing IRQ MMIO test failure, which is unrelated to this change.
+That test doesn't include the sample outputs or audio code,
+and this change neither fixed nor disabled it. The amd64 run, which includes the same test, passed in full.
+Hardware install, listening, audio timing, Dots deployment and public release weren't performed.
+
+## First official cluster integration (before the replacement sounds), 2026-10-10
+
+This entry describes a local working tree, separate from the published and installed 0.5.0 recorded below.
+CLUSTER is added as default ID 15, keeping the existing IDs 0..14 and the FUN5/int16 storage layout.
+The 16 original factory names and raw knobs are preserved; pitch/ADSR/velocity/FX come from ORBIT.
+Only the 54,284 B of FLUTE/SCRCH ADPCM was removed, and set/zone/preset/USR numbers are preserved.
+The two SAMPLE patches using it and GRAIN FLUTE DUST are silent.
+
+| Check | Result of a direct run |
+|---|---|
+| Comparison with the product C original | 729 cases, 5,103 blocks/R0, 653,184 samples and all voice/global/table state match the strict oracle. The product, const and UBSan runs and the generation reproducibility check all exit 0 |
+| Real adapter, samples and transfer | 16 raw patches, 128/32 cadence, PCM/state/PRNG, release, multiple parts/arena, silence of the removed banks on all 128 MIDI notes, signed16/legacy and malformed write checks PASS |
+| Strict macOS DSP regression | 210 renders, changed/gone 0, health/voice/routing/CPU overrun/crash 0, exit 0. Existing baselines/tolerances kept, only new cluster baselines added. 5 informational faster-item notes |
+| Full web suite | `node web/test_web.mjs` exit 0, covering raw bounds, 16 factory rows with original names, user preset/library/lock/WATCH and legacy frame round trips |
+| Native preview | `tests/orbit_preview_test.py` exit 0 after building the latest C host. Real render command, 44.1 kHz stereo and HTTP/panel checks |
+| Required host checks | macOS 23/24 PASS. The existing Linux-only `irq_init_test` fails to compile because of its Mach-O section and `MAP_FIXED_NOREPLACE`. Standalone Linux gives 24/24 PASS |
+| Full Linux runner | `sh tests/run_tests.sh` on a native Linux ARM64 copy of the read-only original, including the real SDK and current target outputs: **ALL HOST TESTS PASSED**, exit 0 |
+| Extra FUN5 raw storage check | CLUSTER ID with COUNT 17408, WAVE -32768, CURVE 24575 and SPREAD 32767 preserved through capture/apply. The extra case ran on both macOS and Linux, exit 0 |
+| Direct check in Aside | CLUSTER selection and C preview at desktop 1470px, and 32767/21120 raw display on iPhone 16 at 393px. The real C screen showed `CLUSTER grit drive`; HTTP PCM was 44100 Hz / stereo / 44032 B / peak 11863. Browser playback of the C audio starting was also confirmed |
+| Real pi32v2 build | exit 0. image **539,744/581,564 B**, RAM **85,908/98,304 B**, pool **333,948/344,064 B**, package **610,019 B**, identity `FM-1_900` |
+| Static target cost | **33 PASS**, the existing 31 plus the new `cls_render`/`cluster_render`, exit 0. New costs 570/570 and 53/53, 0 divides inside loops, existing baselines/tolerances kept |
+
+`build/orbit.fwsc` SHA256 at the time:
+`8aec413af72bc3315c5cee71f99985d121633a253e1812213e66bf79dc662652`.
+Per-case results of the original comparison are in `build/host/cluster-product/verification.json`.
+The official analysis images and the existing `.omo/evidence` were only read.
+The 95 timed CPU notes from Linux ARM64 weren't used for the strict CPU verdict.
+The macOS instruction-count regression above has 0 CPU overruns.
+The existing favicon 404 seen in manual QA was left as is and wasn't treated as a JavaScript failure.
+The working browser tabs, audio and both local servers were closed, and the original Aside tabs were restored.
+
+The three changed existing goldens are the exact silent hash `0000000000000000` of the removed banks,
+and the health check was changed to confirm that those factory banks peak at exactly 0.
+No other existing golden or CPU tolerance was raised.
+Reproducing the original full-patch ADSR/FX, real FM-1 audio/ISR time and cache burst load,
+hardware storage and power-cycling, installation, Dots deployment and public release were unconfirmed or not performed in this work.
+
 ## ORBIT 0.5.0 final release candidate, 2026-10-10
 
 The final candidate includes the SLOOP 2.5 integration, English public documentation and new comments, and two fixes from the release audit: FIR reads use separate pointers within the left and right history arrays; SYN backup restore sanitizes staging data before publishing the live bank with the existing void IRQ off/on pair. No buffer, format, engine ID, CPU baseline or tolerance changed.

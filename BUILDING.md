@@ -1,6 +1,6 @@
 # Building ORBIT
 
-The current tree is **ORBIT 0.5.0 / SLOOP v2.5 integration**. Building for the device needs the pi32v2 toolchain and the AC79 SDK. On 2026-10-09 the integrated target compile, `build/orbit.fwsc` generation, memory and existing CPU/ISR budgets were checked, and on 2026-10-10 the displayed version was raised. The [validation record](docs/VALIDATION.md) keeps hardware validation and the post-bump rebuild separate. Generated packages aren't committed to the repository.
+The current tree is **ORBIT 0.6.0**, adding the official CLUSTER oscillator and synthesized sample replacements to the SLOOP v2.5 integration. Device builds require the pi32v2 toolchain and AC79 SDK. The [validation record](docs/VALIDATION.md) distinguishes the post-version-bump build from hardware installation results. Generated packages are not committed to the repository.
 
 The build makes three files in `build/`:
 
@@ -52,7 +52,7 @@ sh build.sh
 `sh build.sh --release 0.9-beta` makes a release build: the package identity becomes
 `FM-1_909` and the version string `0.9-BETA`; the package remains `build/orbit.fwsc`.
 
-Build the 0.5.0 package with `PYTHON=~/.jieli/orbit-venv/bin/python sh build.sh`. The default source version is `ORBIT 0.5.0`, and the install identity is still `FM-1_900`. Check the real displayed version with the device's INFO reply. `--release` only accepts upstream's single-digit `X.Y` form, so don't pass `--release 0.5.0`. For the package, SHA-256 and tag, see the [0.5.0 release](https://github.com/dspaudio/orbit/releases/tag/v0.5.0). The [earlier 0.4.1 release](https://github.com/dspaudio/orbit/releases/tag/v0.4.1) stays available.
+Build the 0.6.0 package with `PYTHON=~/.jieli/orbit-venv/bin/python sh build.sh`. The default source version is `ORBIT 0.6.0`, and the install identity remains `FM-1_900`. Check the displayed version with the device's INFO reply. `--release` only accepts upstream's single-digit `X.Y` form, so do not pass `--release 0.6.0`. The verified package is in the [0.6.0 release](https://github.com/dspaudio/orbit/releases/tag/v0.6.0). The previous [0.5.0 release](https://github.com/dspaudio/orbit/releases/tag/v0.5.0) and [0.4.1 release](https://github.com/dspaudio/orbit/releases/tag/v0.4.1) remain available.
 
 Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 
