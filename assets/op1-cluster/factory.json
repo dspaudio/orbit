@@ -1,0 +1,86 @@
+{
+  "database_sha256": "be4572298fe9dc83b106d5c4eaf1cc972280d97f028f3eaebc0c76dc68ac9cf0",
+  "default_params_raw": "[4000, 4000, 8000, 100, 0, 0, 0, 0]",
+  "patches": [
+    {
+      "id": 65,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[576,6592,0,14912,14336,64,4000,4000],\"fx_active\":true,\"fx_params\":[64,-14337,4515,7232,0,0,0,0],\"fx_type\":\"nitro\",\"knobs\":[17408,9216,512,3,0,0,0,0],\"lfo_active\":false,\"lfo_params\":[4608,32767,8448,15360,0,0,0,0],\"lfo_type\":\"value\",\"name\":\"bass face\",\"octave\":-2,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 66,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[2112,14784,25087,9664,10237,6848,4000,4000],\"fx_active\":true,\"fx_params\":[7863,8865,13392,16291,8000,8000,8000,8000],\"fx_type\":\"grid\",\"knobs\":[3072,22528,512,105,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[2000,-16439,7168,5760,0,0,0,0],\"lfo_type\":\"element\",\"name\":\"caterpillar\",\"octave\":1,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 67,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[8768,9280,21503,6720,2048,64,4000,4000],\"fx_active\":true,\"fx_params\":[12672,11008,2560,6663,8000,8000,8000,8000],\"fx_type\":\"spring\",\"knobs\":[17408,15360,6400,411,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[0,32767,2000,2000,0,0,0,0],\"lfo_type\":\"value\",\"name\":\"cstrings\",\"octave\":0,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 68,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[64,12224,32767,64,2048,64,4000,4000],\"fx_active\":false,\"fx_params\":[5440,20066,10824,16462,0,0,0,0],\"fx_type\":\"delay\",\"knobs\":[8000,31551,13760,402,0,0,0,0],\"lfo_active\":false,\"lfo_params\":[10752,0,10137,4182,0,0,0,0],\"lfo_type\":\"tremolo\",\"name\":\"dissolver\",\"octave\":0,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 69,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[64,16320,32767,10688,14336,3008,4000,4000],\"fx_active\":false,\"fx_params\":[12672,16448,3584,6663,8000,8000,8000,8000],\"fx_type\":\"spring\",\"knobs\":[3072,32767,512,3,0,0,0,0],\"lfo_active\":false,\"lfo_params\":[4773,-26,264,12409,4000,4000,4000,4000],\"lfo_type\":\"tremolo\",\"name\":\"dub bass\",\"octave\":-3,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 70,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[3071,6650,32767,13308,2048,4000,4000,4000],\"fx_active\":true,\"fx_params\":[1088,1024,16773,16448,0,0,0,0],\"fx_type\":\"nitro\",\"knobs\":[13376,11264,7136,1584,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[8576,32767,9120,2880,0,0,0,0],\"lfo_type\":\"value\",\"name\":\"grit drive\",\"octave\":-1,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 71,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[4160,7104,0,13248,2048,64,4000,4000],\"fx_active\":true,\"fx_params\":[9216,32767,409,15521,0,0,0,0],\"fx_type\":\"delay\",\"knobs\":[3072,32767,21120,3,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[23183,0,32767,15918,0,0,0,0],\"lfo_type\":\"tremolo\",\"name\":\"kids show\",\"octave\":0,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 72,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[3136,11258,27647,7676,2048,6336,4000,4000],\"fx_active\":true,\"fx_params\":[5184,23628,5190,18134,0,0,0,0],\"fx_type\":\"delay\",\"knobs\":[3072,14322,3456,346,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[6781,677,2269,9139,4000,4000,4000,4000],\"lfo_type\":\"tremolo\",\"name\":\"love chords\",\"octave\":-1,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 73,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[3136,10816,32767,2624,9216,64,4000,4000],\"fx_active\":true,\"fx_params\":[6720,8983,7334,8638,8000,8000,8000,8000],\"fx_type\":\"delay\",\"knobs\":[17408,9216,512,3,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[5476,1017,4190,15696,4000,4000,4000,4000],\"lfo_type\":\"tremolo\",\"name\":\"mr legato\",\"octave\":1,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 74,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[10751,16320,24064,64,3072,4000,4000,4000],\"fx_active\":true,\"fx_params\":[4160,24686,9840,9640,0,0,0,0],\"fx_type\":\"delay\",\"knobs\":[10720,31722,4192,873,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[22544,1968,0,12064,0,0,0,0],\"lfo_type\":\"tremolo\",\"name\":\"newday\",\"octave\":1,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 75,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[64,16320,32767,16320,14336,64,4000,4000],\"fx_active\":true,\"fx_params\":[6218,7516,13312,32767,8000,8000,8000,8000],\"fx_type\":\"punch\",\"knobs\":[17408,16363,14496,3,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[2000,19975,6048,1024,0,0,0,0],\"lfo_type\":\"element\",\"name\":\"serious bass\",\"octave\":-3,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 76,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[4672,10816,32767,6720,2048,6464,4000,4000],\"fx_active\":true,\"fx_params\":[8000,10295,2578,13229,8000,8000,8000,8000],\"fx_type\":\"delay\",\"knobs\":[17408,17407,13024,465,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[8428,1017,4190,15696,4000,4000,4000,4000],\"lfo_type\":\"tremolo\",\"name\":\"so lonely\",\"octave\":0,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 77,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[64,12224,19455,13248,2048,64,4000,4000],\"fx_active\":true,\"fx_params\":[16448,15000,2000,10784,8000,8000,8000,8000],\"fx_type\":\"spring\",\"knobs\":[4000,4000,8000,54,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[7264,1024,15383,-1664,640,0,0,2048],\"lfo_type\":\"bend\",\"name\":\"sqeek bend\",\"octave\":0,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 78,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[6208,10816,32767,4160,2048,4000,4000,4000],\"fx_active\":true,\"fx_params\":[8000,10295,2578,13229,8000,8000,8000,8000],\"fx_type\":\"delay\",\"knobs\":[17408,17407,13024,465,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[4492,1345,4190,15696,4000,4000,4000,4000],\"lfo_type\":\"tremolo\",\"name\":\"streengs\",\"octave\":2,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 79,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[3071,6650,32767,10748,2048,4000,4000,4000],\"fx_active\":true,\"fx_params\":[7168,0,5120,32767,0,0,0,0],\"fx_type\":\"cwo\",\"knobs\":[13376,11264,7136,1584,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[7144,5047,9472,1920,0,0,0,0],\"lfo_type\":\"value\",\"name\":\"trans4m\",\"octave\":0,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    },
+    {
+      "id": 80,
+      "folder": "cluster",
+      "raw_json": "{\"adsr\":[6720,11258,27647,7676,2048,6336,4000,4000],\"fx_active\":true,\"fx_params\":[5184,23628,5190,18134,0,0,0,0],\"fx_type\":\"delay\",\"knobs\":[17408,32767,4192,1638,0,0,0,0],\"lfo_active\":true,\"lfo_params\":[6781,677,2269,9139,4000,4000,4000,4000],\"lfo_type\":\"tremolo\",\"name\":\"xyz files\",\"octave\":1,\"synth_version\":1,\"type\":\"cluster\"}\n"
+    }
+  ]
+}

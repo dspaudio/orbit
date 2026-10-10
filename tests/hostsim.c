@@ -97,6 +97,8 @@ static void host_preset_req(track_t *t, uint32_t e, uint32_t pi)
     t->preset = (uint8_t)(pi % ENGINES[e]->npresets);
     for (i = 0; i < 8u; i++)
         t->p[P_E0 + i] = p->e[i];
+    if (e == ENGI_CLUSTER)
+        cluster_preset_to(t, pi % ENGINES[e]->npresets);
     t->p[P_ATK] = p->env[0];
     t->p[P_DEC] = p->env[1];
     t->p[P_SUS] = p->env[2];
@@ -799,6 +801,8 @@ int main(int argc, char **argv)
     if (ENGINES[eng]->npresets) {
         const preset_t *p = &ENGINES[eng]->presets[preset % ENGINES[eng]->npresets];
         for (i = 0; i < 8; i++) inst.p[P_E0 + i] = p->e[i];
+        if ((uint32_t)eng == ENGI_CLUSTER)
+            cluster_preset_to(&inst, (uint32_t)preset % ENGINES[eng]->npresets);
         inst.p[P_ATK] = p->env[0]; inst.p[P_DEC] = p->env[1];
         inst.p[P_SUS] = p->env[2]; inst.p[P_REL] = p->env[3]; inst.p[P_ED_FLT] = p->fenv;
         preset_extras(inst.p, p);

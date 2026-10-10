@@ -9,6 +9,7 @@
  * v8 = SLOOP 2.4: the steps' fill conditions (41-42); v9 = SLOOP 2.4: the FM6 engine's patches (68-71,
  * editor_fm6.c: Felucca 1.0's numbers) and the patch bank as backup object 8;
  * v10 = SLOOP 2.5: SYN drum kits (72-76) and backup object 9.
+ * v11: ED_WIDE(77) wraps commands with three-byte signed values offset by 32768.
  *   F0 7D 46 4C cmd args.. F7     (7D = non-commercial ID, "FL")
  * Values are 14 bit, two 7-bit bytes LSB first, offset by 8192 (so -8192..8191).
  * Every request gets a reply with the same cmd; 23/24/26 are also pushed
@@ -28,10 +29,12 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
        ED_LOCK_GET, ED_LOCK_SET, ED_MICRO_GET, ED_MICRO_SET,                    /* v7: parameter locks, nudges */
        ED_FILL_GET, ED_FILL_SET,                                                /* v8: fill conditions */
        ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE };                /* v9: FM6 patches (Felucca's numbers) */
-#define ED_PROTO 10u                                  /* the protocol version INFO ends with */
+#define ED_WIDE 77u
+#define ED_PROTO 11u                                  /* the protocol version at the end of INFO */
 
 static uint8_t ed_out[600];
 static uint32_t ed_n;
+static uint8_t ed_wide;                               /* value width for the current request or push */
 
 static void ed_begin(uint32_t cmd)
 {
@@ -39,8 +42,10 @@ static void ed_begin(uint32_t cmd)
     ed_out[1] = ED_HDR0;
     ed_out[2] = ED_HDR1;
     ed_out[3] = ED_HDR2;
-    ed_out[4] = (uint8_t)cmd;
+    ed_out[4] = (uint8_t)(ed_wide ? ED_WIDE : cmd);
     ed_n = 5;
+    if (ed_wide)
+        ed_out[ed_n++] = (uint8_t)cmd;
 }
 static void ed_b(uint32_t v)
 {
@@ -49,9 +54,11 @@ static void ed_b(uint32_t v)
 }
 static void ed_v(int32_t v)
 {
-    uint32_t u = (uint32_t)(clamp(v, -8192, 8191) + 8192);
+    uint32_t u = (uint32_t)(ed_wide ? v + 32768 : clamp(v, -8192, 8191) + 8192);
     ed_b(u);
     ed_b(u >> 7);
+    if (ed_wide)
+        ed_b(u >> 14);
 }
 static void ed_str(const char *s, uint32_t max)   /* ASCII, 0-terminated */
 {
@@ -65,7 +72,14 @@ static void ed_send(void)
     ed_out[ed_n++] = 0xF7;
     ota_wire_send(ed_out, ed_n);
 }
-static int32_t ed_rv(const uint8_t *p) { return (int32_t)(p[0] | p[1] << 7) - 8192; }
+static int32_t ed_rv(const uint8_t *p)
+{
+    return (int32_t)(p[0] | p[1] << 7 | (ed_wide ? p[2] << 14 : 0)) - (ed_wide ? 32768 : 8192);
+}
+static int ed_value_ok(const uint8_t *p)
+{
+    return p[0] < 128u && p[1] < 128u && p[2] <= 3u;
+}
 
 /* ---- user sample slots (eng_sample.c): flash SMP_USER_OFF(k) (USR1..3 at 0xA0000.., USR4 at 0xE7000) ----
  * BEGIN erases the header sector (the slot is invalid from then on), WRITE fills the data
@@ -160,6 +174,7 @@ static const uint8_t ED_TIDS[3] = {P_LEVEL, P_PAN, P_MUTE};
 static struct {
     uint8_t on, eng, preset, sel;
     uint8_t v4;                                          /* WATCH bit 1: TRACK_CHANGED pushes too */
+    uint8_t wide;                                        /* WATCH width: applies only to value pushes */
     uint32_t pos, last_ms, run_ms, resets;
     int16_t v[ED_NV];                                    /* TSEL->p[], then song.g[] */
     uint16_t t[ED_NV];                                   /* ms (low 16 bits) of the last push */
@@ -297,6 +312,7 @@ static void ed_sync(void)                                /* main loop */
     uint32_t i, n = 0, now = fm1_ms;
     if (!ed_w.on || now - ed_w.run_ms < 5u)
         return;
+    ed_wide = 0;                                        /* the previous request does not negotiate push width */
     ed_w.run_ms = now;
     if (!usb.config || usb.resets != ed_w.resets || now - ed_w.last_ms > 3000u) {
         ed_w.on = 0;                                     /* no host, USB reset, or 3 s without a request */
@@ -335,6 +351,7 @@ static void ed_sync(void)                                /* main loop */
             return;
         ed_w.v[k] = v;
         ed_w.t[k] = (uint16_t)now;
+        ed_wide = ed_w.wide;
         ed_begin(ED_CHANGED);
         ed_b(k < P_COUNT ? 0u : 1u);
         ed_b(k < P_COUNT ? k : k - P_COUNT);
@@ -352,6 +369,7 @@ static void ed_sync(void)                                /* main loop */
             return;
         ed_w.tv[k] = v;
         ed_w.tt[k] = (uint16_t)now;
+        ed_wide = ed_w.wide;
         ed_begin(ED_TRACK_CHANGED);
         ed_b(tr);
         ed_b(id);
@@ -392,6 +410,9 @@ static const param_desc_t *ed_desc(uint32_t scope, uint32_t id, int16_t **vp)
  * LIST takes a snapshot of the working project and the settings; GET reads 1..256 bytes of an object.
  * PUT stages one object in RAM (begin: id, length, CRC-32; data; commit), checks it as a load would,
  * then writes it through the usual A/B commit: a cut-off restore never leaves half an object. */
+/* Share the UP_PUT transport-busy check with hosts that have no flash. */
+static uint32_t ed_flash_busy(void) { return song.playing || transport_req; }
+
 #if FELUCCA_FLASH
 #define ED_BK_RAW ((uint8_t *)&proj_tmp)                  /* the staging RAM (main loop, as the project loads) */
 _Static_assert(sizeof proj_tmp >= sizeof(project_t) && sizeof proj_tmp >= sizeof(up_bank_t) &&
@@ -446,9 +467,6 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
     return 0;
 }
 static const uint8_t ED_BK_IDS[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 32, 33, 34, 35};
-
-/* a flash erase silences the audio for ~50 ms and stalls USB: only while stopped (as the panel) */
-static uint32_t ed_flash_busy(void) { return song.playing || transport_req; }
 
 static uint32_t ed_bk_commit(void)
 {
@@ -608,11 +626,34 @@ static int ed_backup(uint32_t cmd, const uint8_t *a, uint32_t na)   /* no flash:
 
 static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0 and F7 */
 {
-    uint32_t cmd = f[3], i;
-    const uint8_t *a = f + 4;
-    uint32_t na = n - 4u;
+    uint32_t cmd, i, width;
+    const uint8_t *a;
+    uint32_t na;
     int16_t *vp;
     const param_desc_t *d;
+    ed_wide = 0;
+    if (n < 4u)
+        return;
+    cmd = f[3];
+    a = f + 4;
+    na = n - 4u;
+    if (cmd == ED_WIDE) {
+        if (!na)
+            return;
+        cmd = *a++;
+        na--;
+        switch (cmd) {
+        case ED_GET: case ED_SET: case ED_DUMP: case ED_DESC:
+        case ED_UP_GET: case ED_UP_PUT: case ED_TRACK: case ED_TRACK_MIX:
+        case ED_TRACK_DUMP: case ED_TRACK_PARAM: case ED_LOCK_GET: case ED_LOCK_SET:
+        case ED_WATCH:
+            ed_wide = 1;
+            break;
+        default:                                        /* reject recursion and commands without value fields */
+            return;
+        }
+    }
+    width = ed_wide ? 3u : 2u;
     ed_begin(cmd);
     if (ed_backup(cmd, a, na)) {                           /* v6: backup / restore */
         ed_send();
@@ -643,7 +684,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
     case ED_SET:
         if (na < 2u || !(d = ed_desc(a[0], a[1], &vp)))
             return;
-        if (cmd == ED_SET && na >= 4u) {
+        if (ed_wide && cmd == ED_SET && (na != 2u + width || !ed_value_ok(a + 2)))
+            return;
+        if (cmd == ED_SET && na >= 2u + width) {
             if (a[0] == 1 && a[1] == G_ENGSEL) {          /* engine change: the safe path */
                 set_engine((uint32_t)clamp(ed_rv(a + 2), 0, NENGINES - 1));
             } else if (d->max > d->min) {
@@ -841,7 +884,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         uint32_t slot = 0, rc;
         if (na < 1u)
             return;
-        rc = (uint32_t)up_parse(a, na, &r, &slot);
+        rc = (uint32_t)up_parse_width(a, na, &r, &slot, width);
         if (!rc) {
             int16_t v[P_COUNT];
             up_values(&r, v);                              /* each value inside its range */
@@ -886,6 +929,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         if (na < 1u)
             return;
         ed_w.on = a[0] & 1u;
+        ed_w.wide = ed_wide;
         ed_w.v4 = (uint8_t)(ed_w.on && (a[0] & 2u));     /* v4: also TRACK_CHANGED; the reply says it is known */
         ed_w.resets = usb.resets;
         if (ed_w.on)
@@ -917,11 +961,13 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         int16_t *lv;
         if (na < 1u || a[0] >= NTRK)
             return;
+        if (ed_wide && na != 1u && (na != 2u + width || !ed_value_ok(a + 1)))
+            return;
         t = &trk[a[0]];
         lv = a[0] == TRK_DRUM ? &song.g[G_DRLVL] : &t->p[P_LEVEL];
-        if (na >= 4u) {
+        if (na >= 2u + width) {
             *lv = (int16_t)clamp(ed_rv(a + 1), 0, 127);
-            t->p[P_MUTE] = (int16_t)(a[3] ? 1 : 0);
+            t->p[P_MUTE] = (int16_t)(a[1u + width] ? 1 : 0);
             if (a[0] == TRK_DRUM)                          /* the editor's own change: no push */
                 ed_w.v[P_COUNT + G_DRLVL] = *lv;
             else
@@ -996,9 +1042,11 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         track_t *t;
         if (na < 2u || a[0] >= NTRK || a[1] >= P_COUNT)
             return;
+        if (ed_wide && na != 2u && (na != 2u + width || !ed_value_ok(a + 2)))
+            return;
         t = &trk[a[0]];
         d = ed_tdesc(t, a[1]);
-        if (na >= 4u) {
+        if (na >= 2u + width) {
             if (d->max > d->min)                           /* as SET: clamped; a fixed value stays */
                 t->p[a[1]] = (int16_t)clamp(ed_rv(a + 2), d->min, d->max);
             ed_known(a[0], a[1]);
@@ -1035,6 +1083,8 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         int k;
         if (na < 3u || a[0] >= NTRK)
             return;
+        if (ed_wide && na != 3u && (na != 3u + width || !ed_value_ok(a + 3)))
+            return;
         t = &trk[a[0]];
         if (a[1] >= NSTEP || a[2] >= P_COUNT)
             rc = 1;
@@ -1042,7 +1092,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             rc = 2;
         else {
             fm1_irq_off();
-            if (na >= 5u)
+            if (na >= 3u + width)
                 rc = lock_set(t, a[1], a[2], ed_rv(a + 3)) ? 0u : 3u;   /* 3: no free slot */
             else
                 lock_del(t, a[1], a[2]);

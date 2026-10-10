@@ -44,7 +44,7 @@ async function editorMock() {
   inp.onmidimessage = (e) => link.receive(e.data);
   const rq = async (r, o) => link.request(r, o);
   const info = E.parse[E.CMD.INFO](await rq(E.req.info()));
-  ok(info.nengines === 15 && info.engines[12] === "FM6" && info.engines[13] === "PHYS" && info.engines[14] === "NOISE" && info.engines[9] === "SWARM" && info.engines[10] === "PULSE" && info.engines[11] === "FM4"
+  ok(info.nengines === 16 && info.engines[15] === "CLUSTER" && info.engines[12] === "FM6" && info.engines[13] === "PHYS" && info.engines[14] === "NOISE" && info.engines[9] === "SWARM" && info.engines[10] === "PULSE" && info.engines[11] === "FM4"
     && info.engines[5] === "VOICE" && info.engines[6] === "TRIO" && info.engines[7] === "WHEEL" && info.engines[8] === "GRAIN" && info.pcount === 61 && info.pe0 === 53 && info.engines[4] === "SAMPLE",
     "editor: INFO");
   let descs = 0;
@@ -199,7 +199,7 @@ async function editorLibrarian() {
   const ctx = { keys, engines: info.engines, firmware: info.version, pe0: info.pe0 };
   const pts = [cap, { ...bass, engineName: info.engines[bass.engine], tags: ["bass", "device"] }];
   const file = JSON.parse(JSON.stringify(E.libraryFile("library", pts, ctx)));
-  ok(file.format === "felucca-library" && file.version === 1 && file.pCount === 61 && file.paramLabels.length === 61 && file.engines.length === 15,
+  ok(file.format === "felucca-library" && file.version === 1 && file.pCount === 61 && file.paramLabels.length === 61 && file.engines.length === 16,
     "library file: versioned, with P_COUNT, labels and engines");
   const back = E.readLibraryFile(file, ctx);
   ok(back.patches.length === 2 && !back.skipped && eq(back.patches[0].p, cap.p) && eq(back.patches[1].p, bass.p)
@@ -489,7 +489,7 @@ async function editorV9() {
   /* the device: FM6_LIST / GET / PUT / ERASE */
   const { m, rq, done } = attachMock({});
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 10 && info.nengines === 15 && info.engines[12] === "FM6", "v9: INFO ends with 10 (v10 includes v9), FM6 is engine 12");
+  ok(info.proto === 11 && info.nengines === 16 && info.engines[12] === "FM6", "v11 includes v9, FM6 remains engine 12");
   const L = E.parse[C.FM6_LIST](await rq(E.req.fm6List()));
   if (!(L.factory === 8 && L.bank === 27 && L.slots.length === 35)) console.log("  FM6_LIST", L.factory, L.bank, L.slots.length, js(L.slots.slice(0, 10)));
   ok(L.factory === 8 && L.bank === 27 && L.slots.length === 35 && L.slots[0].used, "v9: FM6_LIST: 8 factory patches, 27 bank slots");
@@ -583,7 +583,7 @@ async function editorV5() {
   const C = E.CMD;
   const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 10 && /ORBIT/.test(info.version) && info.pcount === 61 && info.gcount === 33 && info.pe0 === 53, "v5..v10: INFO ends with the protocol version (10: SYN kits); 33 globals (2.5: drum DLY)");
+  ok(info.proto === 11 && /ORBIT/.test(info.version) && info.pcount === 61 && info.gcount === 33 && info.pe0 === 53, "v11 INFO, 33 globals and unchanged parameter layout");
   /* the firmware says the same: ED_DRUM_STEP is command 33, INFO sends 5, P_CHORD / the master globals as the mock has them */
   const ec = readFileSync(join(HERE, "../firmware/src/editor.c"), "utf8"), pc = readFileSync(join(HERE, "../firmware/src/params.c"), "utf8");
   const en = (/enum \{ ED_INFO = 1,([^}]*)\}/.exec(ec) || [])[1] || "";
@@ -594,7 +594,8 @@ async function editorV5() {
     && names.indexOf("ED_MICRO_GET") + 1 === C.MICRO_GET && names.indexOf("ED_MICRO_SET") + 1 === C.MICRO_SET
     && names.indexOf("ED_FILL_GET") + 1 === C.FILL_GET && names.indexOf("ED_FILL_SET") + 1 === C.FILL_SET
     && /ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE/.test(ec) && C.FM6_GET === 68 && C.FM6_ERASE === 71
-    && /#define ED_PROTO 10u/.test(ec) && /ed_b\(ED_PROTO\);/.test(ec)
+    && Number(/#define ED_PROTO (\d+)u/.exec(ec)?.[1]) === info.proto && /ed_b\(ED_PROTO\);/.test(ec)
+    && Number(/#define ED_WIDE (\d+)u/.exec(ec)?.[1]) === C.WIDE
     && /enum \{ ED_DSYN_LIST = 72, ED_DSYN_GET, ED_DSYN_PUT, ED_DSYN_STORE, ED_DSYN_PLAY \};/.test(readFileSync(join(HERE, "../firmware/src/editor_dsyn.c"), "utf8"))
     && C.DSYN_LIST === 72 && C.DSYN_PLAY === 76, "v5..v10: command numbers and INFO == editor.c / editor_dsyn.c");
   const enumNames = (id) => (new RegExp(`${id}\\[\\] = \\{([^}]*)\\}`).exec(pc) || [])[1].split(",").map((x) => x.trim().replace(/"/g, ""));
@@ -664,7 +665,7 @@ async function editorV7() {
   const C = E.CMD;
   const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 10, "v7: INFO ends with 10 (v10 includes v7)");
+  ok(info.proto === 11, "v11 includes v7");
   /* the lockable set == seq.c p_lockable (the ids as core.h names them) */
   const sc = readFileSync(join(HERE, "../firmware/src/seq.c"), "utf8"), ch = readFileSync(join(HERE, "../firmware/src/core.h"), "utf8");
   const ids = {}; let n = 0;
@@ -727,7 +728,7 @@ async function editorV8() {
   const C = E.CMD;
   const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 10, "v8: INFO ends with 10 (v10 includes v8)");
+  ok(info.proto === 11, "v11 includes v8");
   /* the condition codes == core.h FC_*; the bit layout of a 2-bit step field */
   const ch = readFileSync(join(HERE, "../firmware/src/core.h"), "utf8"), sc = readFileSync(join(HERE, "../firmware/src/seq.c"), "utf8");
   ok(/enum \{ FC_NORM, FC_FILL, FC_NOFILL \}/.test(ch) && /uint8_t fill\[NSTEP \/ 4\];/.test(ch)
@@ -1391,6 +1392,62 @@ async function updater() {
   ok(e6 && /official FM-1 V15/.test(e6.message), "fm1pkg.js: only the exact official V15 is accepted (SHA-256)");
 }
 
+async function editorCluster() {
+  const m = E.makeMockDevice(), input = [...m.access.inputs.values()][0], output = [...m.access.outputs.values()][0];
+  const link = new E.Link((data) => output.send(data), { timeout: 1000 });
+  input.onmidimessage = (event) => link.receive(event.data);
+  const rq = (request) => link.request(request);
+  const C = E.CMD, info = E.parse[C.INFO](await rq(E.req.info()));
+  const source = JSON.parse(readFileSync(join(HERE, "../assets/op1-cluster/factory.json"), "utf8"));
+  const patches = source.patches.map((row) => JSON.parse(row.raw_json));
+  try {
+    E.req.protocol(info.proto);
+    for (let pi = 0; pi < patches.length; pi++) {
+      await rq(E.req.preset(15, pi));
+      const dump = E.parse[C.DUMP](await rq(E.req.dump()), info);
+      ok(eq(dump.p.slice(info.pe0), patches[pi].knobs), `cluster: exact factory raw row ${pi}`);
+    }
+    const names = E.parse[C.NAMES](await rq(E.req.names(15))).names;
+    ok(eq(names, patches.map((p) => p.name)), "cluster: original factory names and append-only ID");
+    const desc = E.parse[C.DESC](await rq(E.req.desc(0, info.pe0 + 1)));
+    ok(desc.min === -32768 && desc.max === 32767, "cluster: full signed16 descriptor");
+    for (const value of [-32768, -8193, -1, 0, 8191, 8192, 32767]) {
+      const set = E.parse[C.SET](await rq(E.req.set(0, info.pe0 + 1, value)));
+      const get = E.parse[C.GET](await rq(E.req.get(0, info.pe0 + 1)));
+      ok(set.value === value && get.value === value, `cluster: WIDE SET/GET ${value}`);
+    }
+    await rq(E.req.set(0, info.pe0, 17408));
+    const dump = E.parse[C.DUMP](await rq(E.req.dump()), info);
+    const pt = { engine: 15, engineName: "CLUSTER", name: "CLUSTER RAW", p: dump.p, pattern: [] };
+    const put = E.parse[C.UP_PUT](await rq(E.req.upPut(20, pt)));
+    const saved = E.parse[C.UP_GET](await rq(E.req.upGet(20)), info);
+    ok(put.rc === 0 && saved.p[info.pe0] === 17408 && saved.p[info.pe0 + 1] === 32767, "cluster: signed16 user preset round trip");
+    const ctx = { keys: Array.from({ length: info.pcount }, (_, i) => `P${i}`), engines: info.engines, pe0: info.pe0 };
+    const library = JSON.parse(JSON.stringify(E.libraryFile("library", [pt], ctx)));
+    const back = E.readLibraryFile(library, ctx);
+    ok(back.patches[0].engine === 15 && eq(back.patches[0].p, pt.p), "cluster: library retains raw integers and engine name");
+    const lock = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 3, info.pe0 + 1, -32768)));
+    const locks = E.parse[C.LOCK_GET](await rq(E.req.lockGet(0)));
+    ok(lock.value === -32768 && locks.locks.some((x) => x.value === -32768), "cluster: signed16 parameter lock");
+    await rq(E.req.watch(3));
+    let signal;
+    const pushed = new Promise((resolve) => { signal = resolve; });
+    link.onPush = (f) => { if (f.cmd === C.CHANGED && f.a[1] === info.pe0 + 1) signal(E.parse[C.CHANGED](f.a)); };
+    m.sim.param(0, info.pe0 + 1, -8193);
+    const push = await Promise.race([pushed, new Promise((_, reject) => {
+      const timer = setTimeout(() => reject(new Error("missing CHANGED event")), 1000);
+      pushed.then(() => clearTimeout(timer), () => clearTimeout(timer));
+    })]);
+    ok(push.value === -8193, "cluster: wide WATCH push is lossless");
+    E.req.protocol(10);
+    const legacy = E.parse[C.SET](await rq(E.req.set(0, 0, 75)));
+    ok(legacy.value === 75, "cluster: same device still accepts legacy parameter frames");
+  } finally {
+    E.req.protocol(0);
+    link.close();
+  }
+}
+
 await editorMock();
 await editorLibrarian();
 await editorLive();
@@ -1405,6 +1462,7 @@ await editorBackup();
 await editor25();
 await editorDsyn();
 await editorCart();
+await editorCluster();
 editorTabs();
 editorIcons();
 samplesMatch();

@@ -172,3 +172,20 @@ cpu/NOISE/09_BITCRUSH 2046
 cpu/NOISE/10_RADIO 2074
 cpu/mix/3parts_heavy_now_drums 2894
 cpu/mix/3parts_phys_noise_drums 2992
+# First official cluster macOS cc -O2 instruction-counter measurement; existing baselines/tolerances retained.
+cpu/CLUSTER/00_bass_face 3288
+cpu/CLUSTER/01_caterpillar 3310
+cpu/CLUSTER/02_cstrings 3306
+cpu/CLUSTER/03_dissolver 3249
+cpu/CLUSTER/04_dub_bass 3298
+cpu/CLUSTER/05_grit_drive 3250
+cpu/CLUSTER/06_kids_show 3299
+cpu/CLUSTER/07_love_chords 3311
+cpu/CLUSTER/08_mr_legato 3269
+cpu/CLUSTER/09_newday 3237
+cpu/CLUSTER/10_serious_bass 3305
+cpu/CLUSTER/11_so_lonely 3300
+cpu/CLUSTER/12_sqeek_bend 3253
+cpu/CLUSTER/13_streengs 3299
+cpu/CLUSTER/14_trans4m 3250
+cpu/CLUSTER/15_xyz_files 3274

@@ -6,7 +6,7 @@ protocol v3; commands 31-32 (any track's parameters) form protocol v4; command 3
 `INFO` and `TRACK` bytes form protocol v5 (SLOOP 2.0); commands 34-36 (backup / restore) form protocol v6
 (SLOOP 2.3); commands 37-40 (the steps' nudges and parameter locks) form protocol v7, commands 41-42 (the
 steps' fill conditions) protocol v8, commands 68-71 (the FM6 engine's patches) protocol v9, and commands
-72-76 (SYN drum kits) protocol v10.
+72-76 (SYN drum kits) protocol v10. ORBIT's signed16 envelope command 77 forms protocol v11.
 
 **v3 (four tracks):** the device has four tracks: 1..3 are synth parts, 4 is the drum track. One
 of them is *selected* (the TRACKS page on the device, or `TRACK`). Every v1 / v2 command acts on the
@@ -46,6 +46,28 @@ Their meaning, range and names depend on the current engine, so re-read `DESC` f
 after an engine change.
 
 ## Commands
+
+### ORBIT v11: signed16 value envelope
+
+When `INFO` reports version 11 or later, value-bearing commands can use
+`F0 7D 46 4C 77 inner_cmd body F7`.
+Replies retain the same envelope and `inner_cmd`. Only the table's `v14` fields
+change to three bytes `[lo, mid, hi]`, decoded as `(lo | mid << 7 | hi << 14) - 32768`.
+The range is -32768..32767 and `hi` must be 0..3. Bytes, strings and pack7 fields are unchanged.
+
+Supported inner commands are GET/SET/DUMP/DESC, UP_GET/UP_PUT, TRACK/TRACK_MIX/
+TRACK_DUMP/TRACK_PARAM, LOCK_GET/LOCK_SET and WATCH.
+Wide WATCH uses the same envelope for CHANGED/TRACK_CHANGED;
+non-value pushes such as RELOAD/STEP_CHANGED keep their legacy format.
+Sending plain WATCH again returns value pushes to legacy v14 encoding.
+Recursive envelopes, unsupported commands, short writes and invalid high bytes are rejected.
+INFO and other commands use their original frames.
+Plain commands retain their v14 encoding and command numbers.
+
+CLUSTER is appended as engine 15 in the default registry; existing IDs 0..14 are unchanged.
+Factory raw knobs are signed16. Legacy v14-only clients read values clamped to
+-8192..8191, so preserving original values requires v11.
+FUN5 and user-preset storage retain their existing int16 fields.
 
 | cmd | Request args | Reply args |
 | --- | --- | --- |

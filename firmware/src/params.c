@@ -30,7 +30,7 @@ static const char *const N_ENGNAME[] = {"ANALOG", "DIGITAL", "PHASE", "LOFI", "S
 #if FELUCCA_SLICE
                                              "SLICE",
 #endif
-    "SWARM", "PULSE", "FM4", "FM6", "PHYS", "NOISE",
+    "SWARM", "PULSE", "FM4", "FM6", "PHYS", "NOISE", "CLUSTER",
 };
 
 #define PD(l, f, mn, mx, df) {l, f, mn, mx, df, 0, 0}

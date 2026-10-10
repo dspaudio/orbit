@@ -717,7 +717,8 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   LOCK_GET: 37, LOCK_SET: 38, MICRO_GET: 39, MICRO_SET: 40,     /* v7 (SLOOP 2.4): parameter locks, nudges */
   FILL_GET: 41, FILL_SET: 42,                         /* v8 (SLOOP 2.4): the steps' fill conditions */
   FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71,    /* v9 (SLOOP 2.4): the FM6 engine's patches (Felucca 1.0's numbers) */
-  DSYN_LIST: 72, DSYN_GET: 73, DSYN_PUT: 74, DSYN_STORE: 75, DSYN_PLAY: 76 };   /* v10 (SLOOP 2.5): the SYN drum kits */
+  DSYN_LIST: 72, DSYN_GET: 73, DSYN_PUT: 74, DSYN_STORE: 75, DSYN_PLAY: 76,
+  WIDE: 77 };   /* v11: signed16 value envelope around existing commands */
 /* v7: the parameters a step can lock (firmware seq.c p_lockable: the sound, not the sequencer / arp / key / voice
    mode); ids as core.h: LEVEL .. LFO dests, GATE, the sends, GLIDE, PAN, DETUNE, the SLICER, the engine's 8 */
 const lockable = (id) => id <= 16 || id === 32 || (id >= 33 && id <= 36) || id === 38 || id === 39 || id === 44 || (id >= 45 && id <= 48) || id === 50 || (id >= 53 && id <= 60);
@@ -744,6 +745,11 @@ const emptyDrum = () => ({ on: 0, lvl: new Array(16).fill(0), rat: new Array(16)
 
 const v14enc = (v) => { const u = Math.max(-8192, Math.min(8191, Math.round(v))) + 8192; return [u & 0x7F, (u >> 7) & 0x7F]; };
 const v14dec = (lo, hi) => (lo | (hi << 7)) - 8192;
+const v16enc = (v) => { const u = Math.max(-32768, Math.min(32767, Math.round(v))) + 32768; return [u & 127, (u >> 7) & 127, (u >> 14) & 3]; };
+const v16dec = (lo, hi, top) => {
+  if (!Number.isInteger(top) || top < 0 || top > 3) throw new Error("bad signed16 value");
+  return (lo | (hi << 7) | (top << 14)) - 32768;
+};
 function strEnc(s) { const a = []; for (const c of String(s)) a.push(c.charCodeAt(0) & 0x7F); a.push(0); return a; }
 
 /* only ever builds F0 7D 46 4C ... F7 */
@@ -755,13 +761,18 @@ function frame(cmd, args = []) {
 function unframe(d) {
   if (!d || d.length < 6 || d[0] !== 0xF0 || d[d.length - 1] !== 0xF7) return null;
   if (d[1] !== HDR[0] || d[2] !== HDR[1] || d[3] !== HDR[2]) return null;
-  return { cmd: d[4], a: Array.from(d.slice(5, d.length - 1)) };
+  const wide = d[4] === CMD.WIDE;
+  if (wide && (d.length < 7 || d[5] === CMD.WIDE)) return null;
+  const a = Array.from(d.slice(wide ? 6 : 5, d.length - 1));
+  /* Preserve rq()'s array API while passing each received envelope's value width to Reader. */
+  if (wide) Object.defineProperty(a, "valueBytes", { value: 3 });
+  return wide ? { cmd: d[5], a, wide: true } : { cmd: d[4], a };
 }
 
 class Reader {
   constructor(a) { this.a = a; this.i = 0; }
   b() { if (this.i >= this.a.length) throw new Error("short reply"); return this.a[this.i++]; }
-  v() { const lo = this.b(); return v14dec(lo, this.b()); }
+  v() { const lo = this.b(), hi = this.b(); return this.a.valueBytes === 3 ? v16dec(lo, hi, this.b()) : v14dec(lo, hi); }
   s() { let s = ""; for (;;) { const c = this.b(); if (!c) return s; s += String.fromCharCode(c); } }
 }
 
@@ -944,12 +955,16 @@ const parse = {
 /* a name the device accepts: printable ASCII, 1..12 characters */
 function upName(s) { return String(s ?? "").replace(/[^\x20-\x7E]/g, "").trim().slice(0, UP.NAME_MAX) || "PATCH"; }
 
+let valueWide = false;
+const valueEnc = (v) => valueWide ? v16enc(v) : v14enc(v);
+const valueReq = (cmd, args) => valueWide ? [CMD.WIDE, [cmd, ...args]] : [cmd, args];
 const req = {
+  protocol: (version) => { valueWide = version >= 11; },
   info: () => [CMD.INFO, []],
-  get: (scope, id) => [CMD.GET, [scope, id]],
-  set: (scope, id, v) => [CMD.SET, [scope, id, ...v14enc(v)]],
-  dump: () => [CMD.DUMP, []],
-  desc: (scope, id) => [CMD.DESC, [scope, id]],
+  get: (scope, id) => valueReq(CMD.GET, [scope, id]),
+  set: (scope, id, v) => valueReq(CMD.SET, [scope, id, ...valueEnc(v)]),
+  dump: () => valueReq(CMD.DUMP, []),
+  desc: (scope, id) => valueReq(CMD.DESC, [scope, id]),
   stepGet: (i) => [CMD.STEP_GET, [i]],
   stepSet: (i, st) => {
     const n = Math.max(0, Math.min(4, st.n | 0));
@@ -975,23 +990,23 @@ const req = {
   smpErase: (s) => [CMD.SMP_ERASE, [s & 0x7F]],
   smpInfo: () => [CMD.SMP_INFO, []],
   upList: (start, count) => [CMD.UP_LIST, [start & 0x7F, Math.max(1, Math.min(UP.LIST_MAX, count | 0))]],
-  upGet: (s) => [CMD.UP_GET, [s & 0x7F]],
+  upGet: (s) => valueReq(CMD.UP_GET, [s & 0x7F]),
   /* patch: {engine, name, p: P_COUNT values, pattern: 16 x [note, flags]} */
-  upPut: (s, pt) => [CMD.UP_PUT, [s & 0x7F, pt.engine & 0x7F, ...strEnc(upName(pt.name)), ...pt.p.flatMap((v) => v14enc(v ?? 0)),
-    ...Array.from({ length: UP.PAT }, (_, i) => { const x = (pt.pattern || [])[i] || [0, 0]; return [x[0] & 0x7F, x[1] & 7]; }).flat()]],
+  upPut: (s, pt) => valueReq(CMD.UP_PUT, [s & 0x7F, pt.engine & 0x7F, ...strEnc(upName(pt.name)), ...pt.p.flatMap((v) => valueEnc(v ?? 0)),
+    ...Array.from({ length: UP.PAT }, (_, i) => { const x = (pt.pattern || [])[i] || [0, 0]; return [x[0] & 0x7F, x[1] & 7]; }).flat()]),
   upStore: (s, name) => [CMD.UP_STORE, [s & 0x7F, ...strEnc(name ? upName(name) : "")]],   /* "": the device names it ("ANALOG 07") */
   upLoad: (s) => [CMD.UP_LOAD, [s & 0x7F]],
   upErase: (s) => [CMD.UP_ERASE, [s & 0x7F]],
   /* on: 1 = pushes; 3 = also TRACK_CHANGED (v4 firmware answers 3, older firmware 1) */
-  watch: (on) => [CMD.WATCH, [on === 3 ? 3 : on ? 1 : 0]],
+  watch: (on) => valueReq(CMD.WATCH, [on === 3 ? 3 : on ? 1 : 0]),
   ping: () => [CMD.PING, []],
   /* v3: tracks 0..3 (3 = drums) */
   track: (sel) => [CMD.TRACK, sel == null ? [] : [sel & 0x7F]],
-  trackMix: (tr, level, mute) => [CMD.TRACK_MIX, level == null ? [tr & 0x7F] : [tr & 0x7F, ...v14enc(level), mute ? 1 : 0]],
-  trackDump: (tr) => [CMD.TRACK_DUMP, [tr & 0x7F]],
+  trackMix: (tr, level, mute) => valueReq(CMD.TRACK_MIX, level == null ? [tr & 0x7F] : [tr & 0x7F, ...valueEnc(level), mute ? 1 : 0]),
+  trackDump: (tr) => valueReq(CMD.TRACK_DUMP, [tr & 0x7F]),
   trackStep: (tr, i, st) => [CMD.TRACK_STEP, st ? [tr & 0x7F, ...req.stepSet(i, st)[1]] : [tr & 0x7F, i & 0x7F]],
   /* v4: get (v == null) or set parameter id (P_*) of track tr, clamped as SET */
-  trackParam: (tr, id, v) => [CMD.TRACK_PARAM, v == null ? [tr & 0x7F, id & 0x7F] : [tr & 0x7F, id & 0x7F, ...v14enc(v)]],
+  trackParam: (tr, id, v) => valueReq(CMD.TRACK_PARAM, v == null ? [tr & 0x7F, id & 0x7F] : [tr & 0x7F, id & 0x7F, ...valueEnc(v)]),
   /* v6: backup / restore */
   bkList: () => [CMD.BK_LIST, []],
   bkGet: (id, off, n) => [CMD.BK_GET, [id & 0x7F, ...u35enc(off), n & 0x7F, (n >> 7) & 0x7F]],
@@ -1000,8 +1015,8 @@ const req = {
   bkCommit: (id) => [CMD.BK_PUT, [2, id & 0x7F]],
   bkAbort: (id) => [CMD.BK_PUT, [3, id & 0x7F]],
   /* v7: the locks of a track; set (v a number) or delete (v == null) the lock of (step, param) */
-  lockGet: (tr) => [CMD.LOCK_GET, [tr & 0x7F]],
-  lockSet: (tr, step, param, v) => [CMD.LOCK_SET, v == null ? [tr & 0x7F, step & 0x7F, param & 0x7F] : [tr & 0x7F, step & 0x7F, param & 0x7F, ...v14enc(v)]],
+  lockGet: (tr) => valueReq(CMD.LOCK_GET, [tr & 0x7F]),
+  lockSet: (tr, step, param, v) => valueReq(CMD.LOCK_SET, v == null ? [tr & 0x7F, step & 0x7F, param & 0x7F] : [tr & 0x7F, step & 0x7F, param & 0x7F, ...valueEnc(v)]),
   /* v7: the nudges of a track; set one (m: MICRO.MIN..MAX, sent + 64) */
   microGet: (tr) => [CMD.MICRO_GET, [tr & 0x7F]],
   microSet: (tr, step, m) => [CMD.MICRO_SET, [tr & 0x7F, step & 0x7F, (Math.max(MICRO.MIN, Math.min(MICRO.MAX, Math.round(m))) + 64) & 0x7F]],
@@ -1114,7 +1129,9 @@ class Link {
     if (!f) return;                                  /* not ours (notes, clock, other SysEx) */
     if (PUSH.has(f.cmd)) { this.onPush(f); return; }
     const c = this.cur;
-    if (!c || f.cmd !== c.cmd || !replyMatches(c.cmd, c.args, f.a)) { this.onUnknown(f); return; }
+    const wide = c && c.cmd === CMD.WIDE, cmd = wide ? c.args[0] : c && c.cmd;
+    const args = wide ? c.args.slice(1) : c && c.args;
+    if (!c || !!f.wide !== !!wide || f.cmd !== cmd || !replyMatches(cmd, args, f.a)) { this.onUnknown(f); return; }
     this.finish(f.a);
   }
   close() {
@@ -2123,7 +2140,7 @@ function makeMockDevice(opt = {}) {
     E("MIDI", ["KEYS", "SEQ"], 0), E("SYNC", ["INT", "USB", "TRS"], 0), E("IN", ["NOTES", "CLOCK"], 0), D("CPU", F.INT, 0, 0, 0),
     D("SLOT", F.INT, 1, 4, 1), E("NAME", NDASH, 0), E("LOAD", NGO, 0), E("SAVE", NGO, 0),
     E("ENG", ["ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL",
-      "GRAIN", "SWARM", "PULSE", "FM4", "FM6", "PHYS", "NOISE"], 0), E("SET", NGO, 0),   /* ORBIT engine order: core.h */
+      "GRAIN", "SWARM", "PULSE", "FM4", "FM6", "PHYS", "NOISE", "CLUSTER"], 0), E("SET", NGO, 0),   /* ORBIT engine order: core.h */
     E("CLRSQ", NGO, 0), E("INIT", NGO, 0),
     D("CH", F.INT, 0, 16, 10), D("LVL", F.INT, 0, 127, 100), D("REV", F.INT, 0, 127, 16),
     D("DUST", F.PCT, 0, 127, 0), D("DUCK", F.PCT, 0, 127, 0), D("FILT", F.FILT, -64, 63, 0),
@@ -2281,6 +2298,33 @@ function makeMockDevice(opt = {}) {
   const FM6_E = ENG.findIndex((e) => e.name === "FM6"), FM6_BANK = 27, FM6_NPART = 3;
   const v9 = !opt.legacy && !opt.v3 && !opt.noBackup && !opt.v7 && !opt.v8;   /* SLOOP 2.4: FM6 patches */
   const v10 = v9 && !opt.v9;                         /* SLOOP 2.5: the SYN drum kits */
+  const v11 = v10 && !opt.v10;
+  if (v11) {
+    ENG.push({ name: "CLUSTER", titles: ["OSC RAW", "RESERVED"],
+      edit: [D("COUNT", F.INT, 2048, 18431, 4000), D("WAVE", F.INT, -32768, 32767, 4000),
+        D("CURVE", F.INT, 0, 24575, 8000), D("SPREAD", F.INT, -32768, 32767, 100),
+        D("--", F.INT, 0, 0, 0), D("--", F.INT, 0, 0, 0), D("--", F.INT, 0, 0, 0), D("--", F.INT, 0, 0, 0)],
+      presets: [
+        P("bass face", [17408,9216,512,3,0,0,0,0], [0,70,127,40]),
+        P("caterpillar", [3072,22528,512,105,0,0,0,0], [0,70,127,40]),
+        P("cstrings", [17408,15360,6400,411,0,0,0,0], [0,70,127,40]),
+        P("dissolver", [8000,31551,13760,402,0,0,0,0], [0,70,127,40]),
+        P("dub bass", [3072,32767,512,3,0,0,0,0], [0,70,127,40]),
+        P("grit drive", [13376,11264,7136,1584,0,0,0,0], [0,70,127,40]),
+        P("kids show", [3072,32767,21120,3,0,0,0,0], [0,70,127,40]),
+        P("love chords", [3072,14322,3456,346,0,0,0,0], [0,70,127,40]),
+        P("mr legato", [17408,9216,512,3,0,0,0,0], [0,70,127,40]),
+        P("newday", [10720,31722,4192,873,0,0,0,0], [0,70,127,40]),
+        P("serious bass", [17408,16363,14496,3,0,0,0,0], [0,70,127,40]),
+        P("so lonely", [17408,17407,13024,465,0,0,0,0], [0,70,127,40]),
+        P("sqeek bend", [4000,4000,8000,54,0,0,0,0], [0,70,127,40]),
+        P("streengs", [17408,17407,13024,465,0,0,0,0], [0,70,127,40]),
+        P("trans4m", [13376,11264,7136,1584,0,0,0,0], [0,70,127,40]),
+        P("xyz files", [17408,32767,4192,1638,0,0,0,0], [0,70,127,40]),
+      ] });
+  }
+  GP[20].names = ENG.map((e) => e.name);
+  GP[20].max = ENG.length - 1;
   /* demo patterns of the mock only (the LIVE firmware has no factory patterns: a preset never writes the
      sequencer); used to seed the mock's user presets and track 1 as if they had been recorded */
   const T_ = 4;
@@ -2345,6 +2389,7 @@ function makeMockDevice(opt = {}) {
     [1, 2, 3, 4].forEach((id, k) => { st.p[id] = pr.env[k]; });
     st.p[37] = pr.mono ? 2 : 0;
     st.p[33] = 0; st.p[34] = 24; st.p[35] = 28; st.p[36] = 36;
+    if (e.name === "CLUSTER") for (let i = 33; i <= 36; i++) st.p[i] = 0;
     for (let i = P_SLCR; i < P_CHORD; i++) st.p[i] = TP[i].def;   /* a factory preset turns the SLICER off (CHORD stays: the key) */
     if (demo && pr.pat && seqEmpty()) loadPattern(pr.pat - 1);
     if (st.engine === FM6_E) fm6Slot(st.tracks[st.sel], st.p[P_E0 + 7]);   /* eng_fm6.c fm6_track_loaded: the slot's patch */
@@ -2402,7 +2447,10 @@ function makeMockDevice(opt = {}) {
 
   function handle(cmd, a) {
     const out = [];
-    const b = (x) => out.push(x & 0x7F), v = (x) => out.push(...v14enc(x)), s = (x) => out.push(...strEnc(x));
+    const wide = a.valueBytes === 3, width = wide ? 3 : 2;
+    if (wide && !v11) return null;
+    const rv = (i) => wide ? v16dec(a[i], a[i + 1], a[i + 2]) : v14dec(a[i], a[i + 1]);
+    const b = (x) => out.push(x & 0x7F), v = (x) => out.push(...(wide ? v16enc(x) : v14enc(x))), s = (x) => out.push(...strEnc(x));
     if (opt.legacy && cmd >= CMD.UP_LIST) return null;
     if (opt.v3 && cmd >= CMD.TRACK_PARAM) return null;
     if (opt.noBackup && cmd >= CMD.LOCK_GET) return null;   /* (a v5 device: no locks either) */
@@ -2474,6 +2522,7 @@ function makeMockDevice(opt = {}) {
       case CMD.WATCH:
         if (a.length < 1) return null;
         st.watch = !!(a[0] & 1);
+        st.wide = st.watch && wide;
         st.v4 = st.watch && !opt.v3 && !!(a[0] & 2);   /* v4: TRACK_CHANGED pushes too */
         b((st.watch ? 1 : 0) | (st.v4 ? 2 : 0));
         break;
@@ -2481,19 +2530,21 @@ function makeMockDevice(opt = {}) {
         b(0);
         break;
       case CMD.INFO:
-        s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : opt.v3 ? "FELUCCA 0.8 (MOCK)" : "ORBIT 0.5.0 (MOCK)"); b(ENG.length); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0);
+        s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : opt.v3 ? "FELUCCA 0.8 (MOCK)" : "ORBIT 0.6.0 (MOCK)"); b(ENG.length); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0);
         ENG.forEach((e) => s(e.name));
         if (!opt.legacy) b(NTRK);
-        if (v5) b(opt.noBackup ? 5 : opt.v7 ? 7 : opt.v8 ? 8 : opt.v9 ? 9 : 10);   /* v10: SYN kits (v9: FM6 patches, v8: fill conditions, v7: nudges and locks, v6: backup) */
+        if (v5) b(opt.noBackup ? 5 : opt.v7 ? 7 : opt.v8 ? 8 : opt.v9 ? 9 : opt.v10 ? 10 : 11);
         break;
       case CMD.GET: case CMD.SET: {
         if (a.length < 2) return null;
         const d = desc(a[0], a[1]);
         if (!d) return null;
         const arr = a[0] ? st.g : st.p;
-        if (cmd === CMD.SET && a.length >= 4) {
-          if (a[0] === 1 && a[1] === G_ENGSEL) setEngine(clamp(v14dec(a[2], a[3]), 0, ENG.length - 1));
-          else if (d.max > d.min) arr[a[1]] = clamp(v14dec(a[2], a[3]), d.min, d.max);
+        if (cmd === CMD.SET && a.length < 2 + width) return null;
+        if (cmd === CMD.SET && wide && a[4] > 3) return null;
+        if (cmd === CMD.SET) {
+          if (a[0] === 1 && a[1] === G_ENGSEL) setEngine(clamp(rv(2), 0, ENG.length - 1));
+          else if (d.max > d.min) arr[a[1]] = clamp(rv(2), d.min, d.max);
           if (!a[0] && a[1] === P_E0 + 7 && st.engine === FM6_E && !drumSel()) fm6Slot(st.tracks[st.sel], arr[a[1]]);   /* PTCH (fm6_poll) */
         }
         b(a[0]); b(a[1]); v(arr[a[1]]);
@@ -2511,10 +2562,12 @@ function makeMockDevice(opt = {}) {
       case CMD.TRACK_MIX: {
         if (a.length < 1 || a[0] >= NTRK) return null;
         const t = st.tracks[a[0]], drum = a[0] === TRK_DRUM;
-        if (a.length >= 4) {
-          const lv = clamp(v14dec(a[1], a[2]), 0, 127);
+        if (a.length > 1 && a.length < 2 + width) return null;
+        if (a.length > 1 && wide && a[3] > 3) return null;
+        if (a.length >= 2 + width) {
+          const lv = clamp(rv(1), 0, 127);
           if (drum) st.g[25] = lv; else t.p[0] = lv;
-          t.p[40] = a[3] ? 1 : 0;
+          t.p[40] = a[1 + width] ? 1 : 0;
         }
         b(a[0]); v(drum ? st.g[25] : t.p[0]); b(t.p[40] ? 1 : 0);
         break;
@@ -2528,8 +2581,10 @@ function makeMockDevice(opt = {}) {
       case CMD.TRACK_PARAM: {
         if (a.length < 2 || a[0] >= NTRK || a[1] >= P_COUNT) return null;
         const t = st.tracks[a[0]], d = tdesc(t, a[1]);
-        if (a.length >= 4 && d.max > d.min) t.p[a[1]] = clamp(v14dec(a[2], a[3]), d.min, d.max);
-        if (a.length >= 4 && a[1] === P_E0 + 7 && !t.drum && t.engine === FM6_E) fm6Slot(t, t.p[a[1]]);   /* PTCH (fm6_poll) */
+        if (a.length > 2 && a.length < 2 + width) return null;
+        if (a.length > 2 && wide && a[4] > 3) return null;
+        if (a.length >= 2 + width && d.max > d.min) t.p[a[1]] = clamp(rv(2), d.min, d.max);
+        if (a.length >= 2 + width && a[1] === P_E0 + 7 && !t.drum && t.engine === FM6_E) fm6Slot(t, t.p[a[1]]);   /* PTCH (fm6_poll) */
         b(a[0]); b(a[1]); v(t.p[a[1]]);
         break;
       }
@@ -2556,12 +2611,14 @@ function makeMockDevice(opt = {}) {
       }
       case CMD.LOCK_SET: {
         if (a.length < 3 || a[0] >= NTRK) return null;
+        if (a.length > 3 && a.length < 3 + width) return null;
+        if (a.length > 3 && wide && a[5] > 3) return null;
         const t = st.tracks[a[0]], step = a[1], param = a[2];
         let rc = step >= NSTEP || param >= P_COUNT ? 1 : !lockable(param) ? 2 : 0;
         if (!rc) {
           const k = t.locks.findIndex((l) => l.step === step && l.param === param);
-          if (a.length >= 5) {
-            const d = tdesc(t, param), val = clamp(v14dec(a[3], a[4]), d.min, d.max);
+          if (a.length >= 3 + width) {
+            const d = tdesc(t, param), val = clamp(rv(3), d.min, d.max);
             if (k >= 0) t.locks[k].value = val;
             else if (t.locks.length < NLOCK) t.locks.push({ step, param, value: val });
             else rc = 3;
@@ -2826,7 +2883,7 @@ function makeMockDevice(opt = {}) {
       default:
         return null;
     }
-    return frame(cmd, out);
+    return frame(wide ? CMD.WIDE : cmd, wide ? [cmd, ...out] : out);
   }
 
   /* a WebMIDI-like access object: one input and one output named "Felucca" */
@@ -2846,7 +2903,7 @@ function makeMockDevice(opt = {}) {
         busy = false;
         const r = handle(f.cmd, f.a);
         if (r && input.onmidimessage) input.onmidimessage({ data: Uint8Array.from(r) });
-        const ra = r ? r.slice(5, -1) : [];
+        const ra = r ? unframe(r).a : [];
         if (r && ((f.cmd === CMD.SET && f.a[0] === 1 && f.a[1] === G_ENGSEL) || f.cmd === CMD.PRESET
           || (f.cmd === CMD.PROJECT && f.a[0] === 0 && ra[2]) || (f.cmd === CMD.UP_LOAD && !ra[1]))) reloadPush();
       }, f.cmd === CMD.SMP_ERASE ? 900 : f.cmd === CMD.SMP_BEGIN ? 120 : flash ? 150 : f.cmd === CMD.SMP_WRITE ? 25 + Math.random() * 10 : 4 + Math.random() * 12);
@@ -2859,17 +2916,19 @@ function makeMockDevice(opt = {}) {
   }
   function push(cmd, args) {
     if (!watching()) return false;
-    const fr = Uint8Array.from(frame(cmd, args));
+    const wide = st.wide && (cmd === CMD.CHANGED || cmd === CMD.TRACK_CHANGED);
+    const fr = Uint8Array.from(frame(wide ? CMD.WIDE : cmd, wide ? [cmd, ...args] : args));
     setTimeout(() => { if (input.onmidimessage) input.onmidimessage({ data: fr }); }, 0);
     return true;
   }
   const reloadPush = () => push(CMD.RELOAD, opt.legacy ? [st.engine, st.preset] : [engOf(st.tracks[st.sel]), st.preset, st.sel]);
   /* things done on the device itself */
+  const pushEnc = (v) => st.wide ? v16enc(v) : v14enc(v);
   const sim = {
     knob(id = [9, 33, 35, P_E0 + 4][Math.floor(Math.random() * 4)], dv = Math.random() < 0.5 ? -4 : 4) {
       const d = desc(0, id);
       st.p[id] = clamp(st.p[id] + dv, d.min, d.max);
-      push(CMD.CHANGED, [0, id, ...v14enc(st.p[id])]);
+      push(CMD.CHANGED, [0, id, ...pushEnc(st.p[id])]);
       return { id, value: st.p[id] };
     },
     reload(pi = st.preset + 1) {
@@ -2887,16 +2946,16 @@ function makeMockDevice(opt = {}) {
       const drum = st.sel === TRK_DRUM;
       v = clamp(v, 0, 127);
       if (drum) st.g[25] = v; else st.p[0] = v;
-      push(CMD.CHANGED, drum ? [1, 25, ...v14enc(v)] : [0, 0, ...v14enc(v)]);
+      push(CMD.CHANGED, drum ? [1, 25, ...pushEnc(v)] : [0, 0, ...pushEnc(v)]);
       return v;
     },
-    mute(on = !st.p[40]) { st.p[40] = on ? 1 : 0; push(CMD.CHANGED, [0, 40, ...v14enc(st.p[40])]); return st.p[40]; },
+    mute(on = !st.p[40]) { st.p[40] = on ? 1 : 0; push(CMD.CHANGED, [0, 40, ...pushEnc(st.p[40])]); return st.p[40]; },
     /* a parameter of track i changed on the device: CHANGED for the selected track, else TRACK_CHANGED (v4 watch) */
     param(i, id, val) {
       const t = st.tracks[i], d = id >= P_E0 ? ENG[t.engine].edit[id - P_E0] : TP[id];
       t.p[id] = clamp(val, d.min, d.max);
-      if (i === st.sel) push(CMD.CHANGED, [0, id, ...v14enc(t.p[id])]);
-      else if (st.v4) push(CMD.TRACK_CHANGED, [i, id, ...v14enc(t.p[id])]);
+      if (i === st.sel) push(CMD.CHANGED, [0, id, ...pushEnc(t.p[id])]);
+      else if (st.v4) push(CMD.TRACK_CHANGED, [i, id, ...pushEnc(t.p[id])]);
       return t.p[id];
     },
     /* SEQ + a step held + KNOB 4 / PRESETS on the device: a nudge or a lock; the firmware pushes STEP_CHANGED for it */
@@ -4171,6 +4230,7 @@ async function load(d) {
   try {
     /* the first frame after opening the port can be lost: a few tries */
     d.info = parse[CMD.INFO](await d.link.request(req.info(), { timeout: 500, retries: 3 }));
+    req.protocol(d.info.proto);
     $("version").textContent = d.info.version;
     const total = d.info.pcount + d.info.gcount;
     for (let i = 0; i < d.info.pcount; i++) { sayK("reading", `${i + 1}/${total}`); d.pdesc[i] = await getDescOrNull(0, i); }

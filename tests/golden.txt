@@ -42,8 +42,8 @@ preset/SAMPLE/01_UP_BASS acc2343761723048
 preset/SAMPLE/02_VIBES e9fbb6e77e6ea323
 preset/SAMPLE/03_HORN_STAB 86ad5792a6a14110
 preset/SAMPLE/04_STRING_STB 3571698fc2d40575
-preset/SAMPLE/05_LOFI_FLUTE 6e8af43ec7b7eb5a
-preset/SAMPLE/06_SCRATCH 8a8ea8f053f6b12c
+preset/SAMPLE/05_LOFI_FLUTE 6b00494918cd5c5b
+preset/SAMPLE/06_SCRATCH 63b3781856e18118
 preset/SAMPLE/07_GM_KIT 93cf54cc9ce1b3eb
 preset/SAMPLE/08_DUSTY_PNO 09e1054d55016792
 preset/SAMPLE/09_LOFI_KEYS b8b2f34b7c13a74c
@@ -67,7 +67,24 @@ preset/WHEEL/03_DIRTY_B3 596a084ed7f260b7
 preset/WHEEL/04_HOUSE_ORGN 2472aa521901c9a0
 preset/GRAIN/00_LOFI_CLOUD ec0140076bcf40e0
 preset/GRAIN/01_VIBE_HAZE e06f202f34953a04
-preset/GRAIN/02_FLUTE_DUST d30fce9db59ccf8a
+preset/GRAIN/02_FLUTE_DUST 77577e91d32879d4
+# First official cluster adapter measurement; original core verification retains its separate oracle matrix.
+preset/CLUSTER/00_bass_face ce5ec937e6c90dc4
+preset/CLUSTER/01_caterpillar 94d803a72411fac8
+preset/CLUSTER/02_cstrings 0ae8985c68de029c
+preset/CLUSTER/03_dissolver 3b6f7a476d9fb324
+preset/CLUSTER/04_dub_bass c671bb00af6121f4
+preset/CLUSTER/05_grit_drive 859c6ace7b9da9f4
+preset/CLUSTER/06_kids_show 2b3a7ea709c7797c
+preset/CLUSTER/07_love_chords b12dc6e125c905ec
+preset/CLUSTER/08_mr_legato ce5ec937e6c90dc4
+preset/CLUSTER/09_newday 68f1c0d05e973658
+preset/CLUSTER/10_serious_bass dbd3eceae8b349d4
+preset/CLUSTER/11_so_lonely 106f039c89058ffc
+preset/CLUSTER/12_sqeek_bend 11f3bb5332595364
+preset/CLUSTER/13_streengs 106f039c89058ffc
+preset/CLUSTER/14_trans4m 859c6ace7b9da9f4
+preset/CLUSTER/15_xyz_files a547f8405f93e0f8
 preset/FM6/00_TINE_EP 88ca19323e344957
 preset/FM6/01_GLASS_BELL f8dc8b413f02de3a
 preset/FM6/02_ROUND_BASS a5dd890e76dfd172

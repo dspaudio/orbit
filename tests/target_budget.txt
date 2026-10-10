@@ -38,4 +38,8 @@ px_modal_block 111
 px_memb_block 106
 noise_render 264
 uac_tap48 536
+# First official cluster pi32v2 static measurement: 2026-10-10; existing baselines/tolerances retained.
+# This does not establish actual ISR timing or full cycle budgets of internal calls.
+cls_render 570
+cluster_render 53
 

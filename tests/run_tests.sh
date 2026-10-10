@@ -35,6 +35,14 @@ run() { echo "== $1"; shift; "$@" || fail=1; }
 mkdir -p build/gen
 [ build/gen/felucca_tables.h -nt tools/gen_tables.py ] || python3 tools/gen_tables.py build/gen/felucca_tables.h
 [ build/gen/felucca_fm6.h -nt tools/gen_fm6_patches.py ] || python3 tools/gen_fm6_patches.py build/gen/felucca_fm6.h
+python3 tools/gen_op1_cluster.py build/gen/felucca_op1_cluster.h
+
+$CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/cluster_test" tests/cluster_test.c -lm
+run "official cluster: raw presets, kernel cadence, release and shared arena" "$OUT/cluster_test"
+$CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/sample_replacement_test" tests/sample_replacement_test.c -lm
+run "synthesized sample replacements: preserved IDs/data and audible banks" "$OUT/sample_replacement_test"
+$CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/editor_wide_test" tests/editor_wide_test.c -lm
+run "editor WIDE: signed16 round trips and legacy frames" "$OUT/editor_wide_test"
 
 $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"

@@ -45,6 +45,7 @@ assets, is entirely governed by the GPL.
 | What | Licence | Where |
 | --- | --- | --- |
 | Instrument and drum samples (Versilian Studios VSCO-2 CE, VCSL; Sonic Pi: SCRCH) | CC0 1.0 | `assets/samples-cc0/`, provenance in `ATTRIBUTION.txt` there |
+| New synthesized FLUTE/SCRCH replacement waveforms (separate from the original CC0 recordings) | GPL-3.0-only | Deterministic waveform generation in `tools/gen_samples.py` |
 | Terminus font 8x16 (ter-u16n): the FM-1's screen, and the web editor's font (`tools/gen_webfont.py` makes it a TrueType font inlined in `web/editor.html`) | SIL OFL 1.1 | `assets/fonts/ter-u16n.bdf`, `assets/fonts/Terminus-LICENSE.txt` |
 | Fukiai icon font (Hügelton Instruments), web editor only | MIT | `web/fukiai.ttf`, `web/FUKIAI-LICENSE.txt` |
 | CrispyZebra by Leo Kuroshita (<https://github.com/hugelton/CrispyZebra>): the PHASE engine's waveforms are a C port of its oscillator | GPL-3.0 | `firmware/src/eng_phase.c` |
@@ -54,6 +55,13 @@ assets, is entirely governed by the GPL.
 | JieLi AC79 SDK: `uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin` are read from your SDK checkout at build time and placed in the package; no SDK files are in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK> |
 
 ## Contributions
+
+The official OP-1 #246 data extracted into `assets/op1-cluster/tables.json`
+and `factory.json` remains original Teenage Engineering material. It is not
+relicensed as CC0 or as new GPL assets, and the Felucca Assets permission above
+is not claimed to cover it. Original URLs, addresses, hashes and rights are
+recorded in `assets/op1-cluster/README.md`. SPDX notices for the new C translation,
+generator and verification code are maintained separately.
 
 Contributions are welcome under GPL-3.0-only. By submitting one, you agree that it may be
 combined with the Felucca Assets under the section 7 permission above.

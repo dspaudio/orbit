@@ -342,12 +342,38 @@ class Builder:
         self.sets.append(("PERC", z0, len(self.zones) - z0))
         self.kinds["PERC"] = "kit"
 
-    def cc0_set(self, name, kind):
+    def cc0_set(self, name: str, kind: str) -> None:
         entries = []
         for k, (_, s, loop, root) in enumerate(cc0_entries(name, kind)):
+            rate = TR
+            if name in ("FLUTE", "SCRCH"):
+                # Preserve existing roots/key zones and store small synthesized replacements.
+                flute = name == "FLUTE"
+                if flute:
+                    frequency = 440 * 2 ** ((root - 69) / 12)
+                    period = round(TR / frequency)
+                    rate = period * frequency
+                    n = period * math.ceil(4096 / period) + 1
+                    s = [int(18000 * (math.sin(math.tau * i / period) +
+                                     0.08 * math.sin(2 * math.tau * i / period) +
+                                     0.025 * math.sin(3 * math.tau * i / period))) for i in range(n)]
+                    loop = (period * 2, n - 1)
+                else:
+                    # Fixed-seed band noise and bidirectional chirp: identical one-shots on every build.
+                    s, phase, low, seed = [], 0.0, 0.0, k + 1
+                    for i in range(2048):
+                        t = i / 2047
+                        seed = (1664525 * seed + 1013904223) & 0xFFFFFFFF
+                        noise = (seed >> 16) / 32768 - 1
+                        low = 0.88 * low + 0.12 * noise
+                        phase += (250 + 2400 * abs(2 * t - 1)) / TR
+                        tone = 4 * abs(phase % 1 - 0.5) - 1
+                        envelope = math.sin(math.pi * t) ** 0.7 * (1 - 0.4 * t)
+                        s.append(int(18000 * envelope * (0.65 * tone + 0.35 * (noise - low))))
+                    loop = None
             ls, le = loop if loop else (len(s), len(s))
             off, st = self.add(s, ls)
-            entries.append(dict(off=off, n=len(s), ls=ls, le=le, looped=bool(loop), sr=TR,
+            entries.append(dict(off=off, n=len(s), ls=ls, le=le, looped=bool(loop), sr=rate,
                                 root16=int(round(root * 16)), pred=st[0], idx=st[1],
                                 key=KIT_BASE + k if kind == "kit" else None))
         self.add_set(name, kind, entries)

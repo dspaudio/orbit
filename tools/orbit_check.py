@@ -9,7 +9,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/host'
 CASES = ['fm6_test', 'userkit_test', 'stress_test', 'ui_pages_test', 'uac_test', 'upreset_test', 'orbit_lfo_test', 'orbit_engines_test', 'irq_init_test', 'recovery_test', 'orbit_test', 'seq2_test', 'project_test', 'storage_test', 'drumkit_test', 'studio_drums_test',
-         'punch_test', 'song_audio_test', 'song_ui_test', 'arena_test', 'dsyn_test']
+         'punch_test', 'song_audio_test', 'song_ui_test', 'arena_test', 'dsyn_test',
+         'sample_replacement_test', 'cluster_test', 'editor_wide_test']
 
 
 def main():

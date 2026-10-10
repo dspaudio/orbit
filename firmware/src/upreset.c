@@ -114,18 +114,23 @@ static int up_pat_empty(const up_rec_t *r)
 
 /* UP_PUT arguments: slot, engine, name, P_COUNT x v14, 16 x (note, flags) -> *r (values not yet
  * clamped); 0 ok, 1 bad arguments. *slot gets the slot byte when there is one. */
-static int up_parse(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot)
+static int up_parse_width(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot, uint32_t width)
 {
     uint32_t i, n, k;
-    if (na < 3u)
+    if (na < 3u || (width != 2u && width != 3u))
         return 1;
     *slot = a[0];
     for (n = 0; 2u + n < na && a[2 + n]; n++)
         ;
     k = 3u + n;                                  /* after the name's 0 */
     if (a[0] >= UP_SLOTS || a[1] >= NENGINES || 2u + n >= na || !up_name_ok(a + 2, n) ||
-        na < k + 2u * P_COUNT + 32u)
+        na < k + width * P_COUNT + 32u ||
+        (width == 3u && na != k + width * P_COUNT + 32u))
         return 1;
+    /* Validate every wide value's high byte before touching the record. */
+    for (i = 0; width == 3u && i < P_COUNT; i++)
+        if (a[k + i * width] >= 128u || a[k + i * width + 1u] >= 128u || a[k + i * width + 2u] > 3u)
+            return 1;
     memset(r, 0, sizeof *r);
     r->used = UP_USED;
     r->ver = UP_VER;
@@ -133,14 +138,20 @@ static int up_parse(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot)
     r->np = P_COUNT;
     for (i = 0; i < n; i++)
         r->name[i] = (char)a[2 + i];
-    for (i = 0; i < P_COUNT; i++, k += 2u)
-        r->p[i] = (int16_t)((int32_t)((a[k] & 127u) | (a[k + 1] & 127u) << 7) - 8192);
+    for (i = 0; i < P_COUNT; i++, k += width)
+        r->p[i] = (int16_t)((int32_t)((a[k] & 127u) | (a[k + 1] & 127u) << 7 |
+                                     (width == 3u ? a[k + 2] << 14 : 0)) - (width == 3u ? 32768 : 8192));
     for (i = 0; i < 16u; i++, k += 2u) {
         r->note[i] = a[k];
         r->flags[i] = a[k + 1];
         up_pat_norm(&r->note[i], &r->flags[i]);
     }
     return 0;
+}
+/* Existing host tests and v14 callers use the same parser with two-byte values. */
+static int up_parse(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot)
+{
+    return up_parse_width(a, na, r, slot, 2u);
 }
 
 #ifndef UP_HOST

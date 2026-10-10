@@ -1,0 +1,86 @@
+{
+  "source_url": "https://teenage.engineering/_software/op-1/op1_246.op1",
+  "package_sha256": "c5315218f825f143b415ca554516541898abee843d3a236df0b54c04e1fb13a9",
+  "tar_sha256": "ee96790ae90e4bb1e21174f08b6d1c0e4c222b7075c1806ddd7221b4059e8171",
+  "ldr_sha256": "82a51d76ad19a23da485b1e4f007335a95d815731b096d21ef0642e8c8c0577d",
+  "database_sha256": "be4572298fe9dc83b106d5c4eaf1cc972280d97f028f3eaebc0c76dc68ac9cf0",
+  "kernel_source_sha256": "d7e73a515fcfee1f3cdccdafacfcd27391bfedea30c7276006d1896fa1aaebc8",
+  "kernel_header_sha256": "b1d9d3cd09d41b7b0031003c9d83a27dae207155cef424dff494cd40fdba8cc9",
+  "serialization_sha256": "9ef611a57b95dcc8cdd732255bd804ae29da34f924a77b95fed0786908e9443f",
+  "serialization_format": "little-endian wave[8193] int16, count[8] int16, curve[24] int32, master int16; 16500 bytes, no ABI padding",
+  "wave": {
+    "address": "0x018b6688",
+    "runtime_address": "0x0101e5e8",
+    "source_sha256": "06f658c86b3e749ebf21b615c845f5a2fc644916b9e954cb5cb10e27dc875b34",
+    "runtime_sha256": "f959d94906b410fd7dad618c3e6dff68db1eb2a4b490b60781b3a5c49cf69911",
+    "format": "u32 low16 -> signed16, including final guard element"
+  },
+  "count": {
+    "address": "0xff900524",
+    "runtime_address": "0x01baa91c",
+    "source_sha256": "ed6583c58695ea34cd408b94c420f2d75dab50926b57bdff022bd80eb4a1bea8",
+    "bits": [
+      "0x3f000000",
+      "0x3e800000",
+      "0x3e2aaaab",
+      "0x3e000000",
+      "0x3dcccccd",
+      "0x3daaaaab",
+      "0x3d924925",
+      "0x3d800000"
+    ],
+    "conversion": "cls_tables_init Q15 integer exponent/mantissa conversion"
+  },
+  "curve": {
+    "address": "0x018befb0",
+    "runtime_address": "0x0106a954",
+    "source_sha256": "6e9181bfe3def658ef5707eb563708de791612601441746a94df3354f2a8358b",
+    "bits": [
+      "0x3d60d04b",
+      "0x3e6fe68d",
+      "0x3ec293a4",
+      "0x3f0f4333",
+      "0x3f321a88",
+      "0x3f3f81f9",
+      "0x3f4cc63c",
+      "0x3f55875d",
+      "0x3f5d6b08",
+      "0x3f63f05d",
+      "0x3f686479",
+      "0x3f6ba073",
+      "0x3f6e14fd",
+      "0x3f718ff5",
+      "0x3f73e929",
+      "0x3f76e0e5",
+      "0x3f78ad29",
+      "0x3f7b1812",
+      "0x3f7c4fc7",
+      "0x3f7d88ff",
+      "0x3f7e84ab",
+      "0x3f7f420f",
+      "0x3f7f8150",
+      "0x3f7fc0a0"
+    ],
+    "conversion": "cls_tables_init Q31 integer exponent/mantissa conversion"
+  },
+  "master": {
+    "runtime_address": "0x01baa918",
+    "value": 16384
+  },
+  "patch_mapping": {
+    "ids": [
+      65,
+      80
+    ],
+    "internal_type": 4,
+    "sqlite_type_id": 1,
+    "knobs_bank": "0xff8013c4",
+    "slot_stride": 16,
+    "lane_bytes": 2
+  },
+  "assets": {
+    "tables.json": "09e4cd8702ef5a3222c9d19c814bea79f1eb8a6afdbbfdcd7c1190000f097f61",
+    "factory.json": "298aeec4c17833e13919c59caad64372844a0f844fd0ef2d115ce5abc77c4408"
+  },
+  "rights": "Original waveforms and factory JSON were extracted from Teenage Engineering's official OP-1 #246. They are not relicensed as CC0 or as new GPL assets. Original rights are preserved; separate redistribution permission is not established."
+}

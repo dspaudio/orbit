@@ -21,11 +21,12 @@ enum { V_POLY, V_MONO, V_LEGATO, V_UNISON };   /* P_VOICE */
 #define ORBIT_SWARM (9 + FELUCCA_SLICE)
 #define ORBIT_PULSE (10 + FELUCCA_SLICE)
 #define ORBIT_FM4 (11 + FELUCCA_SLICE)
-#define NENGINES (15 + FELUCCA_SLICE)
+#define NENGINES (16 + FELUCCA_SLICE)
 #define ENGI_FM6 (12u + FELUCCA_SLICE)              /* the FM6 engine's index (eng_fm6.c, the stores: append-only) */
 #define ENGI_GRAIN 8u
 #define ENGI_PHYS (13u + FELUCCA_SLICE)
 #define ENGI_NOISE (14u + FELUCCA_SLICE)
+#define ENGI_CLUSTER (15u + FELUCCA_SLICE)
 #define UP_SLOTS 32u             /* user presets (upreset.c) */
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
 

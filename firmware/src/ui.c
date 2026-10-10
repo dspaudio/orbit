@@ -3,7 +3,7 @@
 /* Felucca user interface. Four columns map to KNOB 1..4. Rendering is lazy:
  * every element remembers what it last drew and is redrawn only on change. */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "ORBIT 0.5.0"  /* the beat machine firmware for the FM-1 (based on Felucca) */
+#define FELUCCA_VERSION "ORBIT 0.6.0"  /* the beat machine firmware for the FM-1 (based on Felucca) */
 #endif
 static void project_save(uint32_t slot);
 static void orbit_demo_load(void);
@@ -305,6 +305,8 @@ static void apply_preset_to(track_t *t, uint32_t pi)
             t->p[i] = TP[i].def;                     /* sounds the same after any edit (not the pattern, not the mix) */
     for (i = 0; i < 8u; i++)
         t->p[P_E0 + i] = (int16_t)e->presets[pi].e[i];
+    if (e == &ENG_CLUSTER)
+        cluster_preset_to(t, pi);
     t->p[P_ATK] = e->presets[pi].env[0];
     t->p[P_DEC] = e->presets[pi].env[1];
     t->p[P_SUS] = e->presets[pi].env[2];
@@ -424,6 +426,14 @@ static const struct { uint8_t kind, e; const char *name; } BANK[] = {
     {BK_FX, 9u, "BREAK 16"}, {BK_FX, 9u, "CHOP 8"}, {BK_FX, 9u, "REVERSE"},
     {BK_FX, 9u, "USR SLICE"},
 #endif
+    {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[0]}, {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[1]},
+    {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[2]}, {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[3]},
+    {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[4]}, {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[5]},
+    {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[6]}, {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[7]},
+    {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[8]}, {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[9]},
+    {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[10]}, {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[11]},
+    {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[12]}, {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[13]},
+    {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[14]}, {BK_FX, ENGI_CLUSTER, OP1_CLUSTER_NAMES[15]},
 };
 #define NBANK (sizeof BANK / sizeof BANK[0])
 static uint8_t bank_pi[NBANK];                       /* the preset index of each entry in its engine */

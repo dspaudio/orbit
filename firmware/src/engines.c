@@ -25,12 +25,15 @@ static inline int32_t soft_knee(int32_t y, int32_t k)
 #include "eng_fm6.c"            /* FM6: 6-operator FM, msfa ported (fm6_core.c, Apache-2.0); SLOOP 2.4 */
 #include "eng_phys.c"           /* PHYS: DaisySP/Rings physical models (MIT); SLOOP 2.5 */
 #include "eng_noise.c"          /* NOISE: based on Felucca 1.0; SLOOP 2.5 */
+#include "eng_op1_cluster.c"
 
 typedef union {
     gr_part_t grain;
     fm6_note_t fm6[FM6_POLY];
     uint32_t phys[PHYS_ARENA / 4u];
+    cluster_part_t cluster;
 } eng_arena_t;
+_Static_assert(sizeof(cluster_part_t) <= PHYS_ARENA, "cluster fits the existing engine arena");
 static eng_arena_t eng_arena[NPART] __attribute__((section(".pool")));
 static uint8_t eng_arena_own[NPART];
 #ifdef ARENA_STATS
@@ -64,11 +67,13 @@ static const engine_t *const ENGINES[NENGINES] = {&ENG_ANALOG, &ENG_DIGITAL, &EN
 #if FELUCCA_SLICE
                                                     &ENG_SLICE,
 #endif
-    &ENG_SWARM, &ENG_ORBIT_PULSE, &ENG_FM4, &ENG_FM6, &ENG_PHYS, &ENG_NOISE,
+    &ENG_SWARM, &ENG_ORBIT_PULSE, &ENG_FM4, &ENG_FM6, &ENG_PHYS, &ENG_NOISE, &ENG_CLUSTER,
 };
 _Static_assert(ENGI_FM6 == ORBIT_FM4 + 1u, "ENGINES[ENGI_FM6] is FM6");
 _Static_assert(ENGI_GRAIN == 8u && ENGI_PHYS == ENGI_FM6 + 1u && ENGI_NOISE == ENGI_PHYS + 1u,
                "append-only engine order");
+_Static_assert(ENGI_CLUSTER == ENGI_NOISE + 1u && NENGINES == ENGI_CLUSTER + 1u,
+               "cluster is append-only");
 #if FELUCCA_SLICE
 _Static_assert(ORBIT_SWARM == 10u && ENGI_FM6 == 13u && ENGI_PHYS == 14u && ENGI_NOISE == 15u,
                "optional SLICE engine order");

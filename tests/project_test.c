@@ -350,6 +350,19 @@ int main(void)
          step_fill(&trk[1], 4) == FC_FILL && step_fill(&trk[1], 5) == FC_NOFILL && trk[1].fill[1] == 0x09;
     bad += check("apply: a nudge past the range is clamped, a lock on LEN / step 64 / param 200 is freed, LEVEL 999 -> 127, condition 3 -> normal", ok);
 
+    /* The new engine's raw values retain their width in existing FUN5 int16 fields. */
+    host_tracks_init();
+    host_preset(&trk[0], ENGI_CLUSTER, 0);
+    trk[0].p[P_E1] = -32768;
+    trk[0].p[P_E2] = 24575;
+    trk[0].p[P_E3] = 32767;
+    proj_capture(&q);
+    host_tracks_init();
+    proj_apply(&q, 1);
+    bad += check("FUN5: CLUSTER ID and full signed16 raw knobs survive capture/apply",
+                 trk[0].eng_req == ENGI_CLUSTER && trk[0].p[P_E0] == 17408 &&
+                 trk[0].p[P_E1] == -32768 && trk[0].p[P_E2] == 24575 && trk[0].p[P_E3] == 32767);
+
     printf("%s\n", bad ? "PROJECT FORMAT TEST FAILED" : "project format test passed");
     return bad != 0;
 }
