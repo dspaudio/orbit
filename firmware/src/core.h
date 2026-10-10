@@ -21,8 +21,11 @@ enum { V_POLY, V_MONO, V_LEGATO, V_UNISON };   /* P_VOICE */
 #define ORBIT_SWARM (9 + FELUCCA_SLICE)
 #define ORBIT_PULSE (10 + FELUCCA_SLICE)
 #define ORBIT_FM4 (11 + FELUCCA_SLICE)
-#define NENGINES (13 + FELUCCA_SLICE)
+#define NENGINES (15 + FELUCCA_SLICE)
 #define ENGI_FM6 (12u + FELUCCA_SLICE)              /* the FM6 engine's index (eng_fm6.c, the stores: append-only) */
+#define ENGI_GRAIN 8u
+#define ENGI_PHYS (13u + FELUCCA_SLICE)
+#define ENGI_NOISE (14u + FELUCCA_SLICE)
 #define UP_SLOTS 32u             /* user presets (upreset.c) */
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -30,7 +33,7 @@ enum { V_POLY, V_MONO, V_LEGATO, V_UNISON };   /* P_VOICE */
 enum {
     F_INT, F_PCT, F_BIPCT, F_TIME, F_LFOHZ, F_CUTOFF, F_DB, F_SEMI, F_ENUM, F_BPM, F_NOTE,
     F_ONOFF, F_OCT, F_STEPS,
-    F_SWING,                    /* 0..100: MPC swing, 50 % (straight) .. 75 % */
+    F_SWING,                    /* 0..100: straight .. MPC 75/25 */
     F_FILT                      /* -64..63: the DJ filter, LP <- OFF -> HP */
 };
 
@@ -78,6 +81,7 @@ enum {                          /* global parameters */
     G_DUST, G_DUCK, G_FILT,     /* the master bus: lo-fi / vinyl, the kick ducking the parts, the DJ filter (fx.c) */
     G_ROLL,                     /* note repeat rate (ARP + key, seq.c) */
     G_NEWPRJ,                   /* TOOLS > NEW: a new project (GO) */
+    G_DRDLY,                    /* drum delay send; stored in a reserved FUN5 byte */
     G_COUNT
 };
 

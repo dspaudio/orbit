@@ -9,7 +9,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/host'
 CASES = ['fm6_test', 'userkit_test', 'stress_test', 'ui_pages_test', 'uac_test', 'upreset_test', 'orbit_lfo_test', 'orbit_engines_test', 'irq_init_test', 'recovery_test', 'orbit_test', 'seq2_test', 'project_test', 'storage_test', 'drumkit_test', 'studio_drums_test',
-         'punch_test', 'song_audio_test', 'song_ui_test']
+         'punch_test', 'song_audio_test', 'song_ui_test', 'arena_test', 'dsyn_test']
 
 
 def main():
@@ -18,7 +18,9 @@ def main():
     def run(name):
         binary = OUT / name
         compile_result = subprocess.run([os.environ.get('CC', 'cc'), '-O2', '-w', '-Ibuild/gen', '-Ifirmware/src', '-Ifirmware/hal',
-                                        *(['-DHALF_FRAMES=256','-DT_CDC=1'] if name == 'uac_test' else []), f'tests/{name}.c', '-o', str(binary), '-lm'], cwd=ROOT, capture_output=True, text=True)
+                                        *(['-DHALF_FRAMES=256','-DT_CDC=1'] if name == 'uac_test' else []),
+                                        *(['-DARENA_STATS'] if name == 'arena_test' else []),
+                                        f'tests/{name}.c', '-o', str(binary), '-lm'], cwd=ROOT, capture_output=True, text=True)
         if compile_result.returncode:
             return name, compile_result.returncode, compile_result.stdout + compile_result.stderr
         extra = [str(OUT)] if name == 'orbit_test' else []

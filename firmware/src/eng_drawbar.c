@@ -274,6 +274,10 @@ static const preset_t DRAWBAR_PRESETS[] = {
     {"DIRTY B3", {5, 0, 0, 0, 0, 60, 90, 2}, {0, 64, 127, 40}, 0, 0, FX(30, 0, 6, 20)},
     /* 90s house: the percussive organ that plays bass lines and chords */
     {"HOUSE ORGN", {13, 2, 0, 1, 1, 80, 22, 0}, {0, 60, 96, 22}, 0, 0, FX(0, 10, 12, 18)},
+    /* SLOOP 2.5: {REG, SUB, BODY, TOP, PERC, CLICK, DRIVE, ROTR} */
+    {"ROCK ORGAN", {7, 0, 0, 0, 0, 50, 80, 2}, {0, 64, 127, 40}, 0, 0, FX(20, 0, 6, 20)},
+    {"CHAPEL", {12, 0, 0, 0, 0, 10, 0, 1}, {20, 64, 127, 60}, 0, 0, FX(0, 0, 0, 50)},
+    {"REGGAE ORG", {2, 0, 0, 0, 0, 60, 10, 0}, {0, 52, 0, 24}, 0, 0, FX(0, 0, 10, 15)},
 };
 
 static const engine_t ENG_DRAWBAR = {
@@ -291,4 +295,3 @@ static const engine_t ENG_DRAWBAR = {
     DRAWBAR_PRESETS, sizeof(DRAWBAR_PRESETS) / sizeof(DRAWBAR_PRESETS[0]), -1, drawbar_note_on, drawbar_render,
     0xBC1F, {P_E0, P_E4, P_E6, P_E7}, 0, 0, 0, drawbar_block,
 };
-

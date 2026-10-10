@@ -10,7 +10,8 @@ a bass line, held chords, comping or a melody).
   tools/level_presets.py build/host/presets.raw build/host/presets.txt [ENGINE]
   (rebuild and run it again until nothing moves: the trims add to the ones in preset_trim.h)
   ENGINE: only that engine's presets are measured again (a new engine: the others keep their trims, so
-  their golden renders do not move; ORBIT 0.4: FM6 = 12 (13 with SLICE), trim row = 9).
+  their golden renders do not move). ORBIT append-only engine IDs are mapped to semantic trim rows by
+  preset name: FM6=9, PHYS=10, NOISE=11, optional SLICE=12; SWARM/PULSE/FM4 remain untrimmed.
 Needs numpy and scipy."""
 import re
 import sys
@@ -25,6 +26,16 @@ OUT = Path(__file__).resolve().parent.parent / "firmware/src/preset_trim.h"
 TARGET = -15.0                                 # LUFS (integrated), at the default LEVEL
 ROLE = {0: 0.0, 1: -1.0, 2: 0.0, 3: 0.0, 4: 0.0}   # bass, chords held (pads, organs), comping, melody, one-key chords
 SKIP = {"GM KIT"}                              # (the drum map on a synth track: as it is)
+SEMANTIC_ROWS = {
+    9: {"TINE EP", "GLASS BELL", "ROUND BASS", "BRASS SECT", "SOFT PAD", "WOOD BARS", "DRAWBARS", "NYLON PICK"},
+    10: {"BELL TREE", "MODAL BAR", "STR PLUCK", "BOWED MTL", "THUMB PNO", "HAND DRUM", "MEMB TOMS",
+         "SITAR", "PHYS HARP", "NYLON GTR", "STEEL GTR", "MUTED GTR", "PLUCK BASS", "KOTO", "BANJO",
+         "CELLO BOW", "TANPURA", "CHIMES", "BIG BELL", "VIBRA BAR", "GLASS BOWL", "STEEL PAN",
+         "WOOD BLOCK", "TABLA", "CONGA", "TIMPANI"},
+    11: {"WIND", "RAIN", "NZ ARCADE", "NZ METAL", "OCEAN", "VINYL", "HISS", "RISER", "NZ SNARE",
+         "BITCRUSH", "RADIO"},
+    12: {"BREAK 16", "CHOP 8", "REVERSE", "USR SLICE"},
+}
 
 
 def lufs(x):
@@ -50,17 +61,20 @@ def main(raw, rep, only=None):
     if OUT.exists():
         for e, name, v in re.findall(r"/\* (\d+)\.\d+ (.*?) \*/ (-?\d+)", OUT.read_text()):
             old[(int(e), name)] = int(v)              # (by name: presets may move in their table)
-    # Logical trim rows retain upstream 0..8 + FM6 row 9; ORBIT sounds are intentionally untrimmed.
-    mapped = [(i, r) for i, r in enumerate(rows) if int(r[0]) < 9 or r[3] in {"TINE EP", "GLASS BELL", "ROUND BASS", "BRASS SECT", "SOFT PAD", "WOOD BARS", "DRAWBARS", "NYLON PICK"}]
-    neng = 10
-    pmax = 16
+    # Keep logical trim rows separate from ORBIT's append-only engine IDs.
+    mapped = []
+    for i, r in enumerate(rows):
+        actual = int(r[0])
+        row = actual if actual < 9 else next((k for k, names in SEMANTIC_ROWS.items() if r[3] in names), None)
+        if row is not None:
+            mapped.append((i, row, actual, r))
+    neng = 13
+    pmax = 32
     tab = [[0] * pmax for _ in range(neng)]
     names = [[""] * pmax for _ in range(neng)]
-    for i, (e, p, role, name) in mapped:
-        e, p, role = int(e), int(p), int(role)
+    for i, e, requested_engine, (_, p, role, name) in mapped:
+        p, role = int(p), int(role)
         assert p < pmax, name
-        requested_engine = e
-        if e >= 9: e = 9
         names[e][p] = name
         L = lufs(d[i * SEG:(i + 1) * SEG])
         t = old.get((e, name), 0)

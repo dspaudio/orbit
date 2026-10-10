@@ -30,12 +30,27 @@ int main(int argc,char **argv)
         drum_on(36,110);drum_on(38,100);drum_on(46,80);
         for(j=0;j<FS*2u/CTL;j++) {
             int32_t l[CTL]={0},r[CTL]={0},rev[CTL]={0};
-            drums_render(l,r,rev,CTL);
+            drums_render(l,r,rev,rev,CTL);
             for(k=0;k<CTL;k++){assert(l[k]>-131072 && l[k]<131072);energy[i]+=l[k]<0?-l[k]:l[k];}
         }
         assert(energy[i]>10000);
         for(k=0;k<NDRUM;k++)assert(!drums.v[k].active);
         for(k=0;k<i;k++)assert(energy[k]!=energy[i]);
+    }
+    /* Drum delay send: 0 keeps legacy dry/reverb audio; a nonzero value feeds only delay. */
+    {
+        int32_t l0[CTL]={0},r0[CTL]={0},v0[CTL]={0},d0[CTL]={0};
+        int32_t l1[CTL]={0},r1[CTL]={0},v1[CTL]={0},d1[CTL]={0};
+        uint32_t de=0;
+        host_tracks_init();memset(&drums,0,sizeof drums);drums.set=-2;
+        TDRUM->p[P_E0]=DRUM_SAMPLED;song.g[G_DRREV]=0;song.g[G_DRDLY]=0;
+        rng_state=0x1234567u;drum_on(36,110);drums_render(l0,r0,v0,d0,CTL);
+        host_tracks_init();memset(&drums,0,sizeof drums);drums.set=-2;
+        TDRUM->p[P_E0]=DRUM_SAMPLED;song.g[G_DRREV]=0;song.g[G_DRDLY]=100;
+        rng_state=0x1234567u;drum_on(36,110);drums_render(l1,r1,v1,d1,CTL);
+        for(k=0;k<CTL;k++)de+=(uint32_t)(d1[k]<0?-d1[k]:d1[k]);
+        assert(!memcmp(l0,l1,sizeof l0)&&!memcmp(r0,r1,sizeof r0)&&!memcmp(v0,v1,sizeof v0));
+        assert(!memcmp(d0,v0,sizeof d0)&&de>0);
     }
     /* LIVE metronome (seq.c click_tick): 120 BPM, 2 s = 4 beats; REC mode clicks only while a
      * track records, ON always while playing, OFF never; the first beat of the bar is louder */
@@ -45,9 +60,9 @@ int main(int argc,char **argv)
         song.g[G_BPM]=120;song.g[G_CLOCK]=v==3?0:v==2?2:1;song.rec=v==0?1u:0u;rec_wait=0;   /* OFF / ON / REC */
         transport_req=1;age0=drums.age;
         for(j=0;j<(FS*2u-FS/4u)/CTL;j++) {               /* up to just before beat 4 */
-            uint32_t a=drums.age;
+            uint32_t a=click_n;
             mix_block(out,CTL);
-            if(drums.age!=a){hits++;for(k=0;k<NDRUM;k++)if(drums.v[k].age==drums.age && drums.v[k].vel>100)loud++;}
+            if(click_n!=a){hits++;loud+=click_acc;}
         }
         transport_req=2;events_block(CTL);
         if(v==0||v==2)assert(hits==4 && loud==1);

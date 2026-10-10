@@ -32,7 +32,16 @@ def main(path):
     for p in range(128 * 16):
         f = 440.0 * 2 ** ((p / 16 - 69) / 12)
         inc.append(min(int(f / FS * 2 ** 32), 0x7FFFFFFF))
-    L += arr("PITCH_INC", "uint32_t", inc, 8)
+    # Shifting the top octave preserves the existing floor values and saves 7,424 B.
+    L += arr("PITCH_OCT", "uint32_t", inc[2048 - 192:], 8)
+    L += ["static inline uint32_t pitch_inc(uint32_t p)",
+          "{",
+          "    uint32_t k;",
+          "    if (p > 2047u)",
+          "        p = 2047u;",
+          "    k = (2047u - p) / 192u;",
+          "    return PITCH_OCT[p + 192u * k - (2048u - 192u)] >> k;",
+          "}"]
     # times 1 ms .. 10 s (exponential), env in Q24 (1.0 = 1<<24)
     ms = [1.0 * (10000 ** (v / 127)) for v in range(128)]
     L += arr("TIME_MS_X10", "uint32_t", [int(round(m * 10)) for m in ms], 10)

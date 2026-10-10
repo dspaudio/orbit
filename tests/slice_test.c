@@ -139,7 +139,7 @@ static int demo(const char *dir, const demo_t *dm)
         return 1;
     host_tracks_init();
     song.g[G_BPM] = (int16_t)dm->bpm;
-    host_preset(t, 8, dm->preset);
+    host_preset(t, ORBIT_SWARM - 1u, dm->preset);
     if (dm->src >= 0)
         t->p[P_E0] = dm->src;
     if (dm->div >= 0)
@@ -284,7 +284,7 @@ int main(int argc, char **argv)
         voice_t *v;
         uint32_t a, b, st, ok = 1;
         host_tracks_init();
-        host_preset(t, 8, 0);                              /* BREAK 16 */
+        host_preset(t, ORBIT_SWARM - 1u, 0);              /* BREAK 16 */
         trk_note_on(t, 65, 100);
         v = voice_of(t, 65);
         slc_bounds(&SLC_BREAK, 2, 5, &a, &b, &st);
@@ -327,7 +327,7 @@ int main(int argc, char **argv)
             voice_t *v;
             uint32_t held, after, k;
             host_tracks_init();
-            host_preset(t, 8, 0);
+            host_preset(t, ORBIT_SWARM - 1u, 0);
             t->p[P_E4] = (int16_t)m;
             t->p[P_REL] = 10;
             trk_note_on(t, 60, 100);

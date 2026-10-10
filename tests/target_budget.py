@@ -18,6 +18,8 @@ FUNCS = ["analog_render", "digital_render", "phase_render", "lofi_render", "samp
          "trio_render", "trio_pass", "drawbar_render", "drawbar_block",
          "grain_render", "grain_block", "swarm_render", "orbit_pulse_render", "orbit_fm4_render", "slicer_track", "drums_mix",
          "fm6_op_run", "fm6_op_fb", "fm6_render",     # FM6 (SLOOP 2.4): the operator loops (noinline), the voice
+         "phys_render", "px_string_run", "px_string_excite", "px_symp_run", "px_symp_block",
+         "px_modal_run", "px_modal_block", "px_memb_block", "noise_render", "uac_tap48",
          "fm1_alnk0_irq"]
 TOL = 0.10                      # exact (no noise): small edits pass, a grown render loop does not
 DIV_W = 8                       # a divide weighs 1 + 8 instructions

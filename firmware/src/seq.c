@@ -17,7 +17,7 @@
  * Layers: a function button held turns the keys into something else (TE style: hold + touch):
  *   FX   punch-in effects (punch.c)       EDIT  erase that note / sound (while held, as it plays)
  *   ARP  note repeat (roll) at G_ROLL     SEQ   steps 1..16 (the UI: ui_layers.c)
- *   SCL  the key of the song (the UI)     GLO   mute / solo / fill / tap tempo (the UI)
+ *   SEL  the key of the song (the UI)     GLO   mute / solo / fill / tap tempo (the UI)
  * On the drum track OCT- / OCT+ held play (and record) ghost / hard hits. */
 static const uint16_t SCALE_MASK[] = {
     0xFFF,                                   /* CHR */
@@ -113,7 +113,7 @@ static uint32_t dyn_bit[2];              /* OCT- / OCT+: ghost / hard on the dru
  * stay in it with the button let go, as if it were held */
 static volatile uint8_t ly_lock = LY_PLAY;
 static uint32_t layer_buttons(void) { return fm1_in.buttons | (ly_lock != LY_PLAY ? ly_bit[ly_lock % LY_COUNT] : 0u); }
-/* the layer the keys are in: the held function button (FX, EDIT, ARP, SEQ, SCL, GLO in that order),
+/* the layer the keys are in: the held function button (FX, EDIT, ARP, SEQ, SEL, GLO in that order),
  * else the locked one */
 static uint32_t layer_now(void)
 {
@@ -1584,7 +1584,7 @@ static void click_tick(void)
         return;
     click_last = clk_beat;
     if (mode == CLICK_ON || (mode == CLICK_REC && song.rec))
-        drum_on(clk_beat % 4u ? 76u : 77u, clk_beat % 4u ? 72u : 120u);
+        click_on(clk_beat % 4u == 0u);
 }
 
 /* -------------------------------------------------------- sequencer --- */
@@ -2022,6 +2022,51 @@ static track_t *midi_route(uint32_t ch, uint32_t note, int on)
     return t;
 }
 
+/* SLOOP 2.5: MIDI CC edits track parameters (Felucca 1.1.5 standard CC map, #103 Leo Kuroshita).
+ * CC follows the channel's track (1-3 synths, drum channel drums, other channels selected track), like
+ * knobs: 0..127 maps to the parameter range (bipolar center 64). 5 GLIDE, 7 LEVEL, 10 PAN, 71 engine RES/Q
+ * (ignored if absent), 72/73/75 release/attack/decay, 74 track FILTER, 91/93/94 reverb/chorus/delay send.
+ * Drums map 7, 91, 94 to GLO > DRUMS LVL, REV, DLY, and 10/74 to PAN/FILTER. */
+#define MCC_RES 0xFFu
+static const uint8_t MIDI_CC_MAP[][2] = {
+    {5, P_GLIDE}, {7, P_LEVEL}, {10, P_PAN}, {71, MCC_RES}, {72, P_REL}, {73, P_ATK}, {74, P_TFLT}, {75, P_DEC},
+    {91, P_REV}, {93, P_CHOR}, {94, P_DLY},
+};
+static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t value)
+{
+    const param_desc_t *d = 0;
+    int16_t *slot = 0;
+    uint32_t i, id = 0xFFFFu;
+    for (i = 0; i < NELEM(MIDI_CC_MAP); i++)
+        if (MIDI_CC_MAP[i][0] == cc)
+            id = MIDI_CC_MAP[i][1];
+    if (id == 0xFFFFu)
+        return;
+    if (is_drum(t)) {
+        if (id == P_LEVEL || id == P_REV || id == P_DLY) {
+            id = id == P_LEVEL ? G_DRLVL : id == P_REV ? G_DRREV : G_DRDLY;
+            d = &GP[id];
+            slot = &song.g[id];
+        } else if (id == P_PAN || id == P_TFLT) {
+            d = &TP[id];
+            slot = &t->p[id];
+        }
+    } else if (id == MCC_RES) {
+        const engine_t *e = ENGINES[t->eng_req % NENGINES];
+        for (i = 0; i < 8u && !d; i++)
+            if (str_eq(e->edit[i].label, "RES") || str_eq(e->edit[i].label, "Q")) {
+                d = &e->edit[i];
+                slot = &t->p[P_E0 + i];
+            }
+    } else {
+        d = &TP[id];
+        slot = &t->p[id];
+    }
+    if (!d || d->max <= d->min)
+        return;
+    *slot = (int16_t)(d->min + ((int32_t)value * (d->max - d->min) + 63) / 127);
+}
+
 /* MIDI clock in (GLO > SYSTEM > SYNC = USB or TRS; after Felucca 1.0's midi_clock.c, from contributions by
  * ChanceTheMaker and keremimo): 24 pulses a beat. While the clock runs, the sequencer advances by the
  * pulses (a pulse = BEAT_U / 24 units), interpolated up to the next one from the last interval but never
@@ -2129,7 +2174,7 @@ static void events_block(uint32_t n)
             ci_on = 1;                              /* COUNT: one bar of clicks first (below) */
             ci_u = 0;
             ci_beat = 0;
-            drum_on(77u, 120u);
+            click_on(1);
         } else {
             seq_start();
             if (rec_wait && song.playing)
@@ -2159,7 +2204,7 @@ static void events_block(uint32_t n)
                     rec_begin();
             } else if (b != ci_beat) {
                 ci_beat = (uint8_t)b;
-                drum_on(76u, 72u);
+                click_on(0);
             }
         }
     }
@@ -2216,6 +2261,7 @@ static void events_block(uint32_t n)
         t->aholdp = t->p[P_AHOLD];
     }
     keyboard_block();
+    drum_audition_poll();                             /* editor DRUM SYNTH audition requests */
     strum_block(n);                                   /* (voice.c: the strummed notes due) */
     while (mi_r != mi_w) {                            /* USB-MIDI (and TRS) in */
         uint32_t pkt = midi_in_q[mi_r % MQ], st = (pkt >> 8) & 0xF0u, ch = (pkt >> 8) & 0x0Fu;
@@ -2224,6 +2270,11 @@ static void events_block(uint32_t n)
         mi_r++;
         if ((pkt & 15u) == 0xFu) {                    /* clock / transport: cable 0 USB, 1 TRS */
             mclk_event((pkt >> 8) & 0xFFu, ((pkt >> 4) & 15u) ? 2u : 1u);
+            continue;
+        }
+        if (st == 0xB0u) {                            /* CC (ignored with IN = CLOCK) */
+            if (!song.g[G_ROUTE])
+                midi_cc(midi_track(ch), d1, d2);
             continue;
         }
         if (st != 0x90u && st != 0x80u)

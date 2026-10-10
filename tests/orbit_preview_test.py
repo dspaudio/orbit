@@ -13,6 +13,9 @@ import urllib.error
 import urllib.request
 import wave
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+import orbit_preview
+orbit_preview.build()
 with socket.socket() as sock:
     sock.bind(('127.0.0.1', 0))
     port = sock.getsockname()[1]
@@ -113,7 +116,11 @@ context = vm.createContext({
   },
 });
 vm.runInContext(readFileSync("build/host/preview-script.js", "utf8"), context);
-assert(nodes.get("keys-more").children.some(button => button.textContent === "SCL"));
+const selectKey = nodes.get("keys-more").children.find(button => button.textContent === "SEL");
+assert(selectKey);
+selectKey.onclick();
+await vm.runInContext("queue", context);
+assert(requests.some(request => request.op === "button" && request.button === "SEL"));
 const mode = id => nodes.get("modes").children.find(button => button.dataset.id === id);
 const homeBefore = requests.filter(request => request.op === "button" && request.button === "HOME").length;
 await mode("tape").onclick();
@@ -165,7 +172,7 @@ assert.equal(vm.runInContext("notes | pendingNotes", context), 0);
 key.onpointerdown({ preventDefault() {}, pointerId: 1 });
 key.onpointercancel();
 assert.equal(vm.runInContext("notes | pendingNotes", context), 0);
-console.log("Preview controls: PASS (SCL, short note tap, blur release, pointer cancel)");
+console.log("Preview controls: PASS (SEL, short note tap, blur release, pointer cancel)");
 '''], cwd=ROOT, check=True)
     scope_dir = ROOT / 'build/host/stereo-scope'
     scope_dir.mkdir(exist_ok=True)

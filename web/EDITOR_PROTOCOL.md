@@ -5,7 +5,8 @@ header). Commands 16-26 (user presets and live sync) form protocol v2; commands 
 protocol v3; commands 31-32 (any track's parameters) form protocol v4; command 33 and the extra step,
 `INFO` and `TRACK` bytes form protocol v5 (SLOOP 2.0); commands 34-36 (backup / restore) form protocol v6
 (SLOOP 2.3); commands 37-40 (the steps' nudges and parameter locks) form protocol v7, commands 41-42 (the
-steps' fill conditions) protocol v8 and commands 68-71 (the FM6 engine's patches) protocol v9 (all SLOOP 2.4).
+steps' fill conditions) protocol v8, commands 68-71 (the FM6 engine's patches) protocol v9, and commands
+72-76 (SYN drum kits) protocol v10.
 
 **v3 (four tracks):** the device has four tracks: 1..3 are synth parts, 4 is the drum track. One
 of them is *selected* (the TRACKS page on the device, or `TRACK`). Every v1 / v2 command acts on the
@@ -182,7 +183,9 @@ and the P_COUNT it was stored with; another count is mapped by count (last 8 val
 first ones = P_LEVEL.. in order, missing ones = defaults). P_COUNT was 53 (P_E0 45) until the SLICER
 parameters (SLCR, PAT, RATE, DEPTH: ids 45..48) went in just before P_E0: P_COUNT 57, P_E0 49; SLOOP 2.0
 added CHORD (id 49): P_COUNT 58, P_E0 50 (and G_COUNT 32: DUST, DUCK, FILT, ROLL, NEW at 27..31). An
-editor takes them from `INFO`; older records load with the SLICER off and CHORD off.
+editor takes them from `INFO`; older records load with the SLICER off and CHORD off. SLOOP 2.5 adds
+`G_DRDLY` at id 32, so G_COUNT is 33. FUN5 remains 3840 bytes: the value uses the reserved byte
+immediately after `sel`; older FUN4/FUN5 images read it as zero.
 
 ## v2: live sync
 
@@ -269,14 +272,15 @@ editor takes them from `INFO`; older records load with the SLICER off and CHORD 
 (`persist_t`: colours, low cut, zoom, the panel calibration, the song order, the lights word: lights, SYNC,
 the REC screen's mode and start, USB AUDIO and, since 2.4, MIDI OUT = SEQ (bit 14) and IN = CLOCK (bit 15)),
 **2..5** the projects 1..4 (song sections A..D; length 0 = empty), **6..7** the user preset banks (`up_bank_t`,
-16 records each; 0 = empty), **32..35** the user sample slots USR1..4 (35: SLOOP 2.4) (header + ADPCM data, as in flash; 0 =
-empty). Numbers are 5 × 7 bit (u35, LSB first); data is pack7.
+16 records each; 0 = empty), **8** the FM6 patch bank, **9** the SYN drum bank, and **32..35** the user
+sample slots USR1..4 (35: SLOOP 2.4) (header + ADPCM data, as in flash; 0 = empty).
+Numbers are 5 × 7 bit (u35, LSB first); data is pack7.
 
 | cmd | Request args | Reply args |
 | --- | --- | --- |
 | 34 BK_LIST | — | rc (0 ok, 4 no flash), count, then per object: id, length u35, CRC-32 u35 (zlib). Takes a snapshot of the working project and the settings for GET |
 | 35 BK_GET | id, offset u35, count (2 × 7 bit, 1..256) | id, rc (0 ok, 1 arguments, 5 the snapshot is gone: LIST again), offset u35, count, pack7 data |
-| 36 BK_PUT | op 0 begin: id 0..8, length u35, CRC-32 u35 · op 1 data: id, offset u35, pack7 (≤ 256 bytes, in order) · op 2 commit: id · op 3 abort: id | op, id, rc: 0 ok, 1 arguments, 2 not a valid object (CRC, magic, sizes, ranges), 3 stop the song first (projects and preset banks), 4 flash, 5 no begin for this object (or more than 15 s ago) |
+| 36 BK_PUT | op 0 begin: id 0..9 (8: FM6 bank, 9: SYN kits), length u35, CRC-32 u35 · op 1 data: id, offset u35, pack7 (≤ 256 bytes, in order) · op 2 commit: id · op 3 abort: id | op, id, rc: 0 ok, 1 arguments, 2 not a valid object (CRC, magic, sizes, ranges), 3 stop the song first (projects, banks, and settings when the song order changes), 4 flash, 5 no begin for this object (or more than 15 s ago) |
 
 A restore stages one object in RAM (the project load buffer), checks it at the commit as a load checks it
 (projects: magic, size and sum, older formats converted; banks: magic, record size, slot count; settings:
@@ -286,6 +290,11 @@ A/B commit; the working project is loaded at once (the song must be stopped). Sa
 512), an empty slot with `SMP_ERASE`. The editor's file is JSON: `{format: "sloop-backup", version: 1,
 firmware, date, objects: [{id, len, crc, data (base64)}]}`; it is checked (lengths, CRCs) before anything is
 written.
+
+The Song order is bytes 48..83 of backup object 1: `arr_config_t` is 36 bytes
+(count, loop, two reserved bytes, then 16 pairs of section 0..3 and bars 1..64).
+Firmware statically checks offset 48 and size 36. A restore that changes this order returns rc 3
+while playback or a transport request is active.
 
 ## v7: step nudge and parameter locks (SLOOP 2.4)
 
@@ -310,7 +319,7 @@ device while a lock is in force wins: the value found is kept as the new base. S
   change of that step: `STEP_CHANGED` (index) for the selected track; re-read `MICRO_GET` / `LOCK_GET` (two
   requests) with the step. The editor's own `LOCK_SET` / `MICRO_SET` push nothing. While a lock is in force the
   parameter's live value is what `GET` / `DUMP` return and `CHANGED` reports (coalesced, as any knob).
-- **Projects** (`PROJECT`, the backup object 0 and 2..5) are format 5 ("FUN5", 3816 bytes): format 4 plus, per
+- **Projects** (`PROJECT`, the backup object 0 and 2..5) are format 5 ("FUN5", 3840 bytes): format 4 plus, per
   track, 64 nudge bytes, 24 × 4-byte locks and 16 bytes of fill conditions (v8, below). Format 4 projects (SLOOP
   2.0 .. 2.3) load with no nudge, no lock and no condition.
 - A device that does not know these commands (v6 and older) sends no reply: use `INFO`'s version byte.
@@ -335,7 +344,7 @@ armed fill.
 - **Pushes:** a condition changed on the device (SEQ + a step held + OCT+ cycles normal → fill only → no fill; OCT− resets
   it with the nudge and locks) is a change of that step: `STEP_CHANGED` (index) for the selected track; re-read
   `FILL_GET` with `MICRO_GET` / `LOCK_GET`.
-- **Projects:** the 16 bytes sit after the locks in each track of format 5 (3816 bytes in all; the format kept its
+- **Projects:** the 16 bytes sit after the locks in each track of format 5 (3840 bytes in ORBIT; the format kept its
   magic, 2.4 being unreleased: a FUN5 image of a 2.4 development build without the field, 3752 bytes, reads as empty).
 - **On the screen:** a FILL ONLY step's tile carries a small **F** in its top left corner, a NO FILL step's an **×**; the
   nudge / lock dot stays in the top right. The GLO layer's row 3 reads *fill* (lit while a fill plays) and *bar* (framed
@@ -374,6 +383,27 @@ Felucca 1.0's numbers (68–71) so the two editors stay close; firmware `editor_
 - No pushes: after a PTCH change on the device (a `CHANGED` of P_E7) the editor re-reads the track's patch.
 - A device that does not know these commands (v8 and older) sends no reply: use `INFO`'s version byte (the editor hides
   its FM6 panel).
+
+## v10: SYN drum kits
+
+`INFO` ends with 10. Drum kits append **SYN1..SYN4** after the existing sampled, factory synth,
+USR1..USR4 and USR3+4 IDs, so old project kit IDs do not move. Each user kit contains an 8-byte
+name, crush, source factory kit, two reserved zero bytes, and 16 `dsnd_t` records of 22 bytes.
+The complete `dsu_bank_t` is 1464 bytes with magic `"DSU1"`, version 1 and count 4.
+
+| cmd | Request args | Reply args |
+| --- | --- | --- |
+| 72 DSYN_LIST | — | factory count, user count (4), stored flag, factory names, then each user kit name and source |
+| 73 DSYN_GET | factory index, or 64+k for SYN k+1 | which, rc, name, then pack7(crush, source, 16 × 22-byte sounds) |
+| 74 DSYN_PUT | user kit 0..3, part, pack7 data | kit, part, rc. Parts 0..15 are sounds; 16 is name+crush+source; 17 copies one factory kit |
+| 75 DSYN_STORE | — | rc 0, 3 stop playback first, 4 flash failure |
+| 76 DSYN_PLAY | user kit, lane 0..15, velocity 1..127 | kit, lane, rc; audition starts on the next audio block |
+
+Every external sound and restored kit is sanitized before the audio thread reads it. Settings and
+the DSYN bank are written as one A/B storage object (`persist_t` followed by `dsu_bank_t`), so a
+torn write retains the previous pair. A settings-only save preserves the current stored SYN kits.
+Backup object **9** is exactly the 1464-byte bank; invalid magic/version/count returns rc 2, and
+commit while playing returns rc 3. Older protocol devices reject or skip object 9.
 
 ## Notes for the editor
 

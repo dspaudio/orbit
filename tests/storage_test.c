@@ -104,6 +104,42 @@ int main(void)
         bad += check("data stays in the Felucca regions (autosave too)", inside);
         bad += check("every object copy has its own sector", apart);
     }
+    {
+        static char p1[88], p2[1464], all[88 + 1464], got2[88 + 1464];
+        memset(p1, 'P', sizeof p1);
+        memset(p2, 'K', sizeof p2);
+        memcpy(all, p1, sizeof p1);
+        memcpy(all + sizeof p1, p2, sizeof p2);
+        bad += check("2.5 settings+DSYN save in two parts",
+                     st_save2(OBJ_SETTINGS, p1, sizeof p1, p2, sizeof p2) == 0);
+        n = st_load(OBJ_SETTINGS, got2, sizeof got2);
+        bad += check("2.5 settings+DSYN load as one object",
+                     n == (int)sizeof all && !memcmp(got2, all, sizeof all));
+        n = st_load(OBJ_SETTINGS, got2, sizeof p1);
+        bad += check("2.4 reader keeps settings prefix",
+                     n == (int)sizeof p1 && !memcmp(got2, p1, sizeof p1));
+        p1[0] = 'Q';
+        bad += check("settings-only change writes the same stored SYN bank",
+                     st_save2(OBJ_SETTINGS, p1, sizeof p1, p2, sizeof p2) == 0);
+        n = st_load(OBJ_SETTINGS, got2, sizeof got2);
+        bad += check("stored SYN bytes survive settings save",
+                     n == (int)sizeof got2 && got2[0] == 'Q' &&
+                     !memcmp(got2 + sizeof p1, p2, sizeof p2));
+        p1[0] = 'P';
+        memcpy(all, p1, sizeof p1);
+        memcpy(all + sizeof p1, p2, sizeof p2);
+        bad += check("restore baseline settings+SYN object",
+                     st_save2(OBJ_SETTINGS, p1, sizeof p1, p2, sizeof p2) == 0);
+        memset(p2, 'L', sizeof p2);
+        fail_after = 4;
+        st_save2(OBJ_SETTINGS, p1, sizeof p1, p2, sizeof p2);
+        fail_after = -1;
+        n = st_load(OBJ_SETTINGS, got2, sizeof got2);
+        bad += check("torn settings+DSYN save keeps previous object",
+                     n == (int)sizeof all && !memcmp(got2, all, sizeof all));
+        bad += check("oversize two-part object refused",
+                     st_save2(OBJ_SETTINGS, p2, 3000, p2, 1000) == -1);
+    }
     printf("%s\n", bad ? "STORAGE TEST FAILED" : "storage test passed");
     return bad != 0;
 }

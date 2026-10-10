@@ -18,8 +18,11 @@ def main():
     ap.add_argument('--toolchain', required=True)
     ap.add_argument('--sdk', type=Path, required=True)
     ap.add_argument('--skip-generate', action='store_true')
+    ap.add_argument('--slice', choices=['0', '1'], help='SLICE engine and BREAK sample generation')
     args = ap.parse_args()
     os.chdir(ROOT)
+    if args.slice is not None:
+        os.environ['FELUCCA_SLICE'] = args.slice
     import build
     if not args.skip_generate:
         build.generate()
@@ -28,8 +31,9 @@ def main():
         return subprocess.check_output(wsl + ['wslpath', '-a', p.resolve().as_posix()], text=True).strip()
     src, sdk = linux_path(ROOT), linux_path(args.sdk)
     code = 'import sys;sys.path.insert(0,"tools");import build;build.generate=lambda:None;sys.exit(build.main())'
+    extra = ['FELUCCA_SLICE=' + args.slice] if args.slice is not None else []
     subprocess.run(['wsl', '-d', args.distro, '--cd', src, '--exec', 'env',
-                    'JIELI_TOOLCHAIN=' + args.toolchain, 'AC79_SDK=' + sdk,
+                    'JIELI_TOOLCHAIN=' + args.toolchain, 'AC79_SDK=' + sdk, *extra,
                     'python3', '-c', code], check=True)
 
 if __name__ == '__main__':

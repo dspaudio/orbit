@@ -11,7 +11,7 @@ static uint32_t render_case(uint32_t engine, uint32_t preset, uint32_t note, int
     vmod_t m = {0};
     uint32_t hash = 2166136261u, nonzero = 0, b, i;
     const engine_t *e = ENGINES[engine];
-    m.inc = PITCH_INC[note * 16]; m.pitch16 = note * 16;
+    m.inc = pitch_inc(note * 16); m.pitch16 = note * 16;
     m.amp0 = m.amp1 = m.envq15 = 32767; m.shape = 64 << 8;
     for (i = 0; i < 8; i++) t.p[P_E0+i] = e->presets[preset].e[i];
     if (extreme) for (i = 0; i < 8; i++)
@@ -52,7 +52,7 @@ int main(void)
     {
         track_t t = {0}; voice_t v = {0}; vmod_t m = {0};
         int32_t o[64], previous = 0; uint32_t blocks, i, crosses = 0;
-        m.inc = PITCH_INC[69 * 16]; m.amp0 = m.amp1 = m.envq15 = 32767; m.shape = 64 << 8;
+        m.inc = pitch_inc(69 * 16); m.amp0 = m.amp1 = m.envq15 = 32767; m.shape = 64 << 8;
         t.p[P_E1] = t.p[P_E2] = t.p[P_E3] = 1; t.p[P_E4] = 127;
         orbit_osc_note_on(&t, &v);
         for (blocks = 0; blocks < 689; blocks++) {

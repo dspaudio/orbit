@@ -27,4 +27,15 @@ fm6_op_run 72
 fm6_op_fb 26
 fm6_render 372
 fm1_alnk0_irq 174
+# SLOOP 2.5 initial pi32v2 measurements: 2026-10-09; existing values/+10% tolerance preserved.
+phys_render 61
+px_string_run 264
+px_string_excite 171
+px_symp_run 252
+px_symp_block 69
+px_modal_run 192
+px_modal_block 111
+px_memb_block 106
+noise_render 264
+uac_tap48 536
 

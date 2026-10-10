@@ -14,7 +14,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/host/preview'
-BUTTONS = {'FX': 0, 'SCL': 1, 'ENV': 2, 'LFO': 3, 'EDIT': 4, 'GLO': 5,
+BUTTONS = {'FX': 0, 'SEL': 1, 'ENV': 2, 'LFO': 3, 'EDIT': 4, 'GLO': 5,
            'HOME': 6, 'SAVE': 7, 'ARP': 8, 'SEQ': 9, 'PLAY': 10, 'REC': 11,
            'OCT-': 12, 'OCT+': 13}
 
