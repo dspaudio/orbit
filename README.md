@@ -2,15 +2,27 @@
 
 **An experimental groovebox firmware for the FM-1, built on SLOOP/Felucca.**
 
-ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current release version: **0.4.1**.
+ORBIT combines the existing synth, sampler and sequencer with an event Tape workflow and original graphics inspired by the OP-1's four-colour controls. Current release version: **0.5.0**.
 
-> Current status: the pi32v2 target build, `build/orbit.fwsc` generation and installation format checks are complete. **On 2026-10-09, ORBIT 0.4.1 was installed on a physical FM-1; reboot, USB INFO/PING responses, the display and button/knob responses were confirmed.** Hardware audio timing, long-term stability and recovery remain unverified. The existing PHASE CPU and ALNK0 ISR budget overruns were resolved by fixing their causes, without changing baselines or tolerances. See the [hardware installation test](#hardware-installation-test-2026-10-09) below and the [validation log](docs/VALIDATION.md) for the confirmed scope and limitations. Bluetooth headphones are not implemented.
+> Current status: the pi32v2 target build, `build/orbit.fwsc` generation and installation format checks are complete. **On 2026-10-10, ORBIT 0.5.0 was installed on a physical FM-1; automatic reboot, USB INFO/PING and unchanged existing backup data were confirmed, and the user reported normal operation.** Hardware audio timing, USB 48 kHz transfer, long-term stability and recovery remain unverified. Existing PHASE CPU and ALNK0 ISR budget overruns were resolved without changing baselines or tolerances. See the [validation record](docs/VALIDATION.md) for the current results and the [earlier 0.4.1 installation](#hardware-installation-test-2026-10-09) for its historical scope. Bluetooth headphones are not implemented.
 
 The web interface starts in English and displays an ultrathin `Orbit` wordmark instead of the Sloop logo. The firmware first displays an `Orbit` boot screen with 1-pixel strokes, then draws the normal UI after at least 750 ms. No new framebuffer or PCM buffer was added.
 
-## 0.4.1 release
+## 0.5.0 release
 
-Download the installation package [`orbit.fwsc`](https://github.com/dspaudio/orbit/releases/download/v0.4.1/orbit.fwsc) from the [GitHub release](https://github.com/dspaudio/orbit/releases/tag/v0.4.1). The [web emulator](https://dspaudio.github.io/orbit-web-emu/) runs the same C firmware as WebAssembly. See the [release notes](docs/releases/0.4.1.md) for changes and installation/validation limitations.
+Get [`orbit.fwsc`](https://github.com/dspaudio/orbit/releases/download/v0.5.0/orbit.fwsc) and [`SHA256SUMS`](https://github.com/dspaudio/orbit/releases/download/v0.5.0/SHA256SUMS) from the [ORBIT 0.5.0 release](https://github.com/dspaudio/orbit/releases/tag/v0.5.0). The [0.5.0 release notes](docs/releases/0.5.0.md) cover the new engines, the 77 new sounds, SYN, USB 48 kHz, the web editing features, installation and validation limits. The separate web emulator isn't deployed as part of this firmware release.
+
+### ORBIT 0.5.0 / SLOOP 2.5 integration
+
+We compared all 72 changed paths from SLOOP v2.4.1 to v2.5 and brought in PHYS and NOISE, 77 new sounds, SYN1-SYN4, USB 44.1/48 kHz, drum delay, MIDI CC, an independent metronome, the STEP chord entry fix, and web piano roll, MIDI file, Song and DX7 cartridge editing. The default factory bank has 165 sounds, and the existing ORBIT engine IDs, first 12 sounds, Event Tape and 3,840 B FUN5 are unchanged. The button and page label is SEL, swing shows 0-100, and the editor protocol is v10.
+
+0.5.0 is a **new version, separate from the 0.4.1 package** linked below. On 2026-10-10 the source version and the native preview and web mock labels were raised to **0.5.0**, and the firmware was installed on the user's FM-1. The write reached 100%, the device rebooted on its own, and it answered INFO as `FELUCCA ORBIT 0.5.0` with protocol v10, 15 engines and 33 globals, plus a working PING. All 13 objects of the original backup were bit-identical before and after installation, and the user confirmed normal operation. Private backups and work journals aren't published.
+
+The integration passed the full host, sanitizer and 194 golden/CPU regression checks. After the version bump, the 21 `orbit_check` cases, native preview, web, installer simulator and a real pi32v2 build passed again. Target RAM is 85,892/98,304 B and pool is 333,948/344,064 B. Hardware audio timing, 48 kHz transfer and long-term stability remain unverified. See the [SLOOP 2.5 integration notes](docs/SLOOP-2.5-INTEGRATION.md) for what was applied or excluded and how to use it, and the [validation record](docs/VALIDATION.md) for measurements and limits.
+
+## 0.4.1 release (previous version)
+
+Download the previous installation package [`orbit.fwsc`](https://github.com/dspaudio/orbit/releases/download/v0.4.1/orbit.fwsc) from the [GitHub release](https://github.com/dspaudio/orbit/releases/tag/v0.4.1). The [web emulator](https://dspaudio.github.io/orbit-web-emu/) runs its separately deployed C firmware as WebAssembly. See the [release notes](docs/releases/0.4.1.md) for changes and installation/validation limitations.
 
 The original OP-1's Synth / Drum / Event Tape / Mixer workflow, T1–T4 sound modules and blue / green / white / orange encoder roles are reflected in the controls. The mixer provides LEVEL / PAN and the existing TRACK editing controls. PHASE and ALNK0 budget overruns were resolved without changing existing baselines. The FUN5 save format and editor protocol v9 are preserved.
 
@@ -94,7 +106,7 @@ The existing SLOOP piano-roll sequencer is retained. The capture below shows a 1
 |---|---|---|
 | Event Tape | Implemented; host tested | Four-track event timeline, transport position, inclusive region selection, COPY / LIFT / DROP |
 | Tape editing | Implemented; host tested | Preserves chords, ties, velocity, ratchets, nudges, fills and locks; clips at the pattern boundary and checks synth/drum compatibility |
-| Synths | Three independent ORBIT engines added | SWARM, PULSE and FM4, with 12 original presets; nine legacy engines retained for compatibility |
+| Synths | 15 engines in the default build | SWARM, PULSE and FM4 with 12 original presets, plus the retained engines, FM6, PHYS and NOISE; 165 factory sounds total |
 | Sampler | Existing functionality retained | Four user slots; sample import, CHOP and device upload through the original web editor |
 | Sequencer | Existing functionality retained | Up to 64 steps, live recording, chords, ratchets, drum lanes and song arrangement |
 | Graphics | Implemented; host tested | Two Tape reels, coloured synth graphics, envelope curves and four mixer faders |
@@ -103,7 +115,7 @@ The existing SLOOP piano-roll sequencer is retained. The capture below shows a 1
 | Native preview | Implemented; host tested | Browser controls backed by the firmware's actual C DSP, sequencer and UI |
 | Divide-by-zero trap mitigation | Applied; host register test passed | Explicitly clears EMU_CON bit 2 during IRQ initialisation |
 | Target firmware build | Build and package verified | pi32v2 compile, ELF memory and static ISR budgets checked |
-| Real FM-1 validation | Installation and reboot tested (2026-10-09) | ORBIT 0.4.1 installation, USB INFO/PING, display and control responses confirmed; audio/IRQ timing, long-term stability, recovery and sample upload remain unverified |
+| Real FM-1 validation | 0.5.0 installation and reboot tested (2026-10-10) | USB INFO/PING and unchanged existing data confirmed, plus user confirmation of normal operation; audio/IRQ timing, long-term stability, recovery and sample upload remain unverified |
 | Bluetooth headphones | Not implemented | Pairing, reconnect and Bluetooth audio require further SDK integration and device testing |
 | PCM audio Tape | Not implemented | Tape edits note/drum events; it does not record long audio or provide tape-speed pitch changes |
 
@@ -120,7 +132,8 @@ HOME now briefly displays the loaded engine and preset after turning PRESETS. It
 - **0.2.1:** Applied the divide-by-zero trap mitigation and captured STEP/PATTERN screens.
 - **0.3.0:** Added independent SWARM, PULSE and FM4 engines, 12 original patches and independent defaults; verified native DSP and wasm32 integration.
 - **0.4.1:** Original OP-1 control roles, Orbit branding, preview input fixes and PHASE/ISR budget fixes; install package and updated WebAssembly emulator.
-- **Next:** Validate boot, controls, USB and audio timing on FM-1 hardware. Bluetooth support remains a separate development task.
+- **0.5.0:** SLOOP 2.5 integration: PHYS/NOISE, 77 sounds, SYN kits, USB 48 kHz, drum delay/CC/click and web piano roll/MIDI/Song/DX7; hardware installation and data preservation confirmed.
+- **Next:** Measure hardware audio/IRQ timing, 48 kHz transfers, long-term stability and recovery.
 
 ## Try the native preview
 
@@ -135,7 +148,7 @@ Open http://127.0.0.1:8080 and press the audio-start button. The preview include
 
 The preview uses the firmware DSP but buffers approximately 250–550 ms of browser audio, so it cannot establish device performance or playing latency. Its project save/load doubles are nonpersistent. Uploading user samples into the preview process is not supported.
 
-The preview supports button taps only. Holding HOME and layer combinations are available on the hardware. Controls including SCL and SELECT, short key presses and the Visualizer's left/right taps are connected to the actual C input/output paths.
+The preview supports button taps only. Holding HOME and layer combinations are available on the hardware. Controls including SEL and SELECT, short key presses and the Visualizer's left/right taps are connected to the actual C input/output paths.
 
 ## FM-1 controls
 
@@ -172,7 +185,7 @@ python tools/orbit_preview.py --port 8080
 python tests/orbit_preview_test.py
 ```
 
-On Linux amd64, the **19 host programs** in `tools/orbit_check.py` and `sh tests/run_tests.sh` under Node 24 passed. A fresh macOS instruction-counted CPU/golden run also passed, with 117 renders unchanged and no CPU budget overruns. ALNK0's static cost is 138 against the existing baseline of 174. Neither baselines nor tolerances were relaxed. Web, installation CLI and native HTTP checks, plus actual browser interactions at 1440px / 390px, were verified. Package checks cover the CRC, loader marker and matching Python/JavaScript logical images for `orbit.fwsc`.
+On Linux amd64, the **21 host programs** in `tools/orbit_check.py` and the full `sh tests/run_tests.sh` under Node 24 passed. The macOS instruction-counted CPU/golden run passed with 194 renders, no changed or missing references and no CPU budget overruns. ALNK0's static cost is 138 against the existing baseline of 174. Neither CPU baselines nor tolerances were relaxed. Web, installation CLI and native HTTP checks, plus actual browser interactions at 1440px / 390px, were verified. Package checks cover the CRC, loader marker and matching Python/JavaScript logical images for `orbit.fwsc`.
 
 See [validation details](docs/VALIDATION.md) for evidence and limitations. Host results do not establish target boot safety, RAM/flash usage or real-time audio performance.
 
