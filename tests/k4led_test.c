@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
-/* SMK-37 Pro: KNOB BANK lit on a PRESETS detent; which pad modes are a grid (UI harness) */
+/* SMK-37: KNOB BANK opens and closes the pad picker (its LED lit while open); which pad modes are a grid (UI harness) */
 #define UI_PAGES_HARNESS_ONLY 1
 #include "ui_pages_test.c"
 static uint8_t smk_fbank, smk_fbank_new;           /* (ui_input.c, SMK build) */
@@ -23,11 +23,10 @@ int main(int argc, char **argv)
     ui.layer = LY_PLAY;
     fb_set(smk_fbank);
     fb_close();
-    pick_open_tmp();
-    check((int32_t)(fm1_ms - pick_k4_until) < 0, "a PRESETS detent: KNOB BANK lit");
-    fm1_ms += 160u;
-    check((int32_t)(fm1_ms - pick_k4_until) >= 0, "~150 ms later: off");
-    pick_close();
+    pick_pin_toggle();
+    check(pick_pin && pick_shown(), "KNOB BANK: the pad picker open (its LED: pick_pin)");
+    pick_pin_toggle();
+    check(!pick_pin && !pick_shown(), "KNOB BANK again: closed");
     ui.menu = 1;
     ui.menu = 0;
     open_family(FAM_ENV);

@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
-/* The FADER BANK screen: the four banks, the active one lit, what faders 1..4 set (track colours).
+/* The FADER BANK screen: the four banks, the active one lit, what faders 1..4 set (track colours). A and B are
+ * the Mixer's two pages (GLO: LEVEL, PAN), C and D the sends.
  * FADER BANK opens it and then steps the bank, as < > and K2 SELECT do; PATCH closes it, or it closes by itself. */
-static const char *const FB_NAME[4] = {"LEVEL", "FILTER", "REVERB", "DELAY"};
+static const char *const FB_NAME[4] = {"LEVEL", "PAN", "REVERB", "DELAY"};
 #define FB_SHOW_MS 4000u                           /* up this long after the last change */
 static uint8_t fb_open;
 static uint32_t fb_t, fb_frame;                    /* last action (ms); the frame drawn last */
@@ -33,16 +34,25 @@ static int fb_left(void)                           /* drawn last frame, not now:
     return l;
 }
 
-/* what fader i sets in bank b (main.c smk_faders) */
+/* what fader i sets in bank b (main.c smk_faders): the drums' level and sends are globals (GLO > DRUMS), their
+ * pan the drum track's own */
 static const param_desc_t *fb_param(uint32_t b, uint32_t i, int16_t **vp)
 {
-    static const uint8_t TID[4] = {P_LEVEL, P_TFLT, P_REV, P_DLY}, GID[4] = {G_DRLVL, 0, G_DRREV, G_DRDLY};
+    static const uint8_t TID[4] = {P_LEVEL, P_PAN, P_REV, P_DLY}, GID[4] = {G_DRLVL, 0, G_DRREV, G_DRDLY};
     if (i == TRK_DRUM && b != 1u) {
         *vp = &song.g[GID[b & 3u]];
         return &GP[GID[b & 3u]];
     }
     *vp = &trk[i].p[TID[b & 3u]];
     return &TP[TID[b & 3u]];
+}
+
+/* fader position v (0..127) to the value's range: LEVEL and the sends 0..127, PAN -64 (left) .. 63 (right) */
+static void fb_apply(uint32_t b, uint32_t i, uint32_t v)
+{
+    int16_t *vp;
+    const param_desc_t *d = fb_param(b, i, &vp);
+    *vp = (int16_t)(d->min + (int32_t)v * (d->max - d->min) / 127);
 }
 
 static void fb_draw(void)

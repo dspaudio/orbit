@@ -5,7 +5,7 @@
 /* The LED picture is built off-line and copied one byte per column: clearing
  * and relighting would let the 10 kHz scan catch the dark gap and flicker. */
 #if BOARD_SMK37
-static uint8_t smk_fbank, smk_fbank_new;           /* FADER BANK: 0 level, 1 filter, 2 reverb, 3 delay (main.c smk_faders) */
+static uint8_t smk_fbank, smk_fbank_new;           /* FADER BANK: 0 level, 1 pan, 2 reverb, 3 delay (ui_fbank.c fb_param) */
 /* SMK-37 Pro: one flag per id. Ids 0..18 are the button LEDs (smk_input.h), the note keys (no LEDs of
  * their own) take LED_KEY0 + k; ui_leds shows white keys F3..G5 on the 16 RGB pads. */
 #define LED_BUF 64u
@@ -286,7 +286,7 @@ static void ui_leds(void)
         fm1_led[c] = nl[c];
     smk_pad_piano = ui.layer == LY_SCALE;          /* SCALE held: the pads are a little piano (smk_input.h) */
     fm1_led[SMK_BTN_FADER_BANK] = fb_shown();      /* FADER BANK lit while its screen is up (one bank screen at a time) */
-    fm1_led[SMK_BTN_KNOB_BANK] = pick_pin || (int32_t)(fm1_ms - pick_k4_until) < 0;   /* KNOB BANK: picker pinned, K4 turning */
+    fm1_led[SMK_BTN_KNOB_BANK] = pick_pin;         /* KNOB BANK lit while the pad picker is open */
     smk_pad_pick = (uint16_t)(pick_shown() ? 0xFFFFu : 0u);   /* (these pads: no notes) */
     smk_pad_grid = (uint8_t)padgrid_on();          /* (steps and tiles: reading order) */
     if (!is_drum(TSEL) && TSEL->p[P_AMODE])        /* ARP lit while the selected track's arpeggiator runs */
@@ -295,8 +295,9 @@ static void ui_leds(void)
         for (c = 0; c < SMK_NLED; c++)
             fm1_led[c] = c == bled_id;
     if ((int32_t)(fm1_ms - padled_hold_until) >= 0) {   /* the pads. Off is off: no glow layers */
-        static const uint8_t PAL[NTRK][3] = {{40, 124, 255}, {30, 204, 112}, {255, 198, 24}, {255, 98, 26}};   /* the screen's track colours (TE_COL) */
-        const uint8_t *col = PAL[song.sel % NTRK];
+        uint32_t tc = TE_COL[song.sel % NTRK];     /* the screen's track colour (the STYLE's: blue, green, white,
+                                                    * orange in ORBIT's own), RGB565 to 8 bits a channel */
+        const uint8_t col[3] = {(uint8_t)((tc >> 11) << 3), (uint8_t)(((tc >> 5) & 63u) << 2), (uint8_t)((tc & 31u) << 3)};
         if (pick_shown())
             pick_leds();
         else
@@ -1277,9 +1278,6 @@ static void ui_input(void)
             ui_message(sound);
             ui.msg_t=80;
         }
-#if BOARD_SMK37
-        pick_open_tmp();                                /* the pad picker, a few seconds, at this sound's page */
-#endif
     }
     if ((s = panel_enc(EN_ALGO)) != 0 && !ft_on)     /* ALGORITHM: the selected track, on every page (not in a take) */
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));

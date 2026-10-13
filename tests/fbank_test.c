@@ -34,10 +34,16 @@ int main(int argc, char **argv)
     fb_set(3u + 1u);
     check(smk_fbank == 0, "D -> A wraps");
     check(fb_param(0, TRK_DRUM, &vp) == &GP[G_DRLVL] && vp == &song.g[G_DRLVL], "bank A, fader 4: the drums' level");
-    check(fb_param(1, TRK_DRUM, &vp) == &TP[P_TFLT] && vp == &TDRUM->p[P_TFLT], "bank B, fader 4: the drum track's filter");
+    check(fb_param(1, TRK_DRUM, &vp) == &TP[P_PAN] && vp == &TDRUM->p[P_PAN], "bank B, fader 4: the drum track's pan");
+    check(fb_param(1, 2, &vp) == &TP[P_PAN] && vp == &trk[2].p[P_PAN], "bank B, fader 3: track 3's pan");
+    fb_apply(1, 0, 0); check(trk[0].p[P_PAN] == -64, "pan: fader down = left (-64)");
+    fb_apply(1, 0, 127); check(trk[0].p[P_PAN] == 63, "pan: fader up = right (63)");
+    fb_apply(1, 0, 64); check(trk[0].p[P_PAN] == 0, "pan: the middle = centre");
+    fb_apply(0, TRK_DRUM, 90); check(song.g[G_DRLVL] == 90, "level: the fader's value (drums: GLO > DRUMS LVL)");
+    fb_apply(3, 1, 127); check(trk[1].p[P_DLY] == 127, "bank D: delay send, full");
     check(fb_param(2, 0, &vp) == &TP[P_REV] && vp == &trk[0].p[P_REV], "bank C, fader 1: track 1's reverb");
     ui.force = 1; fb_shot("fbank-a");
-    trk[1].p[P_TFLT] = -30; trk[2].p[P_TFLT] = 20;
+    trk[1].p[P_PAN] = -30; trk[2].p[P_PAN] = 20;
     fb_set(1); ui.force = 1; fb_shot("fbank-b");
     ui.layer = LY_STEP;
     check(!fb_shown(), "hidden while a layer is held");

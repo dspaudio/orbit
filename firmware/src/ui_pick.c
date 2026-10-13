@@ -2,18 +2,17 @@
  * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
 /* The pad sound picker. The 16 pads (and the screen, 8 x 2) are the sounds of one kind, in the PRESETS
  * order (ui.c BANK), 16 a page, then the user presets; on the drum track the kits. A pad loads its sound
- * (as PRESETS does) and plays a short preview; < > step the pages. KNOB BANK pins it open; a PRESETS
- * turn opens it for PICK_MS. Pad hits never reach the notes while it is up (smk_input.h smk_pad_pick). */
-#define PICK_MS 1500u
+ * (as PRESETS does) and plays a short preview; < > step the pages. KNOB BANK opens and closes it (PATCH closes
+ * it too); a PRESETS turn keeps ORBIT's own list on the screen. Pad hits never reach the notes while it is up
+ * (smk_input.h smk_pad_pick). */
 enum { PK_USER = 8, PK_KITS = 9 };
 static const char *const PICK_KIND[10] = {"BASS", "KEYS", "ORGN", "PAD", "LEAD", "PLCK", "STAB", "FX", "USER", "KITS"};
 static const uint8_t PICK_RGB[10][3] = {           /* a colour a kind (pads and screen) */
     {255, 40, 40},  {255, 140, 0},  {255, 220, 0}, {40, 220, 80},  {0, 200, 255},
     {60, 80, 255},  {170, 60, 255}, {255, 60, 170}, {220, 210, 170}, {255, 98, 26}};
-static uint8_t pick_pin, pick_tmp, pick_sel = 0xFF;
+static uint8_t pick_pin, pick_sel = 0xFF;
 static uint16_t pick_page;
-static uint32_t pick_t, pick_frame;                /* last touch (ms); the frame drawn last */
-static uint32_t pick_k4_until;                     /* KNOB BANK lit until (ms): a PRESETS detent */
+static uint32_t pick_frame;                        /* the frame drawn last */
 typedef struct { uint16_t first, len, sub, nsub, kind; } pick_pg_t;
 
 static uint32_t pick_total(void)
@@ -114,25 +113,17 @@ static uint32_t pick_info(pick_pg_t *pg)          /* the page shown (back to the
 
 static int pick_shown(void)
 {
-    return (pick_pin || (pick_tmp && fm1_ms - pick_t < PICK_MS)) && !ui.menu && ui.layer == LY_PLAY && !ui.hold_kind;
+    return pick_pin && !ui.menu && ui.layer == LY_PLAY && !ui.hold_kind;
 }
 static void pick_close(void)
 {
-    pick_pin = pick_tmp = 0;
+    pick_pin = 0;
 }
 static void pick_pin_toggle(void)                  /* KNOB BANK */
 {
     pick_pin = !pick_pin && !ui.menu;
-    pick_tmp = 0;
     if (pick_pin)
         pick_home();
-}
-static void pick_open_tmp(void)                    /* a PRESETS turn: the current sound's page */
-{
-    pick_tmp = 1;
-    pick_t = fm1_ms;
-    pick_k4_until = fm1_ms + 150u;
-    pick_home();
 }
 static void pick_turn(int32_t d)                   /* < > */
 {
@@ -140,14 +131,12 @@ static void pick_turn(int32_t d)                   /* < > */
     uint32_t np = pick_info(&pg);
     if (np)
         pick_page = (uint16_t)((pick_page + np + (uint32_t)(d > 0 ? 1 : (int32_t)np - 1)) % np);
-    pick_t = fm1_ms;
     ui.force = 1;
 }
 static void pick_select(uint32_t w)                /* white key / cell w (0..15) of the page */
 {
     pick_pg_t pg;
     uint32_t n;
-    pick_t = fm1_ms;
     if (!pick_info(&pg) || w >= pg.len)
         return;
     n = pg.first + w;

@@ -86,11 +86,11 @@ run "sound macros: MACROS assignment, PERFORM values, presets, projects and back
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/ui_pages_test" tests/ui_pages_test.c -lm
 run "live UI: pages, layers (punch, steps, erase, roll, key, mix), holds, drums, REC, fuzz" "$OUT/ui_pages_test" "$OUT"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/pick_test" tests/pick_test.c -lm
-run "SMK-37 Pro pad sound picker: pages by kind, pads load, < >, drum kits" "$OUT/pick_test" "$OUT"
+run "SMK-37 pad sound picker: pages by kind, pads load, < >, drum kits" "$OUT/pick_test" "$OUT"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/fbank_test" tests/fbank_test.c -lm
-run "SMK-37 Pro FADER BANK screen: banks wrap, what each fader sets, closes by itself" "$OUT/fbank_test" "$OUT"
+run "SMK-37 FADER BANK screen: banks wrap, LEVEL / PAN / REVERB / DELAY, fader to value" "$OUT/fbank_test" "$OUT"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/k4led_test" tests/k4led_test.c -lm
-run "SMK-37 Pro: KNOB BANK lit on a PRESETS detent; which modes are a grid" "$OUT/k4led_test" "$OUT"
+run "SMK-37: KNOB BANK opens / closes the pad picker; which modes are a grid" "$OUT/k4led_test" "$OUT"
 $CC -O2 -w -Ifirmware/hal -o "$OUT/padgrid_test" tests/padgrid_test.c
 run "SMK-37 Pro pads: steps and tiles in reading order, notes low at the bottom" "$OUT/padgrid_test"
 $CC -o "$OUT/smk_wheel_test" tests/smk_wheel_test.c

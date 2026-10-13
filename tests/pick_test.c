@@ -48,9 +48,9 @@ int main(int argc, char **argv)
     pick_walk(np - 1u, &pg, 0xFFFFu, 0);
     check(pg.kind == PK_USER, "the last page: the user presets");
 
-    pick_open_tmp();
+    pick_pin_toggle();
     pick_walk(0xFFFFu, 0, pick_cur(), &of);
-    check(pick_shown() && pick_page == of, "a PRESETS turn: open at the current sound's page");
+    check(pick_shown() && pick_page == of, "KNOB BANK: open at the current sound's page");
     pick_turn(-1);
     pick_turn(1);
     check(pick_page == of, "< > step the pages and back");
@@ -60,11 +60,8 @@ int main(int argc, char **argv)
     pick_select(3);
     pick_info(&pg);
     check(pick_cur() == pg.first + 3u, "a pad loads its sound (as PRESETS)");
-    fm1_ms += PICK_MS + 10u;
-    check(!pick_shown(), "closes by itself after PICK_MS");
-    pick_pin_toggle();
-    fm1_ms += PICK_MS + 10u;
-    check(pick_shown(), "KNOB BANK: pinned open");
+    fm1_ms += 60000u;
+    check(pick_shown(), "stays open until KNOB BANK / PATCH");
     ui.layer = LY_STEP;
     check(!pick_shown(), "hidden while a layer is held");
     ui.layer = LY_PLAY;
