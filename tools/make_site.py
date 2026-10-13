@@ -5,7 +5,11 @@
   python3 tools/make_site.py --package build/orbit.fwsc --version 0.6.0 --out build/site
 The same inputs give the same bytes: the installer as index.html, its modules, the sound
 editor with its font, the package as firmware/orbit-<version>.fwsc, the manifest.json the
-installer reads (identity, size, SHA-256 of that file) and SHA256SUMS over every file."""
+installer reads (identity, size, SHA-256 of that file) and SHA256SUMS over every file.
+--package may be given again for the M-Vave SMK-37 packages of the same release (orbit-smk37.fwsc,
+orbit-smk37-elite.fwsc, orbit-smk37-mke.fwsc): each is published as firmware/<name>-<version>.fwsc and
+listed in manifest.json "packages"; the installer writes the one for the connected keyboard. With one
+package the site is as before."""
 import argparse
 import hashlib
 import json
@@ -46,7 +50,13 @@ def generate(package, version, out, release_url=None):
         raise SiteError(f"version {version!r} is not MAJOR.MINOR.PATCH (no leading v)")
     if release_url and not release_url.startswith("https://"):
         raise SiteError(f"release URL {release_url!r} is not https")
-    product, raw = checked_package(package)
+    packages = list(package) if isinstance(package, (list, tuple)) else [package]
+    checked = [(path, *checked_package(path)) for path in packages]
+    if len({product for _path, product, _raw in checked}) != len(checked):
+        raise SiteError("two packages with the same identity")
+    if len({path.stem for path in packages}) != len(packages):
+        raise SiteError("two packages with the same file name")
+    _path, product, raw = checked[0]
     if out.exists() and not (out / "manifest.json").exists():
         raise SiteError(f"{out} exists and is not a generated site: refusing to replace it")
     if out.exists():
@@ -60,6 +70,13 @@ def generate(package, version, out, release_url=None):
     (out / package_path).write_bytes(raw)
     manifest = {"name": "ORBIT", "version": version, "product": product, "package": package_path,
                 "size": len(raw), "sha256": sha256(raw)}
+    if len(checked) > 1:                          # the SMK-37 packages: after the first, by their file names
+        entries = [{"product": product, "package": package_path, "size": len(raw), "sha256": sha256(raw)}]
+        for path, prod, data in checked[1:]:
+            rel = f"firmware/{path.stem}-{version}.fwsc"
+            (out / rel).write_bytes(data)
+            entries.append({"product": prod, "package": rel, "size": len(data), "sha256": sha256(data)})
+        manifest["packages"] = entries
     if release_url:
         manifest["release_url"] = release_url
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
@@ -71,7 +88,8 @@ def generate(package, version, out, release_url=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--package", type=Path, required=True, help="the .fwsc to publish; identity, loader and CRCs are checked")
+    parser.add_argument("--package", type=Path, required=True, action="append",
+                        help="the .fwsc to publish; identity, loader and CRCs are checked (again: the SMK-37 packages)")
     parser.add_argument("--version", required=True, help="release version, MAJOR.MINOR.PATCH")
     parser.add_argument("--out", type=Path, default=ROOT / "build/site", help="output directory (default: build/site)")
     parser.add_argument("--release-url", help="https URL of the release page, recorded in manifest.json")
