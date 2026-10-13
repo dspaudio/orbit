@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
+ * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) */
 /* SMK-37 Pro FADER BANK screen (firmware/src/ui_fbank.c) on the UI harness: banks wrap, what each fader sets,
  * closes by itself; renders DIR/fbank-a.ppm, fbank-b.ppm. */
 #define UI_PAGES_HARNESS_ONLY 1

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
+ * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) */
 /* SMK-37 Pro pitch wheel (firmware/src/smk_wheel.h): the bend is back to 0 once the wheel rests again, however
  * it was moved. v0.1 moved the centre by one count every 200 calls; the main loop calls it some 10 000 to
  * 50 000 times a second, so a slow touch dragged the centre along, the spring brought the wheel back outside

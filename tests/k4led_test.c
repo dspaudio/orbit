@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
+ * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) */
 /* SMK-37: KNOB BANK opens and closes the pad picker (its LED lit while open); which pad modes are a grid (UI harness) */
 #define UI_PAGES_HARNESS_ONLY 1
 #include "ui_pages_test.c"

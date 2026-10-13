@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
+ * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) */
 /* The FADER BANK screen: the four banks, the active one lit, what faders 1..4 set (track colours). A and B are
  * the Mixer's two pages (GLO: LEVEL, PAN), C and D the sends.
  * FADER BANK opens it and then steps the bank, as < > and K2 SELECT do; PATCH closes it, or it closes by itself. */

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
+ * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) */
 /* SMK-37 store owner (firmware/src/storage.c st_owner_check, build with -DBOARD_SMK37=1) on a simulated NOR:
  * the tag "SMK37DATA" + ORBIT is written once; ORBIT's own store loads as before; another port's store
  * (SLOOP's tag) and untagged data (the stock settings) are cleared; nothing outside the store is touched. */
