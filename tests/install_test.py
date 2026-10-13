@@ -296,7 +296,8 @@ def smk():
     """SMK-37 Pro: identities, port names, the 36-block stock package, SLOOP's own SMK loader"""
     ok(I.PORT_RE.search("SMK-37 Pro Midi") and I.PORT_RE.search("SMK-37 Pro-MCP 2") and I.PORT_RE.search("FM-1")
        and not I.PORT_RE.search("IAC Driver Bus 1"), "port names: SMK-37 Pro ports probed, FM-1 too, other gear not")
-    ok(I.OWN_LOADER_RE.fullmatch("ota-SMK-37 Pro_900") and I.OWN_LOADER_RE.fullmatch("ota-FM-1_925")
+    ok(I.OWN_LOADER_RE.fullmatch("ota-SMK-37 Pro_900") and I.OWN_LOADER_RE.fullmatch("ota-SMK-37 Elite_900")
+       and not I.OWN_LOADER_RE.fullmatch("ota-SMK-37 Elite_016") and I.OWN_LOADER_RE.fullmatch("ota-FM-1_925")
        and not I.OWN_LOADER_RE.fullmatch("ota-SMK-37 Pro_016") and not I.OWN_LOADER_RE.fullmatch("ota-FM-1_015"),
        "own loader: ota-SMK-37 Pro_9XX / ota-FM-1_9XX, not the stock ones")
     ident = I.parse_identity(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 0, 0, 0]) + b"SMK-37 Pro_016" + bytes(14)) + b"\xF7")
@@ -389,6 +390,15 @@ errors()
 smk()
 against_js()
 shutil.rmtree(TMP, ignore_errors=True)
+# the SMK-37 Pro, Elite and MKE-P37 are one keyboard: packages install across them, never across FM-1 / SMK
+ok(I.same_keyboard("SMK-37 Elite_016", "SMK-37 Pro_900") and I.same_keyboard("ota-MKE-P37_900", "SMK-37 Elite_900")
+   and I.same_keyboard("STARRYKEY-37 PLAY_01", "SMK-37 Pro_900") and I.same_keyboard("FM-1_015", "FM-1_900")
+   and not I.same_keyboard("FM-1_015", "SMK-37 Pro_900") and not I.same_keyboard("SMK-37 Elite_016", "FM-1_900")
+   and not I.same_keyboard("XY-9_001", "SMK-37 Pro_900"),
+   "models: SMK-37 Pro / Elite / MKE-P37 / Starrykey are one keyboard, FM-1 is another")
+ok(all(I.PORT_RE.search(n) for n in ("SMK-37 Elite", "MKE-P37", "STARRYKEY-37 PLAY", "Snoop37", "Vox37", "Felucca",
+                                     "X0X FM-1", "FoMni SMK-37", "Makkuro37 Update")),
+   "port names: every SMK model and every port firmware probed")
 print(f"INSTALL TESTS FAILED ({failed})" if failed else "install tests passed")
 sys.exit(1 if failed else 0)
 

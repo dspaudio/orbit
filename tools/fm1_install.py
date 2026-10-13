@@ -37,10 +37,10 @@ MAXDATA = 512
 BLOCKS, BLK, KEEP = 20, 0x30, 0x2F         # BLOCKS: the identity blocks (more may follow, see block_count)
 MAX_BLOCKS = 64
 LOADER_MARK = b"FELUCCA-LOADER-1"
-PORT_RE = re.compile(r"fm-1|smk|felucca|sloop|clipper|melodee|fomni|x0x|makkuro|ota|composite|sinco|usb-midi", re.I)   # never probe other gear
-# (the FM-1 / SMK-37 Pro under SLOOP / Felucca, under CLIPPER, the SMK-37 ports, the update loaders, the stock
-# firmware: as web/fm1ota.js FM1_PORT)
-OWN_LOADER_RE = re.compile(r"ota-(FM-1|SMK-37 Pro)_9\d\d", re.I)               # SLOOP's own update loader
+PORT_RE = re.compile(r"fm-1|smk|elite|mke-p37|starry|felucca|sloop|clipper|melodee|fomni|x0x|makkuro|maku|rainbow|snoop|vector|vox|ota|composite|sinco|usb-midi", re.I)   # never probe other gear
+# (the FM-1 and the SMK-37 family under SLOOP / Felucca, under CLIPPER, the other SMK-37 ports, the update loaders,
+# the stock firmware: as web/fm1ota.js PORT_RE)
+OWN_LOADER_RE = re.compile(r"ota-(FM-1|SMK-37 Pro|SMK-37 Elite|MKE-P37)_9\d\d", re.I)   # SLOOP's own update loader
 
 # seconds; the tests shorten them
 DELAY = {"open": 0.3, "start": 2.0, "reply": 0.01, "loader": 3.0, "reboot": 3.0, "retry": 1.0,
@@ -162,6 +162,16 @@ def deinterleave(raw):
 
 def model_of(text):
     return text.split("_")[0].removeprefix("ota-")
+
+
+# the SMK-37 Pro, SMK-37 Elite, MKE-P37, Starrykey 37 Play and the SMK-37+VA mod: one keyboard under several names
+SMK_FAMILY = re.compile(r"SMK-37[ +].*|MKE-P37|STARRYKEY-37.*", re.I)
+
+
+def same_keyboard(a, b):
+    """the models of identities a and b are the same hardware (never an FM-1 and an SMK)"""
+    ma, mb = model_of(a), model_of(b)
+    return ma == mb or bool(SMK_FAMILY.fullmatch(ma) and SMK_FAMILY.fullmatch(mb))
 
 
 # ------------------------------------------------------------------ MIDI ---
@@ -380,7 +390,7 @@ class Updater:
     def install(self, dev, image, product, step=lambda *a: None):
         """running firmware -> loader -> new firmware; dev from find(). A device already in
         update mode only needs the write."""
-        if model_of(dev.id.text) != model_of(product):
+        if not same_keyboard(dev.id.text, product):
             dev.link.close()
             raise InstallError("model", f"the device is {dev.id.text}, the package is for {product}")
         if dev.id.loader and not OWN_LOADER_RE.fullmatch(dev.id.text):
