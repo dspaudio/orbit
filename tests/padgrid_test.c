@@ -1,4 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
+/* SPDX-License-Identifier: GPL-3.0-only
+ * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
 /* SMK-37 Pro pads (firmware/hal/smk_input.h): the step grid in reading order (top-left = step 1),
  * notes low at the bottom (bottom-left = the lowest). Built -O2 (the IRQ lock's asm is left out). */
 #define BOARD_SMK37 1

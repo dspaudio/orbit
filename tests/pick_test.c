@@ -1,4 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
+/* SPDX-License-Identifier: GPL-3.0-only
+ * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
 /* SMK-37 Pro pad sound picker (firmware/src/ui_pick.c) on the UI harness: the pages by kind, 16 a page, the
  * current sound's page, a cell loads its sound, < > wrap, the short names, the drum kits; renders
  * DIR/pick-synth.ppm, pick-drums.ppm. */

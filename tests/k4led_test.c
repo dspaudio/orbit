@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only
+ * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
 /* SMK-37 Pro: KNOB BANK lit on a PRESETS detent; which pad modes are a grid (UI harness) */
 #define UI_PAGES_HARNESS_ONLY 1
 #include "ui_pages_test.c"
