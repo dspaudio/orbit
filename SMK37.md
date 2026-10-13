@@ -39,7 +39,7 @@ its SLOOP function lands on the SMK:
 | OCT− | octave down | drums: ghost hits | OCTAVE− | OCT− |
 | OCT+ | octave up | drums: hard hits | OCTAVE+ | OCT+ |
 | — | — | — | KNOB BANK | pins the pad sound picker |
-| — | — | — | FADER BANK | the fader bank screen on / off (K2 turns A→B→C→D; LED lit off bank A) |
+| — | — | — | FADER BANK | the fader bank screen; pressed again, < > or K2: the next bank A→B→C→D (closes after 4 s; lit while up; closes the pad picker) |
 | — | — | — | < | page back (as SELECT, never tempo); SEQ held: step page back; visualiser: style |
 | — | — | — | > | page forward; SEQ held: step page forward; visualiser: style |
 

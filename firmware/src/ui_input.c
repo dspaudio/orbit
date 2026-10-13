@@ -285,7 +285,7 @@ static void ui_leds(void)
     for (c = 0; c < SMK_NLED; c++)                 /* the buttons: on / off (no dim layers) */
         fm1_led[c] = nl[c];
     smk_pad_piano = ui.layer == LY_SCALE;          /* SCALE held: the pads are a little piano (smk_input.h) */
-    fm1_led[SMK_BTN_FADER_BANK] = smk_fbank != 0;  /* FADER BANK lit off bank A */
+    fm1_led[SMK_BTN_FADER_BANK] = fb_shown();      /* FADER BANK lit while its screen is up (one bank screen at a time) */
     fm1_led[SMK_BTN_KNOB_BANK] = pick_pin || (int32_t)(fm1_ms - pick_k4_until) < 0;   /* KNOB BANK: picker pinned, K4 turning */
     smk_pad_pick = (uint16_t)(pick_shown() ? 0xFFFFu : 0u);   /* (these pads: no notes) */
     smk_pad_grid = (uint8_t)padgrid_on();          /* (steps and tiles: reading order) */
@@ -1073,6 +1073,8 @@ static void ui_input(void)
         int32_t d = (pressed >> SMK_BTN_RIGHT) & 1u ? 1 : -1;
         if (pick_shown())
             pick_turn(d);
+        else if (fb_shown())                              /* the FADER BANK screen: the banks */
+            fb_set(smk_fbank + (d > 0 ? 1u : 3u));
         else
         if (ui.layer == LY_STEP) {
             uint32_t pages = (trk_len(TSEL) + 15u) / 16u;
@@ -1084,12 +1086,11 @@ static void ui_input(void)
         }
         ui.force = 1;
     }
-    if (pressed & 1u << SMK_BTN_FADER_BANK) {                   /* FADER BANK: its screen on / off (ui_fbank.c) */
-        if (fb_shown())
-            fb_close(), ui.force = 1;
-        else
-            fb_set(smk_fbank);
+    if (pressed & 1u << SMK_BTN_FADER_BANK) {                   /* FADER BANK: its screen; pressed again the next bank */
+        pick_close();                                           /* (the pad picker goes: one screen at a time) */
+        fb_set(smk_fbank + (fb_shown() ? 1u : 0u));
     }
+    fb_expire();                                                /* (it closes by itself) */
     if (fb_shown()) {                                           /* K2 SELECT turns the bank there */
         int32_t t = panel_enc(EN_SELECT);
         if (t)
@@ -1100,8 +1101,11 @@ static void ui_input(void)
     int32_t s;
     int layered;
 #if BOARD_SMK37
-    if (pressed & 1u << SMK_BTN_KNOB_BANK)              /* KNOB BANK: pins the pad picker open / closes it */
+    if (pressed & 1u << SMK_BTN_KNOB_BANK) {            /* KNOB BANK: pins the pad picker open / closes it */
+        fb_close();                                     /* (the FADER BANK screen goes: one at a time) */
         pick_pin_toggle();
+        ui.force = 1;
+    }
     {
         uint32_t h = smk_pick_take(), p;                /* the pads hit while it was up: their sounds */
         for (p = 0; h && p < SMK_NPAD; p++)

@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * SMK-37 Pro: Copyright (C) 2026 M. Geisler (makkuro) <mcgeisler@gmail.com> */
 /* The FADER BANK screen: the four banks, the active one lit, what faders 1..4 set (track colours).
- * FADER BANK opens / closes it, K2 SELECT turns the bank round, PATCH closes it. */
+ * FADER BANK opens it and then steps the bank, as < > and K2 SELECT do; PATCH closes it, or it closes by itself. */
 static const char *const FB_NAME[4] = {"LEVEL", "FILTER", "REVERB", "DELAY"};
+#define FB_SHOW_MS 4000u                           /* up this long after the last change */
 static uint8_t fb_open;
 static uint32_t fb_t, fb_frame;                    /* last action (ms); the frame drawn last */
 
@@ -19,6 +20,11 @@ static void fb_set(uint32_t b)                     /* bank b, the screen up */
     ui.force = 1;
 }
 static void fb_close(void) { fb_open = 0; }
+static void fb_expire(void)                        /* up FB_SHOW_MS after the last change */
+{
+    if (fb_open && fm1_ms - fb_t > FB_SHOW_MS)
+        fb_open = 0, ui.force = 1;
+}
 static int fb_left(void)                           /* drawn last frame, not now: the page needs a redraw */
 {
     int l = fb_frame && fb_frame + 1u == ui.frame;
@@ -91,7 +97,7 @@ static void fb_draw(void)
                 cv_rect(32, y + 17, w < 1 ? 1 : w, 3, TE_COL[i]);
             }
             {
-                const char *h = "< K2 SELECT: BANK >";
+                const char *h = "< >  K2  FADER BANK";
                 cv_text((240 - text_w(&FONT_S, h)) / 2, 100, &FONT_S, h, TE_G3);
             }
         }

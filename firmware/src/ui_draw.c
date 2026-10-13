@@ -1019,6 +1019,7 @@ static void fb_draw(void);
 static int fb_left(void);
 static void fb_set(uint32_t b);
 static void fb_close(void);
+static void fb_expire(void);
 #endif
 static void vis_draw(void);                     /* ui_vis.c */
 static int vis_shown(void);
