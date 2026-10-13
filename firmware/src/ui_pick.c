@@ -13,7 +13,7 @@ static const uint8_t PICK_RGB[10][3] = {           /* a colour a kind (pads and 
 static uint8_t pick_pin, pick_sel = 0xFF;
 static uint16_t pick_page;
 static uint32_t pick_frame;                        /* the frame drawn last */
-typedef struct { uint16_t first, len, sub, nsub, kind; } pick_pg_t;
+typedef struct { uint16_t j0, len, sub, nsub, kind; } pick_pg_t;   /* j0: the page's first entry within its kind */
 
 static uint32_t pick_total(void)
 {
@@ -65,31 +65,58 @@ static void pick_abbr(const char *s, char *l1, char *l2)
     l2[j] = 0;
 }
 
-/* the pages: each kind's run of entries, 16 a page. Fills *pg for page want, *of = the page of entry n;
- * returns the number of pages */
+/* the pages: each kind's entries in list order, 16 a page (ORBIT's list puts its own sounds first, of several
+ * kinds, and CLOUD's last: a kind is gathered from the whole list). The kinds in BANK_KIND's order, then the
+ * user presets; on the drum track the kits, then the user kits. */
+static uint32_t pick_kinds(uint8_t *ks)
+{
+    uint32_t i;
+    if (is_drum(TSEL)) {
+        ks[0] = PK_KITS, ks[1] = PK_USER;
+        return 2u;
+    }
+    for (i = 0; i < PK_USER; i++)
+        ks[i] = (uint8_t)i;
+    ks[PK_USER] = PK_USER;
+    return PK_USER + 1u;
+}
+static uint32_t pick_nth(uint32_t kind, uint32_t j)   /* the list index of kind's j-th entry (pick_total(): none) */
+{
+    uint32_t total = pick_total(), n;
+    for (n = 0; n < total; n++)
+        if (pick_kind_of(n) == kind && !j--)
+            return n;
+    return total;
+}
+/* Fills *pg for page want, *of = the page of entry n_of; returns the number of pages */
 static uint32_t pick_walk(uint32_t want, pick_pg_t *pg, uint32_t n_of, uint32_t *of)
 {
-    uint32_t total = pick_total(), n = 0, p = 0;
-    while (n < total) {
-        uint32_t k = pick_kind_of(n), end = n, nsub, i;
-        while (end < total && pick_kind_of(end) == k)
-            end++;
-        nsub = (end - n + 15u) / 16u;
-        for (i = 0; i < nsub; i++, p++) {
-            uint32_t f = n + i * 16u, l = end - f > 16u ? 16u : end - f;
-            if (p == want && pg) {
-                pg->first = (uint16_t)f;
-                pg->len = (uint16_t)l;
-                pg->sub = (uint16_t)i;
-                pg->nsub = (uint16_t)nsub;
-                pg->kind = (uint16_t)k;
+    uint8_t ks[PK_USER + 1u];
+    uint32_t total = pick_total(), nk = pick_kinds(ks), p = 0, i, n, c, r, sub, nsub;
+    for (i = 0; i < nk; i++) {
+        for (n = c = r = 0; n < total; n++)
+            if (pick_kind_of(n) == ks[i]) {
+                if (n < n_of)
+                    r++;
+                c++;
             }
-            if (of && n_of >= f && n_of < f + l)
-                *of = p;
-        }
-        n = end;
+        nsub = (c + 15u) / 16u;
+        if (of && n_of < total && pick_kind_of(n_of) == ks[i])
+            *of = p + r / 16u;
+        for (sub = 0; sub < nsub; sub++, p++)
+            if (p == want && pg) {
+                pg->j0 = (uint16_t)(sub * 16u);
+                pg->len = (uint16_t)(c - sub * 16u > 16u ? 16u : c - sub * 16u);
+                pg->sub = (uint16_t)sub;
+                pg->nsub = (uint16_t)nsub;
+                pg->kind = ks[i];
+            }
     }
     return p;
+}
+static uint32_t pick_cell(const pick_pg_t *pg, uint32_t w)   /* the list index of cell w of the page */
+{
+    return pick_nth(pg->kind, pg->j0 + w);
 }
 static void pick_home(void)                        /* to the page of the current sound */
 {
@@ -139,7 +166,7 @@ static void pick_select(uint32_t w)                /* white key / cell w (0..15)
     uint32_t n;
     if (!pick_info(&pg) || w >= pg.len)
         return;
-    n = pg.first + w;
+    n = pick_cell(&pg, w);
     if (is_drum(TSEL)) {
         TDRUM->p[P_E0] = (int16_t)n;
         audition_req(1u << 0 | 1u << 4, 0u);      /* kick + closed hat */
@@ -170,7 +197,7 @@ static void pick_leds(void)                         /* the current sound white, 
         uint32_t p = w;                            /* reading order: pads 0..7 the top row */
         if (w >= pg.len)
             padled_set(p, 0, 0, 0);
-        else if (pg.first + w == cur)
+        else if (pick_cell(&pg, w) == cur)
             padled_set(p, 150, 150, 150);
         else
             padled_set(p, (uint8_t)(c[0] >> 2), (uint8_t)(c[1] >> 2), (uint8_t)(c[2] >> 2));
@@ -191,7 +218,7 @@ static void pick_draw(void)
         ui.force = 1;
     }
     pick_frame = ui.frame;
-    sig = (np ? pg.first * 977u + pg.kind * 31u : 0u) + cur * 7919u + song.sel * 131u + pick_total() * 3u;
+    sig = (np ? pg.j0 * 977u + pg.kind * 31u : 0u) + cur * 7919u + song.sel * 131u + pick_total() * 3u;
     if (!ui.force && sig == shown)
         return;
     shown = sig;
@@ -214,8 +241,9 @@ static void pick_draw(void)
             cv_text(240 - 4 - text_w(&FONT_S, tn), 4, &FONT_S, tn, TE_COL[song.sel & 3u]);
         }
         for (w = half * 8u; np && w < half * 8u + 8u && w < pg.len; w++) {
-            int32_t x = (int32_t)(w & 7u) * 30, sel = pg.first + w == cur;
-            pick_name(pg.first + w, nm);
+            uint32_t n = pick_cell(&pg, w);
+            int32_t x = (int32_t)(w & 7u) * 30, sel = n == cur;
+            pick_name(n, nm);
             pick_abbr(nm, l1, l2);
             cv_rect(x + 1, y0, 28, 78, sel ? C_WHITE : kc);   /* filled like a button: the kind's colour, the current one white */
             cv_text(x + 15 - text_w(&FONT_S, l1) / 2, y0 + 20, &FONT_S, l1, C_BLACK);

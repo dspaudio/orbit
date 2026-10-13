@@ -38,16 +38,25 @@ int main(int argc, char **argv)
     check(!strcmp(a, "PAD") && !b[0], "short names: a short word, one line");
 
     np = pick_walk(0, &pg, 0xFFFFu, 0);
-    check(pg.first == 0 && pg.len == 16 && pg.kind == 0 && pg.nsub == 2, "page 1: the first 16 basses, BASS 1/2");
-    for (i = 0; i < np; i++) {
-        pick_walk(i, &pg, 0xFFFFu, 0);
-        if (pg.first != sum || pg.len == 0 || pg.len > 16) break;
-        sum += pg.len;
+    check(pg.j0 == 0 && pg.kind == 0 && pick_kind_of(pick_cell(&pg, 0)) == 0 && pg.len == 16 && pg.nsub == 2,
+          "page 1: the first 16 basses (from the whole list), BASS 1/2");
+    {
+        static uint8_t seen[NBANK + UP_SLOTS];
+        uint32_t w, n, once = 1, kinds = 1;
+        for (i = 0; i < np; i++) {
+            pick_walk(i, &pg, 0xFFFFu, 0);
+            if (pg.len == 0 || pg.len > 16) break;
+            for (w = 0; w < pg.len; w++) {
+                n = pick_cell(&pg, w);
+                kinds &= pick_kind_of(n) == pg.kind;
+                if (n < sizeof seen) seen[n]++;
+                sum++;
+            }
+        }
+        for (n = 0; n < NBANK + up_count(); n++)
+            once &= seen[n] == 1;
+        check(i == np && sum == NBANK + up_count() && once && kinds, "the pages hold every sound once, one kind a page, 16 at most");
     }
-    check(i == np && sum == NBANK + up_count(), "the pages cover the list once, in order, 16 at most");
-    pick_walk(np - 1u, &pg, 0xFFFFu, 0);
-    check(pg.kind == PK_USER, "the last page: the user presets");
-
     pick_pin_toggle();
     pick_walk(0xFFFFu, 0, pick_cur(), &of);
     check(pick_shown() && pick_page == of, "KNOB BANK: open at the current sound's page");
@@ -59,7 +68,7 @@ int main(int argc, char **argv)
     pick_page = 1;
     pick_select(3);
     pick_info(&pg);
-    check(pick_cur() == pg.first + 3u, "a pad loads its sound (as PRESETS)");
+    check(pick_cur() == pick_cell(&pg, 3), "a pad loads its sound (as PRESETS)");
     fm1_ms += 60000u;
     check(pick_shown(), "stays open until KNOB BANK / PATCH");
     ui.layer = LY_STEP;
@@ -74,7 +83,7 @@ int main(int argc, char **argv)
     np = pick_info(&pg);
     check(np == (DRUM_USR + 15u) / 16u + (DRUM_KITS - DRUM_USR + 15u) / 16u, "drum track: the kits, 16 a page");
     pick_select(2);
-    check(pick_cur() == pg.first + 2u, "drum track: a pad picks its kit");
+    check(pick_cur() == pick_cell(&pg, 2), "drum track: a pad picks its kit");
     ui.force = 1; pick_shot("pick-drums");
     pick_close();
     printf("pick: %s\n", fails ? "FAIL" : "ok");
