@@ -50,6 +50,8 @@ static int32_t fm1_enc_take(uint32_t e) { int32_t s = encs[e]; encs[e] = 0; retu
 static uint8_t fm1_led[16], fm1_led_dim[16], fm1_led_bg[16];
 static volatile uint16_t fm1_led_bg_ns;
 #define FM1_NCOL 16u
+#define FM1_NBTN 14u
+#define FM1_NENC 7u
 static const int8_t FM1_KEYMAP[5][16];
 static void fm1_led_key(uint32_t id, int on) { (void)id; (void)on; }
 static uint32_t edges_btn, notes_seen;
@@ -93,6 +95,7 @@ static void irq_restore(uint32_t f) { (void)f; }
 static uint32_t fl_jedec_host(void) { return 0x856014u; }
 #define fl_jedec_ram fl_jedec_host
 #define FL_FAR(f) f
+#define FL_JEDEC_OK(id) ((id) == 0x856014u)   /* as firmware/hal/fm1_flash.h */
 static void fl_plain_window_init(void) {}
 static int fl_write(uint32_t off, const void *p, uint32_t n) { return st_prog(off, p, n); }
 static int fl_erase4k_quiet(uint32_t off, uint32_t *t) { (void)t; return st_erase(off); }

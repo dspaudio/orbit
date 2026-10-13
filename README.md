@@ -72,6 +72,8 @@ The release target is **0.7.0**, install identity **FM-1_900**. Build with the d
 
 **Validation:** 0.7.0 was installed on an FM-1, with transfer completion, automatic reboot and actual version/PING responses verified. The earlier short USB recording of **0.6.0 on 2026-10-10 is historical**, not 0.7.0 audio evidence. 0.7.0 hardware timing, power-loss recovery and physical crackle resolution have not been verified. Measurements and release gates belong in the [validation record](docs/VALIDATION.md), not a product promise.
 
+**M-Vave SMK-37:** see [SMK-37 instructions](SMK37.md). Until this project's releases include SMK-37 packages, unofficial builds can be installed with the web installer: https://genkigenki.github.io/smk37/
+
 ## Try the native preview
 
 Python 3, a C compiler and Pillow are required:

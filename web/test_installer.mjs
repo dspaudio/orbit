@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pack7, unpack7, Updater } from "./fm1ota.js";
 import { validatePackage } from "./fm1pkg.js";
-import { describeError, ERRORS, mount, preflight, progressOf } from "./installer.js";
+import { describeDevice, describeError, ERRORS, mount, packageFor, parseManifest, preflight, progressOf } from "./installer.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const failures = [];
@@ -127,7 +127,7 @@ class FakeUpdater {
     for (const [kind, arg] of s.steps || []) { step(kind, arg); if (s.onStep) s.onStep(kind, arg); }
     if (s.error) throw Object.assign(new Error(s.error.message), { code: s.error.code, detail: s.error.detail || "" });
   }
-  async install(image, product, step) { this.calls.push(["install", product, image.length]); this.run(step); return product; }
+  async install(image, product, step, anyModel) { this.calls.push(["install", product, image.length]); this.anyModel = anyModel; this.run(step); return product; }
   async resume(image, step, opts) { this.calls.push(["resume", opts]); this.run(step); return this.script.resumed !== false; }
 }
 
@@ -373,10 +373,11 @@ async function releasePackage() {
 const HS = [0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7];
 const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
 class FakeFM1 {
-  constructor(image) {
+  constructor(image, { identity = "FM-1_015", name = "FM-1", loader = "ota-FM-1_900", finalIdentity = "FM-1_900" } = {}) {
     this.image = image; this.served = 0; this.bad = 0; this.upgrades = 0;
+    this.loader = loader; this.finalIdentity = finalIdentity;
     this.access = { inputs: new Map(), outputs: new Map() };
-    this.boot("FM-1_015", "FM-1");
+    this.boot(identity, name);
   }
   boot(identity, name) {
     this.identity = identity; this.waiting = null; this.queue = [];
@@ -409,8 +410,8 @@ class FakeFM1 {
       if (!eq(got, want)) this.bad++;
       this.waiting = null;
       this.served++;
-      if (addr === 0xE0000000) setTimeout(() => this.boot("ota-FM-1_900", "Felucca Update"), 300);
-      else if (addr === 0xF0000000) setTimeout(() => this.boot("FM-1_900", "Felucca"), 300);
+      if (addr === 0xE0000000) setTimeout(() => this.boot(this.loader, "Felucca Update"), 300);
+      else if (addr === 0xF0000000) setTimeout(() => this.boot(this.finalIdentity, "Felucca"), 300);
       else this.next();
     }
   }
@@ -458,6 +459,98 @@ async function realUpdater() {
     "real Updater: staging, write and reboot phases were shown in order");
 }
 
+/* ------------------------------------------- the M-Vave SMK-37 keyboards: a release with their packages --- */
+const SMK_PKGS = { "SMK-37 Pro_900": makePackage({ product: "SMK-37 Pro_900" }), "SMK-37 Elite_900": makePackage({ product: "SMK-37 Elite_900" }),
+  "MKE-P37_900": makePackage({ product: "MKE-P37_900" }) };
+const SMK_NAMES = { "SMK-37 Pro_900": "orbit-smk37", "SMK-37 Elite_900": "orbit-smk37-elite", "MKE-P37_900": "orbit-smk37-mke" };
+const MULTI = { ...MANIFEST, packages: [{ product: "FM-1_900", package: MANIFEST.package, size: VALID.length, sha256: hex(VALID) },
+  ...Object.entries(SMK_PKGS).map(([product, raw]) => ({ product, package: `firmware/${SMK_NAMES[product]}-0.6.0.fwsc`, size: raw.length, sha256: hex(raw) }))] };
+const releasedAll = { ...released, [`${SITE}manifest.json`]: json(MULTI),
+  ...Object.fromEntries(Object.entries(SMK_PKGS).map(([product, raw]) => [`${SITE}firmware/${SMK_NAMES[product]}-0.6.0.fwsc`, body(raw)])) };
+
+async function smkKeyboards() {
+  const smk = { product: "SMK-37 Pro_900" }, fm1 = { product: "FM-1_900" };
+  ok(preflight(smk, parseId("SMK-37 Pro_016")).ok && !preflight(smk, parseId("SMK-37 Pro_016")).anyModel, "preflight: SMK-37 Pro package on an SMK-37 Pro -> install");
+  ok(preflight(smk, parseId("SMK-37 Elite_016")).ok && preflight(smk, parseId("STARRYKEY-37 PLAY_016")).anyModel,
+    "preflight: another model of the same keyboard -> install (anyModel)");
+  ok(preflight(smk, parseId("FM-1_015")).code === "model" && preflight(fm1, parseId("SMK-37 Pro_016")).code === "model",
+    "preflight: FM-1 and SMK-37 never mix ('model')");
+  ok(preflight(smk, parseId("SMK-37_931")).code === "other" && preflight(fm1, parseId("SMK-37_941")).code === "other",
+    "preflight: a firmware with its own updater (SMK-37_9NN) -> 'other'");
+  ok(preflight(smk, parseId("ota-SMK-37_931")).code === "foreign", "preflight: its updater -> 'foreign'");
+  ok(preflight(smk, parseId("ota-SMK-37 Elite_900")).action === "resume" && preflight(smk, parseId("ota-MKE-P37_900")).anyModel,
+    "preflight: ORBIT's loader under an SMK model's name -> resume");
+  ok(preflight(fm1, parseId("ota-FM-1_900")).anyModel === false, "preflight: FM-1 unchanged (no anyModel)");
+  ok(/official M-Vave firmware/.test(describeDevice(parseId("SMK-37 Elite_016"))) && /ORBIT \/ SLOOP/.test(describeDevice(parseId("MKE-P37_900")))
+    && /own updater/.test(describeDevice(parseId("SMK-37_931"))) && describeDevice(parseId("FM-1_015")) === "FM-1_015: official FM-1 firmware",
+    "describeDevice: SMK-37 models named, the FM-1 text unchanged");
+  const pk = MULTI.packages.map((e) => ({ product: e.product }));
+  ok(packageFor(pk, parseId("SMK-37 Elite_016")).product === "SMK-37 Elite_900" && packageFor(pk, parseId("ota-MKE-P37_900")).product === "MKE-P37_900"
+    && packageFor(pk, parseId("STARRYKEY-37 PLAY_016")).product === "SMK-37 Pro_900" && packageFor(pk, parseId("FM-1_015")).product === "FM-1_900"
+    && packageFor(pk, null).product === "FM-1_900", "packageFor: the model's own package, else the keyboard's first, else the first");
+  const m = parseManifest(MULTI, new URL(`${SITE}manifest.json`));
+  ok(m.packages.length === 4 && m.product === "FM-1_900", "manifest with packages: every package parsed, the FM-1 fields unchanged");
+  let bad = null;
+  try { parseManifest({ ...MULTI, packages: [MULTI.packages[0], MULTI.packages[0]] }, new URL(`${SITE}manifest.json`)); } catch (e) { bad = e; }
+  ok(bad && bad.code === "release", "manifest with one identity twice: refused");
+  bad = null;
+  try { parseManifest({ ...MULTI, packages: [{ ...MULTI.packages[1], package: "https://elsewhere.test/x.fwsc" }] }, new URL(`${SITE}manifest.json`)); } catch (e) { bad = e; }
+  ok(bad && bad.code === "release", "manifest package off this origin: refused");
+
+  let p = await page({ midi: midiGranted({ identity: "SMK-37 Elite_016" }), routes: releasedAll });
+  ok(p.net.log.length === 5 && p.ctl.state.pkgs.length === 4 && p.ctl.state.pkg.product === "FM-1_900" && /FM-1_900, SMK-37 Pro_900/.test(p.ui.releaseNote.textContent),
+    "release with SMK packages: all four downloaded and checked, the FM-1's shown first");
+  await p.ui.connect.click();
+  const up = FakeUpdater.instances.at(-1);
+  ok(p.ctl.state.pkg.product === "SMK-37 Elite_900" && p.ui.pkgProduct.textContent === "SMK-37 Elite_900" && !p.ui.install.disabled
+    && /official M-Vave firmware/.test(p.ui.device.textContent), "SMK-37 Elite connected: its own package chosen and shown, Install enabled");
+  await p.ui.install.click();
+  ok(eq(up.calls.slice(2).map(String), ["install,SMK-37 Elite_900,8192"]) && up.anyModel === false, "Install: the Elite package, no other model needed");
+
+  p = await page({ midi: midiGranted({ identity: "STARRYKEY-37 PLAY_016" }), routes: releasedAll });
+  await p.ui.connect.click();
+  const up2 = FakeUpdater.instances.at(-1);
+  await p.ui.install.click();
+  ok(p.ctl.state.done === true && up2.calls.some((c) => c[0] === "install" && c[1] === "SMK-37 Pro_900") && up2.anyModel === true,
+    "Starrykey 37 Play: the SMK-37 Pro package, written with anyModel");
+
+  p = await page({ midi: midiGranted({ identity: "ota-SMK-37 Pro_900" }), routes: releasedAll });
+  await p.ui.connect.click();
+  const up3 = FakeUpdater.instances.at(-1);
+  await p.ui.install.click();
+  const resume = up3.calls.find((c) => c[0] === "resume");
+  ok(resume && resume[1].product === "SMK-37 Pro_900" && resume[1].anyModel === false, "SMK loader: resume with the SMK-37 Pro package's identity");
+
+  p = await page({ midi: midiGranted({ identity: "SMK-37_931" }), routes: releasedAll });
+  await p.ui.connect.click();
+  ok(p.ui.error.getAttribute("data-code") === "other" && p.ui.install.disabled && p.ui.errorTitle.textContent === ERRORS.other[0],
+    "SMK-37_9NN firmware: 'other', Install disabled");
+  await p.ctl.install();
+  ok(!FakeUpdater.instances.at(-1).calls.some((c) => c[0] === "install" || c[0] === "resume"), "SMK-37_9NN firmware: a forced install() sends nothing");
+
+  p = await page({ midi: midiGranted({ identity: "SMK-37 Pro_016" }), routes: released });
+  await p.ui.connect.click();
+  ok(p.ui.error.getAttribute("data-code") === "model" && p.ui.install.disabled, "FM-1-only release on an SMK-37: 'model', nothing to install");
+
+  const image = validatePackage(SMK_PKGS["SMK-37 Pro_900"]).image;
+  const device = new FakeFM1(image, { identity: "SMK-37 Elite_016", name: "SMK-37 Elite", loader: "ota-SMK-37 Pro_900", finalIdentity: "SMK-37 Pro_900" });
+  const doc = new FakeDocument();
+  const routes = { ...releasedAll, [`${SITE}manifest.json`]: json({ ...MULTI, packages: [MULTI.packages[0], MULTI.packages[1]] }) };
+  const ctl = mount(doc, { requestMIDIAccess: () => Promise.resolve(device.access), fetch: fetchFor(routes).fetch });
+  await ctl.ready;
+  await doc.ids.connect.click();
+  await doc.ids.install.click();
+  ok(device.upgrades === 2 && device.bad === 0 && device.identity === "SMK-37 Pro_900" && doc.ids.status.textContent === "Installed. The FM-1 reports SMK-37 Pro_900.",
+    "real Updater: an SMK-37 Elite takes the SMK-37 Pro package (one keyboard), success from the returned identity");
+  const other = new FakeFM1(image, { identity: "SMK-37_931", name: "Felucca" });
+  const doc2 = new FakeDocument();
+  const ctl2 = mount(doc2, { requestMIDIAccess: () => Promise.resolve(other.access), fetch: fetchFor(releasedAll).fetch });
+  await ctl2.ready;
+  await doc2.ids.connect.click();
+  await ctl2.install();
+  ok(other.upgrades === 0 && doc2.ids.error.getAttribute("data-code") === "other", "real Updater: an SMK-37_9NN firmware is never sent UPGRADE");
+}
+
 const p = await packageFirst();
 await pureFunctions();
 await connectAndInstall(p);
@@ -466,6 +559,7 @@ await connectErrors();
 await resumeInLoader();
 await releasePackage();
 await realUpdater();
+await smkKeyboards();
 
 if (failures.length) {
   console.log(`\n${failures.length} failed:\n  ${failures.join("\n  ")}`);

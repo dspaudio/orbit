@@ -3,12 +3,13 @@
 //
 // The ORBIT web installer page: package selection and validation, one explicit Connect
 // gesture for Web MIDI with SysEx, the device preflight, then the M-UPGRADE install
-// through fm1ota.js. Nothing is sent to the FM-1 before the package passed validation
+// through fm1ota.js. A release may carry packages for the M-Vave SMK-37 keyboards too
+// (manifest.json "packages"): the page then writes the one for the connected keyboard. Nothing is sent to the FM-1 before the package passed validation
 // and the device answered the identity request; success is declared only when the
 // device returns with the package identity. The page is wired by mount(document);
 // the tests mount a fake document with injected MIDI, fetch and Updater doubles.
 
-import { Updater, OUR_LOADER } from "./fm1ota.js";
+import { Updater, OUR_LOADER, OTHER_SMK, sameKeyboard } from "./fm1ota.js";
 import { validatePackage, sha256hex } from "./fm1pkg.js";
 
 const MAXDATA = 512;                                  // the largest read the loader asks for (fm1ota.js)
@@ -27,6 +28,7 @@ export const ERRORS = {
   denied: ["MIDI access was denied.", "Allow MIDI with SysEx for this site in the browser's site settings, then press Connect again."],
   notfound: ["No FM-1 answered.", "Use a USB data cable, close other apps that hold the FM-1's MIDI port (the editor, a DAW), then press Connect again."],
   model: ["This firmware is for a different device.", "Nothing was sent. Connect the FM-1 and try again."],
+  other: ["The keyboard runs a firmware with its own updater.", "Nothing was sent. Return the keyboard to M-Vave's firmware with that firmware's own updater first, then press Connect again."],
   foreign: ["The FM-1 is in another firmware's update mode.", "Nothing was sent. Finish that update with its own updater (M-UPGRADE) first; this page never writes through another loader."],
   stopped: ["The device stopped answering.", "Keep the FM-1 connected, press Connect, then Install again. A device left in update mode resumes the write."],
   lost: ["The USB connection was lost.", "Reconnect the cable, press Connect, then Install again. A device left in update mode resumes the write."],
@@ -50,20 +52,36 @@ export function describeDevice(id) {
     return OUR_LOADER(id) ? `${id.text}: ORBIT update loader, an interrupted install can be resumed`
       : `${id.text}: update loader of another firmware`;
   }
+  if (OTHER_SMK(id)) return `${id.text}: SMK-37 firmware with its own updater`;
+  if (id.model !== "FM-1" && sameKeyboard(id.model, "SMK-37 Pro"))
+    return `${id.text}: ${id.version >= 900 ? "ORBIT / SLOOP firmware" : id.version < 100 ? "official M-Vave firmware" : "another firmware"}`;
   if (id.model !== "FM-1") return `${id.text}: not an FM-1`;
   return `${id.text}: ${id.version >= 900 ? "ORBIT / SLOOP firmware" : "official FM-1 firmware"}`;
 }
 
-// may Install run? the package model must match the device, and a loader must be ORBIT's own
+// may Install run? the package model must match the device (an SMK-37 package fits every model of that
+// keyboard: anyModel), a loader must be ORBIT's own, and a firmware with its own updater is never sent anything
 export function preflight(pkg, id) {
   if (!pkg || !id) return { ok: false };
   if (IS_OTA(id) && !OUR_LOADER(id)) {
     return { ok: false, code: "foreign", detail: `the FM-1 is in the update mode of another firmware (${id.text})` };
   }
-  if (modelOf(id) !== pkg.product.split("_")[0]) {
+  if (OTHER_SMK(id)) {
+    return { ok: false, code: "other", detail: `the keyboard runs a firmware with its own updater (${id.text})` };
+  }
+  const dm = modelOf(id), pm = pkg.product.split("_")[0];
+  if (dm !== pm && !sameKeyboard(dm, pm)) {
     return { ok: false, code: "model", detail: `the device is ${id.text}, the package is for ${pkg.product}` };
   }
-  return { ok: true, action: IS_OTA(id) ? "resume" : "install" };
+  return { ok: true, action: IS_OTA(id) ? "resume" : "install", anyModel: dm !== pm };
+}
+
+// the release package for a device: its own model's, else one of the same keyboard's, else the first
+export function packageFor(pkgs, id) {
+  if (!pkgs.length || !id) return pkgs[0] || null;
+  const dm = modelOf(id);
+  return pkgs.find((p) => p.product.split("_")[0] === dm) ||
+    pkgs.find((p) => sameKeyboard(dm, p.product.split("_")[0])) || pkgs[0];
 }
 
 // value null leaves the <progress> indeterminate
@@ -83,7 +101,20 @@ export function progressOf(step, arg, imageLength) {
   }
 }
 
-// manifest.json of a generated site (tools/make_site.py): the release package on this origin
+// manifest.json of a generated site (tools/make_site.py): the release package on this origin; "packages", when
+// there, lists every package of the release (the FM-1's first, then the SMK-37 models'), each checked the same way
+function parseEntry(e, base) {
+  if (!e || typeof e !== "object") throw fail("release", "the manifest has an invalid package entry");
+  const { product, size, sha256 } = e;
+  if (typeof product !== "string" || !IDENTITY.test(product)) throw fail("release", "the manifest has no valid product identity");
+  if (!Number.isInteger(size) || size <= 0) throw fail("release", "the manifest has no valid size");
+  if (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256)) throw fail("release", "the manifest has no valid SHA-256");
+  if (typeof e.package !== "string") throw fail("release", "the manifest names no package");
+  const url = new URL(e.package, base);
+  if (url.origin !== base.origin) throw fail("release", `the release package is not on this origin (${url.origin})`);
+  return { product, size, sha256, url: url.href };
+}
+
 export function parseManifest(json, base) {
   if (!json || typeof json !== "object") throw fail("release", "the manifest is not an object");
   const { version, product, size, sha256, name } = json;
@@ -95,7 +126,10 @@ export function parseManifest(json, base) {
   const url = new URL(json.package, base);
   if (url.origin !== base.origin) throw fail("release", `the release package is not on this origin (${url.origin})`);
   const releaseUrl = typeof json.release_url === "string" && /^https:\/\//.test(json.release_url) ? json.release_url : "";
-  return { name: typeof name === "string" ? name : "ORBIT", version, product, size, sha256, url: url.href, releaseUrl };
+  const packages = Array.isArray(json.packages) ? json.packages.map((e) => parseEntry(e, base)) : [{ product, size, sha256, url: url.href }];
+  if (!packages.length || new Set(packages.map((p) => p.product)).size !== packages.length)
+    throw fail("release", "the manifest lists no packages, or one identity twice");
+  return { name: typeof name === "string" ? name : "ORBIT", version, product, size, sha256, url: url.href, releaseUrl, packages };
 }
 
 export function createInstaller(deps) {
@@ -104,7 +138,7 @@ export function createInstaller(deps) {
   const UpdaterClass = deps.Updater || Updater;
   const validate = deps.validatePackage || validatePackage;
   const digest = deps.sha256hex || sha256hex;
-  const state = { pkg: null, device: null, updater: null, manifest: null, busy: false, done: false };
+  const state = { pkg: null, pkgs: [], device: null, updater: null, manifest: null, busy: false, done: false };
   const labels = { connect: ui.connect.textContent, install: ui.install.textContent };
   const WORKING = { connect: "Connecting\u2026", install: "Installing\u2026" };
 
@@ -171,6 +205,7 @@ export function createInstaller(deps) {
     setBusy("download");
     clearError();
     state.pkg = null;
+    state.pkgs = [];
     state.manifest = null;
     state.done = false;
     ui.status.textContent = "Downloading and checking the latest firmware...";
@@ -181,20 +216,27 @@ export function createInstaller(deps) {
       if (!manifest.ok) throw fail("release", `manifest.json: HTTP ${manifest.status}`);
       const m = parseManifest(await manifest.json(), base);
       state.manifest = m;
-      ui.releaseNote.textContent = `${m.name} ${m.version} for ${m.product}, ${number.format(m.size)} bytes.`;
-      const res = await fetchFn(m.url, { cache: "no-store" });
-      if (!res.ok) throw fail("release", `${m.url}: HTTP ${res.status}`);
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      const sha256 = await digest(bytes);
-      if (bytes.length !== m.size || sha256 !== m.sha256) {
-        throw fail("release", `the downloaded package does not match the manifest (${number.format(bytes.length)} bytes, SHA-256 ${sha256})`);
+      ui.releaseNote.textContent = m.packages.length > 1
+        ? `${m.name} ${m.version} for ${m.packages.map((p) => p.product).join(", ")}.`
+        : `${m.name} ${m.version} for ${m.product}, ${number.format(m.size)} bytes.`;
+      const pkgs = [];
+      for (const e of m.packages) {
+        const res = await fetchFn(e.url, { cache: "no-store" });
+        if (!res.ok) throw fail("release", `${e.url}: HTTP ${res.status}`);
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        const sha256 = await digest(bytes);
+        if (bytes.length !== e.size || sha256 !== e.sha256) {
+          throw fail("release", `the downloaded package does not match the manifest (${number.format(bytes.length)} bytes, SHA-256 ${sha256})`);
+        }
+        let valid;
+        try { valid = validate(bytes); } catch (x) { throw fail("package", x.message); }
+        if (valid.product !== e.product) {
+          throw fail("release", `the package identity ${valid.product} differs from the manifest (${e.product})`);
+        }
+        pkgs.push({ source: `Latest release ${m.name} ${m.version}`, product: valid.product, image: valid.image, size: bytes.length, sha256 });
       }
-      let valid;
-      try { valid = validate(bytes); } catch (e) { throw fail("package", e.message); }
-      if (valid.product !== m.product) {
-        throw fail("release", `the package identity ${valid.product} differs from the manifest (${m.product})`);
-      }
-      state.pkg = { source: `Latest release ${m.name} ${m.version}`, product: valid.product, image: valid.image, size: bytes.length, sha256 };
+      state.pkgs = pkgs;
+      state.pkg = packageFor(pkgs, state.device);
     } catch (e) {
       showError(e.code ? e : fail("release", e.message));
     }
@@ -232,6 +274,8 @@ export function createInstaller(deps) {
       }
       dev.link.close();
       state.device = dev.id;
+      state.pkg = packageFor(state.pkgs, dev.id);                    // the release's package for this keyboard
+      showPackage();
       ui.device.textContent = describeDevice(dev.id);
       const check = preflight(state.pkg, dev.id);
       if (state.pkg && !check.ok) showError(fail(check.code, check.detail, dev.id.text));
@@ -261,10 +305,10 @@ export function createInstaller(deps) {
         ota.link.close();
         if (!OUR_LOADER(ota.id)) throw fail("foreign", `the FM-1 is in the update mode of another firmware (${ota.id.text})`, ota.id.text);
         step("write", 0);
-        const finished = await state.updater.resume(image, step, { product });
+        const finished = await state.updater.resume(image, step, { product, anyModel: check.anyModel });
         if (!finished) throw fail("stopped", "the loader stopped before the write finished; nothing new is running yet");
       } else {
-        await state.updater.install(image, product, step);
+        await state.updater.install(image, product, step, check.anyModel);
       }
       state.done = true;
       ui.device.textContent = `Installed: the FM-1 reports ${product}. Press Connect to read it again.`;
