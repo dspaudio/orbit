@@ -68,15 +68,16 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
 /* The owner of the store. Several FM-1 firmwares are ported to the SMK-37 Pro with the same board layer and
  * this same store area, each with its own object formats: a firmware must never parse another's data. The
  * sector after the objects (0xAF000) holds "SMK37DATA" + the firmware family (FELUCCA_DATA_FAMILY, build.py).
- * Ours: load as ever. None (erased): data written before the tag existed, by the SLOOP family only
- * (FELUCCA_DATA_UNTAGGED_OK): keep it; anyone else clears it. Another family's: clear the objects (the other
- * firmware's projects; its own backups are its business) and take the store. Samples (FL_SMP) validate
- * themselves. Calibration, BT pairing and key_mac are outside FL_DATA: never touched. */
+ * Ours: load as ever. None (erased): data of a firmware without the tag (the stock settings, an older port):
+ * cleared unless FELUCCA_DATA_UNTAGGED_OK. Another family's (SLOOP's FUN6 projects, for one): clear the objects
+ * (the other firmware's projects; its own backups are its business) and take the store. Samples (FL_SMP)
+ * validate themselves. Calibration, BT pairing and key_mac are outside FL_DATA: never touched. ORBIT's
+ * formats (ORP7, OPB2) are its own: the family ORBIT. */
 #ifndef FELUCCA_DATA_FAMILY
-#define FELUCCA_DATA_FAMILY "SLOOP"
+#define FELUCCA_DATA_FAMILY "ORBIT"
 #endif
 #ifndef FELUCCA_DATA_UNTAGGED_OK
-#define FELUCCA_DATA_UNTAGGED_OK 1
+#define FELUCCA_DATA_UNTAGGED_OK 0
 #endif
 #define ST_OWNER_OFF (ST_SMK_BASE + ST_SMK_SECTORS * ST_SECTOR)
 _Static_assert(ST_OWNER_OFF + ST_SECTOR <= 0xBB000u, "SMK store owner: past FL_DATA");
