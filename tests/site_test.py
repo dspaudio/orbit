@@ -136,6 +136,31 @@ def failures(good):
     ok(rc == 2 and "refusing" in err and (occupied / "keep.txt").read_text() == "mine", "an unrelated output directory is never deleted")
 
 
+def smk_packages(good):
+    """the SMK-37 packages of the same release: listed in manifest.json "packages", the FM-1 fields unchanged"""
+    paths = [good]
+    for name, product in (("orbit-smk37", "SMK-37 Pro_900"), ("orbit-smk37-elite", "SMK-37 Elite_900"), ("orbit-smk37-mke", "MKE-P37_900")):
+        path = TMP / f"{name}.fwsc"
+        path.write_bytes(package(product=product))
+        paths.append(path)
+    out = TMP / "site-smk"
+    args = [a for p in paths for a in ("--package", str(p))]
+    rc, _, err = run(*args, "--version", "0.0.1", "--out", str(out))
+    manifest = json.loads((out / "manifest.json").read_text()) if rc == 0 else {}
+    entries = manifest.get("packages", [])
+    ok(rc == 0 and manifest.get("product") == "FM-1_900" and manifest.get("package") == "firmware/orbit-0.0.1.fwsc"
+       and [e["product"] for e in entries] == ["FM-1_900", "SMK-37 Pro_900", "SMK-37 Elite_900", "MKE-P37_900"],
+       "SMK-37 packages: listed after the FM-1's, the FM-1 fields unchanged")
+    ok(all((out / e["package"]).read_bytes() == p.read_bytes() and e["sha256"] == sha(p) and e["size"] == p.stat().st_size
+           for e, p in zip(entries, paths)) and entries[3]["package"] == "firmware/orbit-smk37-mke-0.0.1.fwsc",
+       "SMK-37 packages: each published byte for byte as firmware/<name>-<version>.fwsc")
+    twice = TMP / "twice.fwsc"
+    twice.write_bytes(package(product="SMK-37 Pro_900"))
+    rc, _, err = run("--package", str(good), "--package", str(paths[1]), "--package", str(twice), "--version", "0.0.1",
+                     "--out", str(TMP / "site-twice"))
+    ok(rc == 2 and "same identity" in err and not (TMP / "site-twice").exists(), "two packages with one identity: exit 2, nothing written")
+
+
 def real_package():
     built = ROOT / "build/orbit.fwsc"
     if not built.exists():
@@ -153,6 +178,7 @@ def real_package():
 try:
     good = generated_site()
     failures(good)
+    smk_packages(good)
     real_package()
 finally:
     if not failed:

@@ -67,9 +67,15 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 | `FELUCCA_OTA_DRYRUN` | 0 | For checking the OTA flow; never used in a real install package |
 | `FELUCCA_CDC` | 1 | USB serial console |
 | `FELUCCA_UAC` | 1 | USB audio input: the master output, 44.1 or 48 kHz stereo |
-| `FELUCCA_UART` | 1 | TRS MIDI IN (the 3.5 mm jack) |
+| `FELUCCA_UART` | 1 (SMK-37: 0) | TRS MIDI IN (the 3.5 mm jack); must stay 0 on the SMK-37 (PH8 is a key row there) |
 | `FELUCCA_ICONS` | 1 if the icon atlas exists | Built-in icons |
 | `FELUCCA_SLICE` | 0 | Optional SLICE engine |
+
+Target board: `BOARD=smk37 sh build.sh` builds for the M-Vave SMK-37 (`-DBOARD_SMK37=1` for the app and the
+update loader, identity `SMK-37 Pro_900`, the SMK-37 flash layout, `build/orbit-smk37.fwsc`); `MODEL=elite` or
+`MODEL=mke` builds under the SMK-37 Elite's or the MKE-P37's model name (`build/orbit-smk37-elite.fwsc`,
+`build/orbit-smk37-mke.fwsc`). The default stays the FM-1, byte for byte. Both boards share the intermediate files
+in `build/`: build the FM-1 again before `sh tests/run_tests.sh`. Controls and install: [SMK37.md](SMK37.md).
 
 ## Samples
 
@@ -142,6 +148,10 @@ python3 tools/make_site.py --package build/orbit.fwsc --version 0.7.1 --out buil
   --release-url https://github.com/dspaudio/orbit/releases/tag/v0.7.1
 python3 -m http.server 8766 --bind 127.0.0.1 --directory build/site
 ```
+
+For a release with SMK-37 packages, give `--package` once per package, the FM-1's first
+(`--package build/orbit.fwsc --package orbit-smk37.fwsc --package orbit-smk37-elite.fwsc --package orbit-smk37-mke.fwsc`):
+they are listed in `manifest.json` under `packages`, and the installer writes the one for the connected keyboard.
 
 Open http://127.0.0.1:8766/ for the installer and
 http://127.0.0.1:8766/editor.html for the editor. Localhost is suitable for Web
