@@ -1,6 +1,6 @@
 # Building ORBIT
 
-The current release target is **ORBIT 0.7.1**, with drum-matrix/control fixes and lossless firmware-size reductions on the 0.7.0 feature set. Device builds require the pi32v2 toolchain and AC79 SDK. The [validation record](docs/VALIDATION.md) owns final package measurements and distinguishes software checks from hardware evidence. Generated packages are not committed to the repository.
+The current release is **ORBIT 0.8.0**, with track-filter resonance and band-pass mode for issue #5, merged SMK-37 source support and no built-in demo-song loader. Official firmware assets are **FM-1 only**. Device builds require the pi32v2 toolchain and AC79 SDK. The [validation record](docs/VALIDATION.md) owns final package hashes, resource measurements and detailed evidence, with earlier release results kept historical. Generated packages are not committed to the repository.
 
 The build produces these artifacts in `build/`:
 
@@ -50,13 +50,13 @@ sh build.sh
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
-Build the 0.7.1 package with `PYTHON=~/.jieli/orbit-venv/bin/python sh build.sh`.
-The default source version is `ORBIT 0.7.1`, and the install identity remains
-`FM-1_900`. **Do not use `--release` for this release:** it changes both the
-product identity and displayed version using upstream's single-digit `X.Y`
-scheme. A three-part ORBIT version is not that scheme. Confirm the actual
-package and source version before labelling a generated site; the site
-generator's `--version` supplies metadata, not a firmware version rewrite.
+Build the 0.8.0 package with `PYTHON=~/.jieli/orbit-venv/bin/python sh build.sh`.
+The default source version is `ORBIT 0.8.0`, and the install identity remains
+`FM-1_900`. **Don't use `--release`:** that upstream option accepts only
+single-digit `X.Y` versions, changes the identity and appends BETA. It does
+not accept `0.8.0`. Confirm the actual package and source version before
+labelling a generated site; the site generator's `--version 0.8.0` supplies
+matching metadata, not a firmware version rewrite.
 
 Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 
@@ -71,11 +71,24 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 | `FELUCCA_ICONS` | 1 if the icon atlas exists | Built-in icons |
 | `FELUCCA_SLICE` | 0 | Optional SLICE engine |
 
-Target board: `BOARD=smk37 sh build.sh` builds for the M-Vave SMK-37 (`-DBOARD_SMK37=1` for the app and the
-update loader, identity `SMK-37 Pro_900`, the SMK-37 flash layout, `build/orbit-smk37.fwsc`); `MODEL=elite` or
-`MODEL=mke` builds under the SMK-37 Elite's or the MKE-P37's model name (`build/orbit-smk37-elite.fwsc`,
-`build/orbit-smk37-mke.fwsc`). The default stays the FM-1, byte for byte. Both boards share the intermediate files
-in `build/`: build the FM-1 again before `sh tests/run_tests.sh`. Controls and install: [SMK37.md](SMK37.md).
+### Merged SMK-37 target
+
+The default board is still FM-1. SMK-37 builds set `BOARD_SMK37=1` for the app
+and update loader and use the SMK-37 flash layout:
+
+| Model | Default build command | Identity | Package |
+| --- | --- | --- | --- |
+| SMK-37 Pro | `BOARD=smk37 sh build.sh` | `SMK-37 Pro_900` | `build/orbit-smk37.fwsc` |
+| SMK-37 Elite | `BOARD=smk37 MODEL=elite sh build.sh` | `SMK-37 Elite_900` | `build/orbit-smk37-elite.fwsc` |
+| MKE-P37 | `BOARD=smk37 MODEL=mke sh build.sh` | `MKE-P37_900` | `build/orbit-smk37-mke.fwsc` |
+
+Use these commands without `--release`. The builds share intermediate files
+in `build/`; build FM-1 again before `sh tests/run_tests.sh`. SMK-37 has flash
+for USR1/USR2 only, and `FELUCCA_UART` must remain 0 because the FM-1 MIDI IN
+pin is a key-matrix row there. Use the package for the connected model.
+These are source-build options. **The v0.8.0 release does not include
+SMK-37 binaries.** Controls and installation safety:
+[SMK37.md](SMK37.md).
 
 ## Samples
 
@@ -85,6 +98,11 @@ again from the source repositories. Without that folder the build still works an
 SAMPLE engine has only the generated drum kit.
 
 ## Tests
+
+The final no-demo firmware passed the full host suite, native-preview
+checks and pi32v2 target build and budget checks. All **218 audio goldens
+remained unchanged**. Detailed results belong in
+[docs/VALIDATION.md](docs/VALIDATION.md).
 
 ```
 sh tests/run_tests.sh
@@ -106,9 +124,11 @@ the hashes; `BUDGET_UPDATE=1` does the same for the cost files.
 ## Install
 
 **BACKUP before updates or downgrades.** Stop playback and export Projects /
-Backup from the editor. ORBIT 0.7.1 retains 0.7.0's ORP7 projects and OPB2 preset banks;
-legacy ORBIT files can be imported, but raw SLOOP FUN6 is rejected. Firmware
-older than 0.7.0 cannot read these saves and may overwrite them through autosave.
+Backup from the editor. ORBIT 0.8.0 writes ORP8 projects (3840 bytes) and OPB3
+USER preset banks. ORP7 projects and OPB2/UPB1 banks are imported with
+parameter-ID migration; legacy ORBIT projects remain readable, but raw SLOOP
+FUN6 is rejected. Older firmware, including 0.7.0 and 0.7.1, cannot read the
+new formats and may overwrite them through autosave.
 Keep a pre-update backup for returning to the matching old firmware. See
 [the user guide](GUIDE.md#backup-updates-and-downgrades).
 
@@ -118,7 +138,8 @@ The page downloads the latest published stable package, verifies
 its size, SHA-256, identity, loader marker and CRCs, then enables Connect.
 Connect requests Web MIDI SysEx permission; Install is separately enabled after
 device identity preflight. A failed download offers Retry download, not a file
-picker. Check the displayed version; an older published release is not 0.7.1.
+picker. Check that the displayed version is 0.8.0 before installing this
+release.
 
 Use Chrome or Edge, a USB data cable and a direct connection. Keep power and USB
 connected until the write and reboot finish. On Windows, use WSL for the
@@ -135,23 +156,37 @@ The CLI is the fallback for a checked local `build/orbit.fwsc`. `--info` only
 reads identity; the package argument starts the install workflow. The installer
 checks the FM-1 identity and package before writing. Neither the CLI nor a
 successful simulated installer test proves physical recovery after a power cut.
-The 0.7.0 installation, reboot, actual version and PING were verified on an FM-1.
-Those checks and the historical 0.6.0 audio checks are not 0.7.1 hardware evidence;
-0.7.1 has not been installed or tested on a physical device.
+On 2026-10-27, the no-demo **0.8 hardware candidate** reached write 100%,
+rebooted and returned the `FM-1_900` identity. The device owner confirmed
+the normal screen, cleared the earlier autosave with NEW PROJECT and
+accepted this hardware check for release. INFO/PING requests timed out;
+the successful identity check is not a successful firmware-version query.
+The version-only **0.8.0 rebuild has not been separately hardware-tested**.
+The 0.7.0 installation/version/PING checks on 2026-10-12, 0.7.1 software
+results on 2026-10-15 and 0.6.0 USB audio check on 2026-10-10 remain
+historical evidence.
+
+The demo-song loader and DEMO SONG menu are removed in 0.8.0. An existing
+working autosave is not erased by the update. Back up any wanted work,
+then use **SAVE > TOOLS > NEW** to clear it; the device confirms
+**NEW PROJECT**. See [projects and autosave](GUIDE.md#mixer-sections-and-projects).
 
 ## Build and serve the installer site locally
 
-After building and checking the actual 0.7.1 package:
+After building and checking the actual ORBIT 0.8.0 package:
 
 ```sh
-python3 tools/make_site.py --package build/orbit.fwsc --version 0.7.1 --out build/site \
-  --release-url https://github.com/dspaudio/orbit/releases/tag/v0.7.1
+python3 tools/make_site.py --package build/orbit.fwsc --version 0.8.0 --out build/site \
+  --release-url https://github.com/dspaudio/orbit/releases/tag/v0.8.0
 python3 -m http.server 8766 --bind 127.0.0.1 --directory build/site
 ```
 
-For a release with SMK-37 packages, give `--package` once per package, the FM-1's first
-(`--package build/orbit.fwsc --package orbit-smk37.fwsc --package orbit-smk37-elite.fwsc --package orbit-smk37-mke.fwsc`):
-they are listed in `manifest.json` under `packages`, and the installer writes the one for the connected keyboard.
+For local development with checked SMK-37 packages of the same version,
+give `--package` once per package, the FM-1's first
+(`--package build/orbit.fwsc --package build/orbit-smk37.fwsc --package build/orbit-smk37-elite.fwsc --package build/orbit-smk37-mke.fwsc`).
+They are listed in `manifest.json` under `packages`, and the installer
+selects the one for the connected keyboard. These locally built packages
+are not part of the official v0.8.0 assets.
 
 Open http://127.0.0.1:8766/ for the installer and
 http://127.0.0.1:8766/editor.html for the editor. Localhost is suitable for Web
@@ -178,9 +213,9 @@ so a main-only environment rejects their deployment.
 `.github/workflows/pages.yml` runs after a published release or manual dispatch.
 It selects the latest published release, downloads `orbit.fwsc` and `SHA256SUMS`,
 checks the checksum, generates/tests the site, then uploads a Pages artifact.
-Repository Pages must use **GitHub Actions** as its source. This describes the
-publication workflow, not a claim that it has run. Do not label a 0.6.0 package
-as 0.7.1 by changing only manifest metadata.
+Repository Pages must use **GitHub Actions** as its source. The v0.8.0
+release uses the FM-1 `orbit.fwsc` and `SHA256SUMS`; SMK-37 packages are not
+release assets. Keep site metadata matched to the actual 0.8.0 package.
 
 Installing firmware is at your own risk. If an install fails and the FM-1 no longer
 starts, recovery needs [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).

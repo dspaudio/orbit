@@ -675,7 +675,7 @@ static int project_empty(void)
 static int p_lockable(uint32_t id)
 {
     return id <= P_LD_AMP || id == P_SGATE || (id >= P_DIST && id <= P_REV) || id == P_GLIDE || id == P_PAN ||
-           id == P_DETUNE || (id >= P_SLCR && id <= P_SLDEPTH) || (id >= P_E0 && id <= P_E7) || id == P_TFLT ||
+           id == P_DETUNE || (id >= P_SLCR && id <= P_SLDEPTH) || (id >= P_E0 && id <= P_E7) || id == P_TFLT || id == P_TRES ||
            (id >= P_IA && id <= P_IMIX);   /* 2.6: the INSERT's values and MIX */
 }
 /* the range of p[id] on track t (the engine that renders: t->engine; the drum track's P_E0: the kit) */

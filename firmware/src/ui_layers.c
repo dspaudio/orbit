@@ -765,7 +765,7 @@ static void layer_screen_draw(void)
             te_lower(v[0], v[0], 8);
             fmt_int(v[1], song.g[G_DUST] * 100 / 127);
             fmt_int(v[2], song.g[G_DUCK] * 100 / 127);
-            param_format(&TP[P_TFLT], t->p[P_TFLT], v[3], &u);
+            param_format(track_desc(t, P_TFLT), t->p[P_TFLT], v[3], &u);
             te_lower(v[3], v[3], 8);
         }
         ratio[0] = (song.g[G_FILT] + 64) * 1000 / 127;

@@ -31,7 +31,8 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
        ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE };                /* v9: FM6 patches (Felucca's numbers) */
 #define ED_WIDE 77u
 enum { ED_MACRO = 78, ED_UP_GET_MAP, ED_UP_PUT_MAP, ED_MACRO_DESC };   /* v12: HOME macro assignments */
-#define ED_PROTO 12u                                  /* the protocol version at the end of INFO */
+#define ED_PROTO 13u                                  /* the protocol version at the end of INFO (v13: the track
+                                                       * FILTER's RES and TYPE, P_E0 65, projects ORP8) */
 
 static uint8_t ed_out[600];
 static uint32_t ed_n;
@@ -493,7 +494,7 @@ static uint32_t ed_bk_commit(void)
         return settings_restore(raw, n);
     if (id <= 5u)
         return project_restore(id == 0u ? 4u : id - 2u, raw, n);
-    if (id == 6u || id == 7u) {                           /* a user preset bank (n 0: empty): OPB2, or UPB1 converted */
+    if (id == 6u || id == 7u) {                           /* preset bank (n 0: empty): OPB3, or OPB2 / UPB1 converted */
         static up_bank_t nb;
         uint32_t k;
         if (ed_flash_busy())

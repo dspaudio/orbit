@@ -208,7 +208,7 @@ int main(void)
     check(!up_used(31), "first USER SAVE detent arms without writing");
     turn(EN_K1 + 3, 1);
     check(up_used(31) && !memcmp(up_rec(31)->macro, maps, 4),
-          "actual USER STORE knob writes OPB2 to simulated NOR storage");
+          "actual USER STORE knob writes OPB3 to simulated NOR storage");
     song.sel = 1; apply_preset_to(TSEL, 0);
     turn(EN_K1 + 1, 1); turn(EN_K1 + 1, 1);
     check(TSEL->eng_req == ENGI_CLUSTER, "actual USER LOAD knob loads sound onto another track");
@@ -219,6 +219,26 @@ int main(void)
     transport_req = 0; backup_cycle(7);
     check(up_load(31) == 0 && !memcmp(TSEL->macro, maps, 4) && TSEL->p[P_E1] == -32768,
           "actual bank LIST/GET/PUT round trip retains map and signed16 sound");
+    {
+        int16_t values[P_COUNT];
+        TSEL->p[P_TRES] = 111, TSEL->p[P_TFTYPE] = 1;
+        TSEL->macro[0] = P_TRES, TSEL->macro[1] = P_TFTYPE;
+        check(up_store(30, "RES BP") == 0, "RES/BP preset saves all current parameters to NOR");
+        memset(up_bank, 0, sizeof up_bank); up_boot(&proj_tmp, sizeof proj_tmp);
+        up_values(up_rec(30), values);
+        check(up_used(30) && values[P_TRES] == 111 && values[P_TFTYPE] == 1 &&
+              up_macro(up_rec(30), 0) == P_TRES && up_macro(up_rec(30), 1) == P_TFTYPE,
+              "cold bank load keeps RES/BP values and both macro assignments");
+        TSEL->p[P_TRES] = 23, TSEL->p[P_TFTYPE] = 0;
+        check(up_load(30) == 0 && TSEL->p[P_TRES] == 23 && TSEL->p[P_TFTYPE] == 0 &&
+              TSEL->macro[0] == P_TRES && TSEL->macro[1] == P_TFTYPE,
+              "preset load preserves param_kept mix while restoring RES/BP assignments");
+        backup_cycle(7);
+        up_values(up_rec(30), values);
+        check(values[P_TRES] == 111 && values[P_TFTYPE] == 1 && up_macro(up_rec(30), 0) == P_TRES &&
+              up_macro(up_rec(30), 1) == P_TFTYPE, "bank LIST/GET/PUT retains stored RES/BP values and assignments");
+        check(up_load(31) == 0 && !memcmp(TSEL->macro, maps, 4), "original sound and map restored after RES/BP test");
+    }
     /* Given distinct maps in A..D, When cold loading or recalling a section, Then each sound owns its map. */
     for (i = 0; i < 4u; i++) {
         TSEL->macro[0] = (uint8_t)(P_ATK + i); transport_req = 0; project_save(i);

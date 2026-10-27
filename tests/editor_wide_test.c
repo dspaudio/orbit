@@ -112,7 +112,7 @@ int main(void)
     host_preset(&trk[1], ENGI_CLUSTER, 0);
     song.sel = 0;
     request(ED_INFO, 0, 0, 0);
-    check(nw == 1u && wire[0][wire_n[0] - 2u] == 12u && ED_WIDE == 77u,
+    check(nw == 1u && wire[0][wire_n[0] - 2u] == 13u && ED_WIDE == 77u,
           "INFO protocol12 and envelope77");
 
     for (w = 0; w < 2u; w++) {
@@ -235,6 +235,8 @@ int main(void)
         TSEL->p[P_E0 + 1] = w ? -32768 : -8192;
         TSEL->p[P_E0 + 2] = w ? 24575 : 8000;
         TSEL->p[P_E0 + 3] = w ? 32767 : 8191;
+        TSEL->p[P_TRES] = 117;
+        TSEL->p[P_TFTYPE] = 1;                              /* BP */
         n = preset_args(a, w);
         check(!(w ? up_parse_width(a, n, &parsed, &slot, 3) : up_parse(a, n, &parsed, &slot)) &&
               slot == 5 && !memcmp(parsed.p, TSEL->p, sizeof TSEL->p),
@@ -250,6 +252,8 @@ int main(void)
         check(frame(ED_UP_GET, w, 7u + P_COUNT * width + 32u) &&
               !strcmp((char *)wire[0] + b + 3, "RAW") &&
               dec(wire[0] + b + 7 + (P_E0 + 1) * width, w) == TSEL->p[P_E0 + 1] &&
+              dec(wire[0] + b + 7 + P_TRES * width, w) == 117 &&
+              dec(wire[0] + b + 7 + P_TFTYPE * width, w) == 1 &&
               wire[0][b + 7 + P_COUNT * width] == 60 &&
               wire[0][b + 8 + P_COUNT * width] == SF_ACCENT,
               "UP_GET strings/count/pattern layout and signed stride");
@@ -359,8 +363,25 @@ int main(void)
         a[n] = P_LPOL, a[n + 1u] = 0, a[n + 2u] = MACRO_DEFAULT, a[n + 3u] = P_E7;
         request(ED_UP_PUT_MAP, 1, a, n + 4u);
         check(frame(ED_UP_PUT_MAP, 1, 2) && wire[0][7] == 2 && up_rec(5)->macro[0] == P_LPOL && up_rec(5)->macro[1] == 0 &&
-                  up_rec(5)->macro[3] == P_E7 && n + 4u + 7u <= 271u, "UP_PUT_MAP (wide, at most 271 bytes): the map stored (rc 2: no flash on the host, RAM kept)");
+                  up_rec(5)->macro[3] == P_E7 && n + 4u + 7u <= 277u, "UP_PUT_MAP: mapped assignment stored (rc 2: no flash on the host, RAM kept)");
+        TSEL->p[P_TRES] = 109, TSEL->p[P_TFTYPE] = 1;
+        n = preset_args(a, 1);
+        a[n] = P_TRES, a[n + 1u] = P_TFTYPE, a[n + 2u] = P_E0, a[n + 3u] = P_E7;
+        request(ED_UP_PUT_MAP, 1, a, n + 4u);
+        check(frame(ED_UP_PUT_MAP, 1, 2) && wire[0][7] == 2 &&
+              up_rec(5)->p[P_TRES] == 109 && up_rec(5)->p[P_TFTYPE] == 1 &&
+              up_rec(5)->macro[0] == P_TRES && up_rec(5)->macro[1] == P_TFTYPE,
+              "UP_PUT_MAP keeps RES and BP values and their assignments");
+        request(ED_UP_GET_MAP, 1, (uint8_t[]){5}, 1);
+        check(frame(ED_UP_GET_MAP, 1, 7u + P_COUNT * 3u + 32u + 4u) &&
+              dec(wire[0] + 6u + 7u + P_TRES * 3u, 1) == 109 &&
+              dec(wire[0] + 6u + 7u + P_TFTYPE * 3u, 1) == 1 &&
+              wire[0][wire_n[0] - 5u] == P_TRES && wire[0][wire_n[0] - 4u] == P_TFTYPE &&
+              wire[0][wire_n[0] - 3u] == P_E0 && wire[0][wire_n[0] - 2u] == P_E7,
+              "UP_GET_MAP returns all RES/BP sound values and exact macro ids");
         before = *up_rec(5);
+        n = preset_args(a, 1);
+        a[n] = P_TRES, a[n + 1u] = P_TFTYPE, a[n + 2u] = P_E0, a[n + 3u] = P_E7;
         a[n + 1u] = 80;
         request(ED_UP_PUT_MAP, 1, a, n + 4u);
         check(wire[0][7] == 1 && !memcmp(&before, up_rec(5), sizeof before), "UP_PUT_MAP with id 80: rc 1 before the record changes");
@@ -386,7 +407,7 @@ int main(void)
         request(ED_MACRO_DESC, 0, (uint8_t[]){0, P_COUNT}, 2);
         check(frame(ED_MACRO_DESC, 0, 4) && wire[0][7] == 1 && wire[0][8] == 0, "MACRO_DESC id 71: [track, id, 1, 0] only");
         request(ED_INFO, 0, 0, 0);
-        check(nw == 1u && wire[0][wire_n[0] - 2u] == 12u, "INFO protocol 12");
+        check(nw == 1u && wire[0][wire_n[0] - 2u] == 13u, "INFO protocol 13");
     }
     printf("editor-wide: %d failures\n", fails);
     return fails ? 1 : 0;

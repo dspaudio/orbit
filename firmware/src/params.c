@@ -17,6 +17,8 @@ static const char *const N_TXRATE[] = {"1BAR", "2BAR", "4BAR", "8BAR", "16BAR"};
 static const char *const N_TXWHEN[] = {"PLAY", "ALWAYS"};
 /* ANALOG's filter TYPE (eng_analog.c): the SVF's low-pass (as always), band-pass, high-pass output */
 static const char *const N_FTYPE[] = {"LP", "BP", "HP"};
+/* the track FILTER's TYPE (fx.c djf_block): LP/HP on FILT's two sides (as before), or a band-pass FILT sweeps */
+static const char *const N_TFTYPE[] = {"LP/HP", "BP"};
 /* ENV SYNC (voice.c): ATK DEC REL as note values of the tempo, shortest first. 0..127 split evenly over these 25
  * (param_format's F_INT name list: value v is ESYNC_NAMES[v * 25 / 128]); ESYNC_UNITS: each in 1/384 of a bar of
  * 4/4 (a quarter 96), 0 = the shortest time ATK / DEC / REL 0 has. 0-terminated (param_format) */
@@ -136,6 +138,8 @@ static const param_desc_t TP[P_COUNT] = {
     [P_LSYNC] = PE("SYNC", N_LSYNC, 0),           /* LFO 2: OFF = RATE, as before */
     [P_LTRIG] = PE("TRIG", N_LTRIG, 0),
     [P_LPOL] = PE("POL", N_LPOL, 0),
+    [P_TRES] = PD("RES", F_PCT, 0, 127, 40),      /* the track FILTER's resonance: 40 = its Q before (fx.c) */
+    [P_TFTYPE] = PE("TYPE", N_TFTYPE, 0),        /* LP/HP = as before */
 };
 /* a preset's extra parameters (preset_t.x) into p, each clamped to its range */
 static void preset_extras(int16_t *p, const preset_t *pr)
@@ -219,9 +223,13 @@ static const param_desc_t ESYNC_DESC[3] = {   /* ATK DEC REL with ENV SYNC on: t
     {"REL", F_INT, 0, 127, 60, ESYNC_NAMES, 0},
 };
 
+static const param_desc_t TFLT_BP_DESC = PD("FILT", F_BPF, -64, 63, 0);   /* FILT with TYPE BP: the band's centre */
+
 static const param_desc_t *track_desc(const track_t *t, uint32_t id)
 {
     if(is_drum(t) && id==P_E0) return &DRUM_KIT_DESC;
+    if (id == P_TFLT && t->p[P_TFTYPE])
+        return &TFLT_BP_DESC;
     if (id >= P_IA && id <= P_IC)                     /* the INSERT's values as its TYPE names them */
         return ins_desc(t->p[P_ITYPE], id - P_IA);
     if (t->p[P_ESYNC] && (id == P_ATK || id == P_DEC || id == P_REL))   /* ENV SYNC: note values */
@@ -283,6 +291,15 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
         } else {
             str_cpy(val, v < 0 ? "LP" : "HP", 6);
             fmt_int(val + 2, v < 0 ? (-v * 100 + 32) / 64 : (v * 100 + 31) / 63);
+            *unit = "%";
+        }
+        break;
+    case F_BPF:                                       /* BP 0..100 %: the centre, low .. high */
+        if (!v) {
+            str_cpy(val, "OFF", 6);
+        } else {
+            str_cpy(val, "BP", 6);
+            fmt_int(val + 2, (v + 64) * 100 / 127);
             *unit = "%";
         }
         break;
@@ -411,7 +428,7 @@ static const page_t PAGES[] = {
     {"LFO 2", FAM_LFO, SC_TRACK, GR_LFO, {P_LSYNC, P_LTRIG, P_LPOL, 0xFF}},   /* 2.6 (Felucca 1.4): SYNC TRIG POL */
     {"LFO DEST", FAM_LFO, SC_TRACK, GR_NONE, {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},
-    {"FILTER", FAM_FX, SC_TRACK, GR_NONE, {P_TFLT, 0xFF, 0xFF, 0xFF}},   /* the track's filter (drum track too) */
+    {"FILTER", FAM_FX, SC_TRACK, GR_NONE, {P_TFLT, P_TRES, P_TFTYPE, 0xFF}},   /* the track's filter (drum track too) */
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},   /* drum track too */
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IA, P_IB, P_IC}},   /* 2.6 (Felucca 1.5): the track's INSERT (fx.c), */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet; the drum track too */
@@ -463,7 +480,7 @@ static int page_for_drum(const page_t *pg)
     if (pg->scope == SC_GLOBAL)
         return pg->graph != GR_BROWSE && pg->graph != GR_USER;
     return pg->scope != SC_ENGINE && (pg->scope != SC_TRACK || pg->fam == FAM_SEQ || pg->graph == GR_SLCR ||
-                                      pg->graph == GR_INS);
+                                      pg->graph == GR_INS || pg->id[0] == P_TFLT);
 }
 /* a page the buttons and SELECT reach on the selected track: EDIT > FILTER (TYPE) on ANALOG only */
 static int page_shown(const page_t *pg)

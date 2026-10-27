@@ -112,7 +112,7 @@ static int track_ok_v2(const proj_trk_t *n, const proj_trk_v2_t *o, uint32_t t)
 static int track_plain(const proj_trk_t *n)
 {
     uint32_t k;
-    int ok = n->user == 0 && n->reserved == 0;
+    int ok = n->user == 0 && pt_get(n, P_TRES) == 40 && pt_get(n, P_TFTYPE) == 0;
     for (k = 0; k < NLOCK; k++)
         ok &= n->lock[k].step == LOCK_FREE;
     for (k = 0; k < NSTEP; k++)
@@ -145,14 +145,14 @@ int main(void)
 
     bad += check("layout: common ids 0..52 kept, P_ITYPE 53 .. P_LPOL 62, P_E0 63, P_COUNT 71, G_COUNT 45",
                  P_CHORD + 1 == P_TFLT && P_TFLT + 1 == P_STRUM && P_STRUM + 1 == P_VLEAD && P_VLEAD == 52 &&
-                 P_ITYPE == 53 && P_LPOL == 62 && P_E0 == 63 && P_COUNT == 71 && G_COUNT == 45 && G_CH1 == 33 &&
+                 P_ITYPE == 53 && P_LPOL == 62 && P_TRES == 63 && P_TFTYPE == 64 && P_E0 == 65 && P_COUNT == 73 && G_COUNT == 45 && G_CH1 == 33 &&
                  G_BEND == 44 && PROJ_NP_V5 == 61u && P_SLDEPTH + 1 == P_CHORD);
     bad += check("ORP7 is 3840 bytes (track 940, offsets asserted); FUN5 frozen at 3840; 4 slots fit .noinit",
                  sizeof(project_t) == 3840u && sizeof(proj_trk_t) == 940u && sizeof(project_v5_t) == 3840u &&
                  offsetof(proj_trk_t, macro) == 934u && offsetof(project_t, sum) == 3836u &&
-                 4u * sizeof(project_t) <= 0x3D50u - 256u && PROJ_MAGIC == 0x3750524Fu);
+                 4u * sizeof(project_t) <= 0x3D50u - 256u && PROJ_MAGIC == 0x3850524Fu);
     bad += check("ORP7 magic bytes are 4F 52 50 37 and differ from FUN1..FUN6",
-                 ((const uint8_t *)&(uint32_t){PROJ_MAGIC})[0] == 0x4Fu && ((const uint8_t *)&(uint32_t){PROJ_MAGIC})[3] == 0x37u &&
+                 ((const uint8_t *)&(uint32_t){PROJ_MAGIC})[0] == 0x4Fu && ((const uint8_t *)&(uint32_t){PROJ_MAGIC})[3] == 0x38u &&
                  PROJ_MAGIC != PROJ_MAGIC_FUN6 && PROJ_MAGIC != PROJ_MAGIC_V5 && PROJ_MAGIC != PROJ_MAGIC_V1);
 
     /* format 3 (SLOOP 1.x) */
@@ -297,7 +297,7 @@ int main(void)
             ok &= pt_get(&q2.t[t], i) == TP[i].def;
         for (i = 0; i < MACRO_COUNT; i++)
             ok &= q2.t[t].macro[i] == MACRO_DEFAULT;
-        ok &= q2.t[t].user == 0 && q2.t[t].reserved == 0 && !memcmp(q2.t[t].step, v5.t[t].step, sizeof v5.t[t].step);
+        ok &= q2.t[t].user == 0 && q2.t[t].flt == 40 && !memcmp(q2.t[t].step, v5.t[t].step, sizeof v5.t[t].step);
     }
     ok &= q2.t[0].engine == ENGI_CLUSTER && q2.t[1].engine == ENGI_CLOUD && q2.t[2].engine == ORBIT_FM4 &&
           q2.t[TRK_DRUM].engine == 0 && q2.t[0].preset == 3;
@@ -337,6 +337,40 @@ int main(void)
                  proj_import(&q, &buf, (int)sizeof q2) && !memcmp(&q, &q2, sizeof q) && pt_get(&q.t[1], P_ITYPE) == 8 &&
                  pt_get(&q.t[2], P_LSYNC) == 10 && q.t[0].user == 32);
 
+    /* ORP7 uses the same byte layout, but engine parameter IDs precede RES/TYPE. */
+    memcpy(&buf, &q2, sizeof q2);
+    buf.v7.magic = PROJ_MAGIC_V7;
+    for (t = 0; t < NTRK; t++) {
+        buf.v7.t[t].flt = 0;
+        for (i = 0; i < NLOCK; i++)
+            if (buf.v7.t[t].lock[i].param >= P_E0 && buf.v7.t[t].lock[i].param <= P_E7)
+                buf.v7.t[t].lock[i].param -= 2;
+        for (i = 0; i < MACRO_COUNT; i++)
+            if (buf.v7.t[t].macro[i] >= P_E0 && buf.v7.t[t].macro[i] <= P_E7)
+                buf.v7.t[t].macro[i] -= 2;
+    }
+    buf.v7.sum = proj_sum(&buf.v7);
+    bad += check("ORP7 migration preserves sounds, locks and macros and defaults RES/TYPE",
+                 proj_import(&q, &buf, sizeof buf.v7) && proj_ok(&q) && !memcmp(&q, &q2, sizeof q));
+    buf.v7.t[0].macro[0] = 71;
+    buf.v7.t[0].lock[0].step = 0;
+    buf.v7.t[0].lock[0].param = 72;
+    buf.v7.sum = proj_sum(&buf.v7);
+    ok = proj_import(&q, &buf, sizeof buf.v7);
+    proj_apply(&q, 1);
+    bad += check("invalid ORP7 IDs do not become newly valid engine controls",
+                 ok && trk[0].macro[0] == MACRO_DEFAULT && trk[0].lock[0].step == LOCK_FREE);
+    pt_set(&q.t[0], P_TRES, 127);
+    pt_set(&q.t[0], P_TFTYPE, 1);
+    q.sum = proj_sum(&q);
+    memcpy(&buf, &q, sizeof q);
+    bad += check("ORP8 packed RES/BP survives import and apply",
+                 proj_import(&q, &buf, sizeof buf.v7) && q.t[0].flt == 255 &&
+                 pt_get(&q.t[0], P_TRES) == 127 && pt_get(&q.t[0], P_TFTYPE) == 1);
+    proj_apply(&q, 1);
+    bad += check("ORP8 applies both track filter controls",
+                 trk[0].p[P_TRES] == 127 && trk[0].p[P_TFTYPE] == 1);
+
     /* refused before anything changes: FUN6, a damaged ORP7 */
     memset(&q, 0x5A, sizeof q);
     memcpy(&buf, &q2, sizeof q2);
@@ -344,7 +378,8 @@ int main(void)
     buf.v7.sum = proj_hash(&buf, sizeof q2 - 4u);
     ok = !proj_import(&q, &buf, (int)sizeof q2);
     memcpy(&buf, &q2, sizeof q2);
-    buf.v7.t[1].reserved = 1;
+    buf.v7.magic = PROJ_MAGIC_V7;
+    buf.v7.t[1].flt = 1;
     buf.v7.sum = proj_hash(&buf, sizeof q2 - 4u);
     ok &= !proj_import(&q, &buf, (int)sizeof q2);
     memcpy(&buf, &q2, sizeof q2);

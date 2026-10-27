@@ -38,7 +38,8 @@ enum {
     F_INT, F_PCT, F_BIPCT, F_TIME, F_LFOHZ, F_CUTOFF, F_DB, F_SEMI, F_ENUM, F_BPM, F_NOTE,
     F_ONOFF, F_OCT, F_STEPS,
     F_SWING,                    /* 0..100: straight .. MPC 75/25 */
-    F_FILT                      /* -64..63: the DJ filter, LP <- OFF -> HP */
+    F_FILT,                     /* -64..63: the DJ filter, LP <- OFF -> HP */
+    F_BPF                       /* -64..63: the track FILTER as a band-pass, its centre low .. high, 0 OFF */
 };
 
 typedef struct {
@@ -74,6 +75,8 @@ enum {                          /* per-track parameters */
     P_FTYPE,                                   /* ANALOG's filter TYPE: LP (as before) / BP / HP (eng_analog.c) */
     P_ESYNC,                                   /* ENV SYNC: ATK DEC REL as note values of the tempo (voice.c) */
     P_LSYNC, P_LTRIG, P_LPOL,                  /* LFO 2: SYNC to the tempo, TRIG (NOTE / FREE), POL (BI / UNI) (voice.c) */
+    P_TRES, P_TFTYPE,                          /* ORBIT (issue #5): the track FILTER's resonance (40 = its fixed Q before) and
+                                                * TYPE: LP/HP (FILT < 0 / > 0, as before) or BP (fx.c) */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };

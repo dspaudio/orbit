@@ -270,7 +270,7 @@ async function editorMacros() {
     const file = E.libraryFile("library", [cap], ctx), imported = E.readLibraryFile(file, ctx).patches[0];
     ok(file.version === 2 && js(imported.macroIds) === js(ids) && imported.macroPE0 === info.pe0 &&
       imported.p[PID.P_E1] === -32768, "macros: library-v2 export/import preserves explicit namespace and signed16");
-    for (const n of [53, 57, 58, 61, 71]) {
+    for (const n of [53, 57, 58, 61, 71, 73]) {
       const p = new Array(n).fill(0); p[n - 8] = -32768; p[n - 1] = 32767;
       const old = { format: "felucca-library", version: 1, pE0: n - 8, patches: [{ engine: 15, name: "LEGACY", params: p }] };
       const migrated = E.readLibraryFile(old, ctx).patches[0];
@@ -292,9 +292,9 @@ async function editorMacros() {
     ok(await E.bank.put(rq, 13, { ...sourcePatch, p: cap.p.slice() }) === 0,
       "macros: target-shaped parameters and source-shaped macro IDs transfer together");
     const mappedSource = await E.bank.get(rq, info, 13);
-    ok(js(mappedSource.macroIds) === js([127, 63, 70, 127]),
+    ok(js(mappedSource.macroIds) === js([63, 65, 72, 127]),
       "macros: transfer defaults uncertain common IDs and moves engine IDs from the source namespace");
-    for (const maps of [null, [], [1, 2, 3], [1, 2, 3, 4, 5], [1, 2, 3, -1], [1, 2, 3, 1.5], [1, 2, 3, 71], "1234"]) {
+    for (const maps of [null, [], [1, 2, 3], [1, 2, 3, 4, 5], [1, 2, 3, -1], [1, 2, 3, 1.5], [1, 2, 3, info.pcount], "1234"]) {
       const badFile = { ...file, patches: [{ ...file.patches[0], macroIds: maps }] };
       const r = E.readLibraryFile(badFile, ctx);
       ok(!r.patches.length && r.skipped === 1 && r.reasons.length === 1, "macros: malformed library map is rejected with a skipped reason");
@@ -320,7 +320,7 @@ async function editorMacros() {
       { ...backup, version: 3 }, { ...backup, product: "SLOOP" }, { ...backup, firmware: "SLOOP 2.6" },
       { ...backup, objects: [...backup.objects, backup.objects[0]] },
     ];
-    for (const magic of [0x46554E36, 0x46554E37, 0x3850524F]) {
+    for (const magic of [0x46554E36, 0x46554E37, 0x3950524F]) {
       const data = E.b64dec(backup.objects[0].data), v = new DataView(data.buffer); v.setUint32(0, magic, true);
       v.setUint32(3836, E.projectHash(data.subarray(0, 3836)), true);
       cases.push({ ...backup, objects: backup.objects.map((o) => o.id === 0 ? { ...o, data: E.b64enc(data), crc: E.crc32(data) } : o) });
@@ -366,6 +366,135 @@ async function editorMacros() {
     ok(refused && (sent[C.SET] || 0) + (sent[C.WIDE] || 0) === writes,
       "macros: drum audition refuses before changing any sound parameter or engine");
   } finally { E.req.protocol(0); done(); }
+}
+
+async function editorFilter() {
+  const C = E.CMD, current = attachMock({}), old = attachMock({ v12: true });
+  const info = E.parse[C.INFO](await current.rq(E.req.info()));
+  const oi = E.parse[C.INFO](await old.rq(E.req.info()));
+  try {
+    /* Given both parameter namespaces, When descriptors are read, Then each version keeps its own contract. */
+    E.req.protocol(info.proto);
+    const res = E.parse[C.DESC](await current.rq(E.req.desc(0, PID.P_TRES)));
+    const type = E.parse[C.DESC](await current.rq(E.req.desc(0, PID.P_TFTYPE)));
+    ok(info.proto === 13 && info.pcount === 73 && info.pe0 === 65 && /ORBIT 0\.8\.0 /.test(info.version) &&
+      oi.proto === 12 && oi.pcount === 71 && oi.pe0 === 63 && /ORBIT 0\.7\.1 /.test(oi.version) &&
+      res.label === "RES" && res.fmt === E.F.PCT && res.min === 0 && res.max === 127 && res.def === 40 &&
+      type.label === "TYPE" && type.def === 0 && js(type.names) === js(["LP/HP", "BP"]),
+      "filter: protocol 13 RES/TYPE descriptors coexist with unchanged protocol 12");
+    for (const track of [0, 3]) {
+      /* Given a synth or drum, When BP is selected, Then both DESC and values use its live track. */
+      await current.rq(E.req.track(track));
+      await current.rq(E.req.set(0, PID.P_TFTYPE, 1));
+      const bp = E.parse[C.DESC](await current.rq(E.req.desc(0, PID.P_TFLT)));
+      const ui = { info, sel: track, pdesc: [], dump: { engine: track === 3 ? info.nengines : 0 } };
+      const start = html.indexOf("async function rereadEngineDesc()");
+      const source = html.slice(start, html.indexOf("\n}", start) + 2);
+      const reread = vm.runInNewContext(source + "\nrereadEngineDesc", {
+        dev: ui, CMD: C, parse: E.parse, req: E.req, rq: current.rq,
+        getDescOrNull: async (scope, id) => E.parse[C.DESC](await current.rq(E.req.desc(scope, id))),
+        fm6Names() {}, readMacros: async () => {}, buildGroups() {},
+      });
+      await reread();
+      ok(ui.pdesc[50].fmt === E.F.BPF, `filter: real UI descriptor refresh reads BP on track ${track}`);
+      const r = E.parse[C.SET](await current.rq(E.req.set(0, PID.P_TRES, 999)));
+      const lock = E.parse[C.LOCK_SET](await current.rq(E.req.lockSet(track, 3, PID.P_TRES, 80)));
+      const rejected = E.parse[C.LOCK_SET](await current.rq(E.req.lockSet(track, 4, PID.P_TFTYPE, 1)));
+      ok(bp.fmt === 16 && bp.min === -64 && bp.max === 63 && r.value === 127 && lock.rc === 0 &&
+        lock.value === 80 && rejected.rc === 2, `filter: synth/drum track ${track} has BP format, RES lock and no TYPE lock`);
+      let match = true;
+      for (let v = -64; v <= 63; v++) match &&= E.fmtValue(bp, v).join("") ===
+        (v === 0 ? "OFF" : `BP${Math.trunc((v + 64) * 100 / 127)}%`);
+      ok(match, `filter: all BP center values match firmware formatting on track ${track}`);
+      await current.rq(E.req.set(0, PID.P_TFTYPE, 0));
+      const lp = E.parse[C.DESC](await current.rq(E.req.desc(0, PID.P_TFLT)));
+      ok(lp.fmt === E.F.FILT, `filter: LP/HP restores the dynamic descriptor on track ${track}`);
+    }
+    const layoutSource = html.slice(html.indexOf("const LAYOUT ="), html.indexOf("/* globals that are actions"));
+    const layout = vm.runInNewContext(layoutSource + "\nLAYOUT");
+    const filter = (pe0) => layout(pe0).find((g) => g.t === "FX").pages.find((p) => p[0] === "FILTER")[2];
+    ok(js(filter(65)) === js([50, 63, 64]) && js(filter(63)) === js([50]) && js(filter(53)) === js([50]),
+      "filter: live UI layout adds RES/TYPE only to the protocol 13 FILTER page");
+
+    /* Given an ORP7 project with engine maps/locks, When restored, Then ORP8 migrates both namespaces. */
+    E.req.protocol(oi.proto);
+    await old.rq(E.req.set(0, oi.pe0, 2));
+    await old.rq(E.req.macro(0, [63, 70, 50, 127]));
+    await old.rq(E.req.lockSet(0, 2, 63, 1));
+    await old.rq(E.req.lockSet(0, 3, 70, 55));
+    await old.rq(E.req.upStore(15, "OLD FILTER"));
+    await old.rq(E.req.project(1, 1));
+    const legacy = await E.backupCapture(old.rq, oi);
+    ok(legacy.protocol === 12 && legacy.projectMagic === 0x3750524F, "filter: protocol 12 exports ORP7 metadata");
+    E.req.protocol(info.proto);
+    await E.backupRestore(current.rq, legacy);
+    const t = current.m.state.tracks[0], slot = current.m.state.slots[1].tracks[0];
+    ok(js(t.macroIds) === js([65, 72, 50, 127]) && js(slot.macroIds) === js(t.macroIds) &&
+      t.locks.some((l) => l.param === 65 && l.value === 1) && t.locks.some((l) => l.param === 72 && l.value === 55) &&
+      t.p[65] === 2 && current.m.state.tracks.every((t) => t.p[63] === 40 && t.p[64] === 0),
+      "filter: ORP7 working/slot projects shift engine locks/maps by two and default RES/TYPE");
+    const migratedPreset = E.parse[C.UP_GET_MAP](await current.rq(E.req.upGetMap(15)), info);
+    ok(migratedPreset.p[65] === 2 && migratedPreset.p[63] === 40 && migratedPreset.p[64] === 0 &&
+      js(migratedPreset.macroIds) === js([65, 72, 50, 127]),
+      "filter: frozen OPB2 reader defaults new controls and shifts both engine values and maps");
+
+    /* Given nondefault synth/drum filters, When backed up and restored, Then byte 939 retains all eight bits. */
+    for (const [track, res] of [[0, 91], [3, 127]]) {
+      await current.rq(E.req.track(track));
+      await current.rq(E.req.set(0, 63, res)); await current.rq(E.req.set(0, 64, 1));
+    }
+    const archive = await E.backupCapture(current.rq, info);
+    const raw = E.b64dec(archive.objects.find((o) => o.id === 0).data);
+    const bank = E.b64dec(archive.objects.find((o) => o.id === 6).data);
+    ok(archive.protocol === 13 && archive.projectMagic === 0x3850524F && raw.length === 3840 &&
+      new DataView(raw.buffer).getUint32(0, true) === 0x3850524F &&
+      raw[76 + 939] === (128 | 91) && raw[76 + 3 * 940 + 939] === 255 && bank.length === 3176 && bank[11] === 73 &&
+      new DataView(bank.buffer).getUint32(0, true) === 0x3342504F,
+      "filter: ORP8 packs synth/drum FILTER and OPB3 stores all 73 parameters");
+    current.m.state.tracks[0].p[63] = 0; current.m.state.tracks[3].p[64] = 0;
+    await E.backupRestore(current.rq, archive);
+    ok(current.m.state.tracks[0].p[63] === 91 && current.m.state.tracks[3].p[64] === 1 &&
+      current.m.state.tracks[3].p[63] === 127, "filter: ORP8 restore retains RES and BP on every track");
+    /* Given a protocol 12 target, When any project is ORP8, Then no destructive request is sent. */
+    for (const file of [archive, ...[4, 6].map((id) => ({ ...legacy, objects: legacy.objects.map((o) => o.id === id
+      ? { ...archive.objects.find((x) => x.id === (id === 4 ? 0 : 6)), id } : o) }))]) {
+      const writes = [];
+      const rq = (r, opts) => { if ([C.BK_PUT, C.SMP_BEGIN, C.SMP_ERASE].includes(r[0])) writes.push(r); return old.rq(r, opts); };
+      let code;
+      try { await E.backupRestore(rq, file); } catch (e) { code = e.code; }
+      ok(code === "bkNewer" && !writes.length, "filter: ORP8 working/slot or OPB3 bank refuses v12 before any write");
+    }
+    /* Given filter macros, When saved and restored through OPB3, Then all values and destinations survive. */
+    await current.rq(E.req.track(0));
+    await current.rq(E.req.macro(0, [63, 64, 65, 72]));
+    await current.rq(E.req.upStore(15, "FILTER"));
+    const saved = E.parse[C.UP_GET_MAP](await current.rq(E.req.upGetMap(15)), info);
+    ok(saved.p[63] === 91 && saved.p[64] === 1 && js(saved.macroIds) === js([63, 64, 65, 72]),
+      "filter: OPB3 preserves RES/TYPE values and their macro destinations");
+    const withPreset = await E.backupCapture(current.rq, info);
+    await current.rq(E.req.upErase(15));
+    await E.backupRestore(current.rq, withPreset);
+    const restored = E.parse[C.UP_GET_MAP](await current.rq(E.req.upGetMap(15)), info);
+    ok(js(restored.p) === js(saved.p) && js(restored.macroIds) === js(saved.macroIds) &&
+      js(restored.pattern) === js(saved.pattern), "filter: OPB3 binary round trip retains parameters, maps and pattern offsets");
+    /* Given stored filter values, When a sound loads, Then the track's current filter mix stays untouched. */
+    await current.rq(E.req.set(0, 63, 27)); await current.rq(E.req.set(0, 64, 0));
+    await current.rq(E.req.upLoad(15));
+    const loaded = E.parse[C.DUMP](await current.rq(E.req.dump()), info);
+    await current.rq(E.req.preset(0, 0));
+    const factory = E.parse[C.DUMP](await current.rq(E.req.dump()), info);
+    ok(loaded.p[63] === 27 && loaded.p[64] === 0 && factory.p[63] === 27 && factory.p[64] === 0,
+      "filter: user and factory sound loads keep the current RES/TYPE mix");
+    /* Given valid outer CRCs, When a bank's version/count/layout is invalid, Then preflight rejects it. */
+    for (const [offset, value] of [[4, 196], [9, 2], [11, 74]]) {
+      const data = E.b64dec(withPreset.objects.find((o) => o.id === 6).data);
+      data[offset] = value;
+      const malformed = { ...withPreset, objects: withPreset.objects.map((o) => o.id === 6
+        ? { ...o, data: E.b64enc(data), crc: E.crc32(data) } : o) };
+      let code; try { E.backupObjects(malformed); } catch (e) { code = e.code; }
+      ok(code === "bkBad", `filter: OPB3 invalid shape byte ${offset} is refused before restore`);
+    }
+  } finally { E.req.protocol(0); current.done(); old.done(); }
 }
 
 async function editorLibrarian() {
@@ -787,7 +916,7 @@ async function editorBackup() {
   const A = await E.backupCapture(rq, info);
   const obj = (id) => A.objects.find((o) => o.id === id);
   ok(A.format === "sloop-backup" && A.objects.map((o) => o.id).join() === "0,1,2,3,4,5,6,7,8,9,10,32,33,34,35" && obj(9).len === 1464 && obj(10).len === 40 && obj(33).len > 512 && obj(35).len === 0
-    && obj(4).len === 3840 && obj(6).len === 3144 && obj(3).len === 0 && obj(32).len === 0, "backup: LIST + GET: real ORP7/OPB2 shapes, MIDI settings, four sample slots");
+    && obj(4).len === 3840 && obj(6).len === 3176 && obj(3).len === 0 && obj(32).len === 0, "backup: LIST + GET: real ORP8/OPB3 shapes, MIDI settings, four sample slots");
   await rq(E.req.upErase(3));
   await rq(E.req.smpErase(1), { timeout: 2500, retries: 0 });
   await rq(E.req.set(0, 3, 5));
@@ -940,7 +1069,7 @@ async function editorV7() {
   for (const nm of (/enum \{\s*\/\* per-track parameters \*\/([^}]*)\}/.exec(ch) || [])[1].replace(/\/\*[\s\S]*?\*\//g, "").split(",").map((x) => x.trim()).filter(Boolean)) ids[nm] = n++;
   const lockableC = (id) => id <= ids.P_LD_AMP || id === ids.P_SGATE || (id >= ids.P_DIST && id <= ids.P_REV) || id === ids.P_GLIDE || id === ids.P_PAN
     || id === ids.P_DETUNE || (id >= ids.P_SLCR && id <= ids.P_SLDEPTH) || (id >= ids.P_E0 && id <= ids.P_E7) || id === ids.P_TFLT
-    || (id >= ids.P_IA && id <= ids.P_IMIX);
+    || id === ids.P_TRES || (id >= ids.P_IA && id <= ids.P_IMIX);
   let same = ids.P_COUNT === info.pcount;
   for (let id = 0; id < info.pcount; id++) same = same && !!E.lockable(id, info.pe0) === !!lockableC(id);
   ok(same && /id <= P_LD_AMP \|\| id == P_SGATE \|\| \(id >= P_DIST && id <= P_REV\) \|\| id == P_GLIDE \|\| id == P_PAN/.test(sc)
@@ -1798,6 +1927,7 @@ await editorMock();
 await editorSetResend();
 await editorMacroActions();
 await editorMacros();
+await editorFilter();
 await editorLibrarian();
 await editorLive();
 await editorTracks();

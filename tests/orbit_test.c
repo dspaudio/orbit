@@ -589,32 +589,10 @@ int main(int argc, char **argv)
         orbit_knob(i%4,(i%3)-1); frame();
     }
     check(orbit_tape.first<=orbit_tape.last && orbit_tape.last<NSTEP,"selection bounds survive track/length changes");
-    /* Actual menu confirmation and transport for the original demo composition. */
-    song.playing=0; ui.menu=1; ui.menu_sel=MI_DEMO;
-    { uint32_t saved=saves, prior=trk[0].p[P_SLEN];
-      menu_input(BT(B_OCTUP)); frame();
-      check(orbit_demo_pending && trk[0].p[P_SLEN]==prior,"demo first confirmation preserves working song");
-      menu_input(BT(B_OCTDN));
-      check(!orbit_demo_pending,"demo cancellation clears confirmation");
-      ui.menu=1; ui.menu_sel=MI_DEMO;
-      menu_input(BT(B_OCTUP)); menu_input(BT(B_OCTUP)); frames(8);
-      check(saves==saved && ui.menu==0 && song.g[G_BPM]==108,"demo loads without writing a numbered project slot"); }
-    check(trk[0].eng_req==ORBIT_FM4 && trk[1].eng_req==ORBIT_SWARM && trk[2].eng_req==ORBIT_PULSE,
-          "demo uses all three independent engines");
-    check(trk[0].p[P_SLEN]==64 && trk[1].step[16].n==3 && trk[1].step[17].time==ST_TIE &&
-          dstep_has(&TDRUM->dstep[4],2) && dstep_has(&TDRUM->dstep[2],4),"demo has four bars, chords, ties, snare and hats");
-    go_home(); tap(B_PLAY); check(song.playing,"demo starts with PLAY"); ppm("orbit-demo-tape");
-    { char path[512]; FILE *f; uint32_t b, j, nonzero=0; int32_t o[CTL*2];
-      snprintf(path,sizeof path,"%s/orbit-first-light.wav",outdir); f=fopen(path,"wb"); assert(f);
-      wav_hdr(f,(FS*12/CTL)*CTL);
-      for(b=0;b<FS*12/CTL;b++) {
-          mix_block(o,CTL);
-          for(j=0;j<CTL;j++) { nonzero+=o[j*2]!=0 || o[j*2+1]!=0; wav_put(f,o[j*2],o[j*2+1]); }
-      }
-      fclose(f); check(nonzero>FS*8,"demo sequencer produces sustained non-silent PCM across its loop"); }
-    ui.menu=1; ui.menu_sel=MI_DEMO; menu_input(BT(B_OCTUP));
-    check(!orbit_demo_pending && song.playing,"demo loader rejects replacement while playing");
-    menu_close(); tap(B_PLAY);
+    song.playing=0; ui.menu=1; ui.menu_sel=MI_ABOUT;
+    menu_input(BT(B_OCTUP));
+    check(ui.menu==2 && MI_COUNT==MI_ABOUT+1,"SYSTEM ends at ABOUT");
+    menu_close();
     go_home(); ui.msg_t=0;
     for (i=0;i<NPALETTES;i++) {
         settings.palette=i; palette_set(i); ui.force=1; frame();

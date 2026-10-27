@@ -345,19 +345,44 @@ static void duck_block(uint32_t adv)
 /* ---- the DJ filter: v < 0 a low-pass closing, > 0 a high-pass opening, 0 off. The cutoff glides
  * to the knob (no zipper); at 0 it opens fully, then the filter is bypassed. On the master (G_FILT)
  * and, SLOOP 2.4, on each track (P_TFLT: a synth part's mono signal, the drum track's left, right,
- * reverb send and delay send) */
+ * reverb send and delay send). A track's filter has its own resonance (P_TRES, tsvf_coef's reso: 40 = the master's)
+ * and TYPE (P_TFTYPE): LP/HP as above, or BP: the SVF's band-pass, v sweeping its centre over the whole range (the
+ * cutoff index (v + 64) << 8), 0 off */
 typedef struct {
     int32_t cut;                                        /* now, 0..127 << 8 (CUTOFF_HZ index) */
-    int8_t mode;                                        /* -1 LP, 1 HP, 0 off */
+    int8_t mode;                                        /* -1 LP, 1 HP, 2 BP, 0 off */
     uint8_t seed;                                       /* (2.6) bit per channel: the LP's state from its next sample */
+    uint8_t res, bp_on;
+    uint16_t bp_wet[4];                                  /* BP bypass ramp, Q8, independent drum buses */
     int32_t z[4][2];                                    /* the SVF states, per channel */
 } djf_t;
 static djf_t djf, tflt[NTRK];
 
-/* the knob v -> this block's coefficients in *c; 0 = bypassed (nothing to do) */
-static int djf_block(djf_t *f, int32_t v, tsvf_t *c)
+/* the knob v, the resonance res and the type (0 LP/HP, 1 BP) -> this block's coefficients in *c; 0 = bypassed */
+static int djf_block(djf_t *f, int32_t v, int32_t res, int32_t bp, tsvf_t *c)
 {
     int32_t to;
+    f->res = (uint8_t)res;
+    if (bp) {
+        f->bp_on = v != 0;
+        if (!v && !(f->bp_wet[0] | f->bp_wet[1] | f->bp_wet[2] | f->bp_wet[3])) {
+            f->mode = 0;
+            return 0;
+        }
+        to = v ? (v + 64) << 8 : f->cut;
+        if (f->mode != 2) {                             /* (from another type or off: from rest, at the knob) */
+            f->mode = 2;
+            f->cut = to;
+            memset(f->z, 0, sizeof f->z);
+            memset(f->bp_wet, 0, sizeof f->bp_wet);
+            f->seed = 0;
+        }
+        f->cut += clamp(to - f->cut, -384, 384);
+        tsvf_coef(c, f->cut, res);
+        return 1;
+    }
+    if (f->mode == 2)                                   /* (BP -> LP/HP: from rest, as a side switch) */
+        f->mode = 0;
     if (v < 0 && f->mode >= 0) {                        /* (switching side: from open) */
         f->mode = -1;
         f->cut = 127 << 8;
@@ -377,8 +402,18 @@ static int djf_block(djf_t *f, int32_t v, tsvf_t *c)
         f->mode = 0;                                    /* fully open again: off */
         return 0;
     }
-    tsvf_coef(c, f->cut, 40);
+    tsvf_coef(c, f->cut, res);
     return 1;
+}
+/* Variable resonance can align the two products beyond INT32_MAX, even with bounded states. */
+static inline int32_t djf_svf(const tsvf_t *c, int32_t x, int32_t *z, int bp)
+{
+    int32_t v3 = x - z[1];
+    int32_t v1 = (int32_t)(((int64_t)c->a1 * z[0] + (int64_t)c->a2 * v3) >> 13);
+    int32_t v2 = z[1] + (int32_t)(((int64_t)c->a2 * z[0] + (int64_t)c->a3 * v3) >> 13);
+    z[0] = clamp(2 * v1 - z[0], -150000, 150000);
+    z[1] = clamp(2 * v2 - z[1], -150000, 150000);
+    return bp ? v1 : v2;
 }
 /* n samples of channel ch through the filter (x within +-140000) */
 static void djf_run(djf_t *f, const tsvf_t *c, int32_t *b, uint32_t n, uint32_t ch)
@@ -393,9 +428,23 @@ static void djf_run(djf_t *f, const tsvf_t *c, int32_t *b, uint32_t n, uint32_t 
         }
     }
     for (i = 0; i < n; i++) {
-        int32_t x = clamp(b[i], -140000, 140000), y = tsvf_lp(c, x, &z[0], &z[1]);
+        int32_t x = clamp(b[i], -140000, 140000);
+        int32_t y = f->res == 40 ? tsvf_lp(c, x, &z[0], &z[1]) : djf_svf(c, x, z, 0);
         b[i] = f->mode < 0 ? y : x - y;
     }
+}
+/* BP: n samples of channel ch through the band-pass out of the same SVF (dsp.c tsvf_lp, its v1); its own loop */
+static __attribute__((noinline)) void djf_run_bp(djf_t *f, const tsvf_t *c, int32_t *b, uint32_t n, uint32_t ch)
+{
+    uint32_t i;
+    int32_t *z = f->z[ch];
+    int32_t wet = f->bp_wet[ch], to = f->bp_on ? 256 : 0;
+    for (i = 0; i < n; i++) {
+        int32_t dry = b[i], y = djf_svf(c, clamp(dry, -140000, 140000), z, 1);
+        wet += (wet < to) - (wet > to);
+        b[i] = dry + (((y - dry) * wet) >> 8);
+    }
+    f->bp_wet[ch] = (uint16_t)wet;
 }
 /* a track's filter on a signal at 4x its level (b >> 2 into the filter's range, back << 2) */
 static void tflt_run(djf_t *f, const tsvf_t *c, int32_t *b, uint32_t n, uint32_t ch)
@@ -403,7 +452,10 @@ static void tflt_run(djf_t *f, const tsvf_t *c, int32_t *b, uint32_t n, uint32_t
     uint32_t i;
     for (i = 0; i < n; i++)
         b[i] >>= 2;
-    djf_run(f, c, b, n, ch);
+    if (f->mode == 2)
+        djf_run_bp(f, c, b, n, ch);
+    else
+        djf_run(f, c, b, n, ch);
     for (i = 0; i < n; i++)
         b[i] *= 4;
 }
@@ -686,7 +738,7 @@ static void mix_part_run(track_t *t, uint32_t n)
         {
             tsvf_t fc;                                  /* the track's FILTER (P_TFLT), after the SLICER */
             djf_t *f = &tflt[(uint32_t)(t - trk) % NTRK];
-            if (djf_block(f, t->p[P_TFLT], &fc))
+            if (djf_block(f, t->p[P_TFLT], t->p[P_TRES], t->p[P_TFTYPE], &fc))
                 tflt_run(f, &fc, b, n, 0);
         }
         int32_t lvl0 = t->lvl ? t->lvl : lvl, dl = (lvl - lvl0) >> CTL_LOG2;   /* a new sound's trim: ramped */
@@ -774,7 +826,7 @@ static void dust_process(int32_t *l, int32_t *r, uint32_t n)
 static void djf_process(int32_t *l, int32_t *r, uint32_t n)
 {
     tsvf_t c;
-    if (!djf_block(&djf, song.g[G_FILT], &c))
+    if (!djf_block(&djf, song.g[G_FILT], 40, 0, &c))
         return;
     djf_run(&djf, &c, l, n, 0);
     djf_run(&djf, &c, r, n, 1);
@@ -1026,7 +1078,7 @@ static void texture_mix(int32_t *l, int32_t *r, uint32_t n)
         tx.lpm[1] += ((((tr[i] * sc) >> 8) - tx.lpm[1]) >> 2) * (k0 >> 2) >> 11;
         tl[i] = tx.lpm[0], tr[i] = tx.lpm[1];
     }
-    if (djf_block(&tx.f, clamp(song.g[G_TXTONE], -64, 63), &fc)) {
+    if (djf_block(&tx.f, clamp(song.g[G_TXTONE], -64, 63), 40, 0, &fc)) {
         djf_run(&tx.f, &fc, tl, n, 0);
         djf_run(&tx.f, &fc, tr, n, 1);
     }
@@ -1063,7 +1115,7 @@ static void mix_block(int32_t *out, uint32_t n)
         static int32_t dl[CTL], dr[CTL], dv[CTL], dd[CTL];
         tsvf_t fc;
         djf_t *f = &tflt[TRK_DRUM];
-        if (n <= CTL && djf_block(f, TDRUM->p[P_TFLT], &fc)) {
+        if (n <= CTL && djf_block(f, TDRUM->p[P_TFLT], TDRUM->p[P_TRES], TDRUM->p[P_TFTYPE], &fc)) {
             for (i = 0; i < n; i++)
                 dl[i] = dr[i] = dv[i] = dd[i] = 0;
             slicer_drums(dl, dr, dv, dd, n);

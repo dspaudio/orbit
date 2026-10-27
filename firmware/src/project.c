@@ -6,11 +6,13 @@
  * the transport is stopped and nothing sounds) and comes back at power-on: SLOOP starts where you
  * left it.
  *
- * Formats: 7 ("ORP7", written, ORBIT 0.7.0): per track the common parameters P_LEVEL..P_VLEAD (signed 16 bits),
+ * Formats: 8 ("ORP8", written, issue #5): per track the common parameters P_LEVEL..P_VLEAD (signed 16 bits),
  * the eight engine controls P_E0..P_E7 (signed 16 bits: CLUSTER keeps its raw values), the ten SLOOP 2.6 controls
  * P_ITYPE..P_LPOL in a byte each, engine, preset, the steps, each step's nudge (6 bits) and fill condition (2 bits)
- * in one byte, NLOCK parameter locks, the four HOME macro assignments and the user preset slot the sound came from.
- * 3840 bytes: one flash object. SLOOP 2.6's "FUN6" has another engine registry and is rejected, never loaded.
+ * in one byte, NLOCK parameter locks, the four HOME macro assignments, the user preset slot the sound came from
+ * and the track FILTER's RES | TYPE << 7 in the last byte. 3840 bytes: one flash object. 7 ("ORP7", ORBIT 0.7.0)
+ * is the same layout with that byte 0 and P_E0 at 63: read, its engine controls' ids (locks, macros) moved up by
+ * two, RES and TYPE their defaults. SLOOP 2.6's "FUN6" has another engine registry and is rejected, never loaded.
  * Read and converted (frozen layouts): 5 ("FUN5", ORBIT 0.4 .. 0.6 and SLOOP 2.4 .. 2.5: 61 parameters, the nudges,
  * locks and conditions; by count, a lock on an engine control follows it to its new id), 4 ("FUN4", SLOOP 2.0 .. 2.3:
  * PROJ_NP_V4 parameters, 10-byte steps with levels and ratchets, the drum track's 16 lanes; no nudge, no lock), 3
@@ -22,7 +24,9 @@
  *
  * Built on the host too (tests/project_test.c, -DPROJ_HOST): the part above the #ifndef
  * PROJ_HOST needs core.h, params.c (TP), drums.c (the lanes), the engines and trk_def_engine (ui.c). */
-#define PROJ_MAGIC 0x3750524Fu                 /* "ORP7" (bytes 4F 52 50 37): ORBIT 0.7.0, written */
+#define PROJ_MAGIC 0x3850524Fu                 /* "ORP8" (bytes 4F 52 50 38): written */
+#define PROJ_MAGIC_V7 0x3750524Fu              /* "ORP7": ORBIT 0.7.0; read */
+#define PROJ_E0_V7 63u                         /* P_E0 of format 7 */
 #define PROJ_MAGIC_FUN6 0x46554E36u            /* "FUN6": SLOOP 2.6, another engine namespace: rejected */
 #define PROJ_MAGIC_V5 0x46554E35u              /* "FUN5": format 4 + per-step nudge, locks, fill conditions; read only */
 #define PROJ_MAGIC_V4 0x46554E34u              /* "FUN4": four tracks, P_COUNT parameters each, 10-byte steps; read only */
@@ -37,12 +41,13 @@
 #define PROJ_NG_V2 27u                         /* G_COUNT of formats 1 and 2 */
 #define PROJ_NG 32u                            /* the globals a project holds (G_DRDLY rides in its own byte) */
 #define PROJ_NC7 53u                           /* format 7: common parameters kept in 16 bits, P_LEVEL .. P_VLEAD */
-#define PROJ_NX7 10u                           /* .. the 2.6 ones in a byte each, P_ITYPE .. P_LPOL */
+#define PROJ_NX7 10u                           /* .. the 2.6 ones in a byte each, P_ITYPE .. P_LPOL (then format 8's flt) */
 _Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u && G_COUNT == G_BEND + 1u && G_COUNT == 45u,
                "the globals a project holds, then G_DRDLY, then the 2.6 device settings and TEXTURE");
-_Static_assert(PROJ_NC7 == (uint32_t)P_ITYPE && PROJ_NX7 == (uint32_t)(P_E0 - P_ITYPE) && P_E0 == 63 && P_COUNT == 71 &&
-               PROJ_NC7 == PROJ_NP_V5 - 8u, "format 7: format 5's common parameters, ten bytes, eight engine controls");
-typedef struct {                               /* one track of format 7 */
+_Static_assert(PROJ_NC7 == (uint32_t)P_ITYPE && PROJ_NX7 == (uint32_t)(P_TRES - P_ITYPE) && P_TFTYPE == P_TRES + 1 &&
+               P_E0 == P_TFTYPE + 1 && P_E0 == PROJ_E0_V7 + 2u && P_COUNT == 73 && PROJ_NC7 == PROJ_NP_V5 - 8u,
+               "format 8: format 5's common parameters, ten bytes, eight engine controls, the FILTER's byte");
+typedef struct {                               /* one track of formats 7 and 8 */
     int16_t p[PROJ_NC7];                       /* P_LEVEL .. P_VLEAD (pt_get, pt_set) */
     int16_t e[8];                              /* P_E0 .. P_E7, raw signed 16 bits */
     uint8_t x[PROJ_NX7];                       /* P_ITYPE .. P_LPOL (2.6) */
@@ -55,7 +60,7 @@ typedef struct {                               /* one track of format 7 */
     plock_t lock[NLOCK];                       /* parameter locks (step LOCK_FREE = none) */
     uint8_t macro[MACRO_COUNT];                /* HOME KNOB 1..4: a P_* id, MACRO_DEFAULT = the engine's own */
     uint8_t user;                              /* the user preset slot + 1 the sound came from, 0 = none (a tag) */
-    uint8_t reserved;                          /* 0 */
+    uint8_t flt;                               /* P_TRES | P_TFTYPE << 7 (format 7: 0, reserved) */
 } proj_trk_t;
 typedef struct {
     uint32_t magic, size;
@@ -70,22 +75,28 @@ _Static_assert(__builtin_offsetof(proj_trk_t, p) == 0u && __builtin_offsetof(pro
                __builtin_offsetof(proj_trk_t, preset) == 133u && __builtin_offsetof(proj_trk_t, step) == 134u &&
                __builtin_offsetof(proj_trk_t, mf) == 774u && __builtin_offsetof(proj_trk_t, lock) == 838u &&
                __builtin_offsetof(proj_trk_t, macro) == 934u && __builtin_offsetof(proj_trk_t, user) == 938u &&
-               __builtin_offsetof(proj_trk_t, reserved) == 939u && sizeof(proj_trk_t) == 940u,
-               "format 7 track layout");
+               __builtin_offsetof(proj_trk_t, flt) == 939u && sizeof(proj_trk_t) == 940u,
+               "format 7 / 8 track layout");
 _Static_assert(__builtin_offsetof(project_t, g) == 8u && __builtin_offsetof(project_t, sel) == 72u &&
                __builtin_offsetof(project_t, drdly) == 73u && __builtin_offsetof(project_t, rsv) == 74u &&
                __builtin_offsetof(project_t, t) == 76u && __builtin_offsetof(project_t, sum) == 3836u &&
                sizeof(project_t) == 3840u, "format 7 is exactly one 3840-byte flash object");
 static int16_t pt_get(const proj_trk_t *t, uint32_t id)   /* p[id] of a stored track */
 {
-    return id < PROJ_NC7 ? t->p[id] : id < (uint32_t)P_E0 ? (int16_t)t->x[id - PROJ_NC7] : t->e[(id - P_E0) & 7u];
+    return id < PROJ_NC7 ? t->p[id] : id < (uint32_t)P_TRES ? (int16_t)t->x[id - PROJ_NC7]
+           : id == (uint32_t)P_TRES ? (int16_t)(t->flt & 127u) : id == (uint32_t)P_TFTYPE ? (int16_t)(t->flt >> 7)
+           : t->e[(id - P_E0) & 7u];
 }
 static void pt_set(proj_trk_t *t, uint32_t id, int32_t v)
 {
     if (id < PROJ_NC7)
         t->p[id] = (int16_t)v;
-    else if (id < (uint32_t)P_E0)
+    else if (id < (uint32_t)P_TRES)
         t->x[id - PROJ_NC7] = (uint8_t)clamp(v, TP[id].min, TP[id].max);   /* (their descriptors: all within 0..127) */
+    else if (id == (uint32_t)P_TRES)
+        t->flt = (uint8_t)((t->flt & 128u) | (uint32_t)clamp(v, 0, 127));
+    else if (id == (uint32_t)P_TFTYPE)
+        t->flt = (uint8_t)((t->flt & 127u) | (v > 0 ? 128u : 0u));
     else
         t->e[(id - P_E0) & 7u] = (int16_t)v;
 }
@@ -176,18 +187,19 @@ static uint32_t proj_hash(const void *p, uint32_t n)   /* FNV-1a over n bytes */
     return s;
 }
 static uint32_t proj_sum(const project_t *p) { return proj_hash(p, sizeof *p - 4u); }
-/* a format 7 project as stored: its header and checksum, then what no writer of it leaves (a reserved byte, an engine
- * this firmware does not have, a user slot out of range) */
-static int proj_ok(const project_t *q)
+/* a format 8 (or, magic PROJ_MAGIC_V7, 7) project as stored: its header and checksum, then what no writer of it leaves
+ * (format 7: a reserved byte not 0; an engine this firmware does not have, a user slot out of range) */
+static int proj_ok_as(const project_t *q, uint32_t magic)
 {
     uint32_t k;
-    if (q->magic != PROJ_MAGIC || q->size != sizeof *q || q->sum != proj_sum(q))
+    if (q->magic != magic || q->size != sizeof *q || q->sum != proj_sum(q))
         return 0;
     for (k = 0; k < NTRK; k++)
-        if (q->t[k].reserved || q->t[k].user > UP_SLOTS || (k < NPART && q->t[k].engine >= NENGINES))
+        if ((magic == PROJ_MAGIC_V7 && q->t[k].flt) || q->t[k].user > UP_SLOTS || (k < NPART && q->t[k].engine >= NENGINES))
             return 0;
     return 1;
 }
+static int proj_ok(const project_t *q) { return proj_ok_as(q, PROJ_MAGIC); }
 
 /* ---- old formats -> format 7 */
 /* an old step into a synth step (no level, no ratchet) */
@@ -231,7 +243,6 @@ static void proj_trk_plain(proj_trk_t *d)
         pt_set(d, k, TP[k].def);
     memset(d->macro, MACRO_DEFAULT, sizeof d->macro);
     d->user = 0;
-    d->reserved = 0;
     for (k = 0; k < NLOCK; k++) {
         d->lock[k].step = LOCK_FREE;
         d->lock[k].param = 0;
@@ -341,6 +352,35 @@ static int proj_from_v5(project_t *q, const project_v5_t *v5, int n)
     return 1;
 }
 
+/* an id of format 7 (P_E0 at 63) -> today's: the engine controls two up (RES, TYPE before them) */
+static uint32_t proj_id_from_v7(uint32_t id)
+{
+    return id < PROJ_E0_V7 ? id : id < PROJ_E0_V7 + 8u ? id + 2u : P_COUNT;
+}
+/* a format 7 project (n bytes in *v7) -> slot q as format 8: the same bytes, the engine controls' locks and HOME
+ * macros at their new ids, RES and TYPE their defaults */
+static int proj_from_v7(project_t *q, const project_t *v7, int n)
+{
+    uint32_t i, k;
+    if (n != (int)sizeof *v7 || !proj_ok_as(v7, PROJ_MAGIC_V7))
+        return 0;
+    memcpy(q, v7, sizeof *q);
+    q->magic = PROJ_MAGIC;
+    for (i = 0; i < NTRK; i++) {
+        proj_trk_t *d = &q->t[i];
+        pt_set(d, P_TRES, TP[P_TRES].def);
+        pt_set(d, P_TFTYPE, TP[P_TFTYPE].def);
+        for (k = 0; k < NLOCK; k++)
+            if (d->lock[k].step != LOCK_FREE)
+                d->lock[k].param = (uint8_t)proj_id_from_v7(d->lock[k].param);
+        for (k = 0; k < MACRO_COUNT; k++)
+            if (d->macro[k] != MACRO_DEFAULT)
+                d->macro[k] = (uint8_t)proj_id_from_v7(d->macro[k]);
+    }
+    q->sum = proj_sum(q);
+    return 1;
+}
+
 /* a format 3 project -> slot q as format 7 */
 static void proj_from_v3_ok(project_t *q, const project_v3_t *v3)
 {
@@ -427,6 +467,8 @@ static int proj_import(project_t *q, const void *b, int n)
         return 1;
     }
     switch (magic) {
+    case PROJ_MAGIC_V7:
+        return proj_from_v7(q, (const project_t *)b, n);
     case PROJ_MAGIC_V5:
         return proj_from_v5(q, (const project_v5_t *)b, n);
     case PROJ_MAGIC_V4:
@@ -738,7 +780,8 @@ static void autosave_resume(void)              /* power-on: the project as it wa
         return;
     }
     autosave_hash = q->sum;
-    if (drch_seed && proj_tmp.v7.magic != PROJ_MAGIC && q->g[G_DRCH] >= 0 && q->g[G_DRCH] <= 16) {
+    if (drch_seed && proj_tmp.v7.magic != PROJ_MAGIC && proj_tmp.v7.magic != PROJ_MAGIC_V7 && q->g[G_DRCH] >= 0 &&
+        q->g[G_DRCH] <= 16) {
         midi_set[3] = (uint8_t)q->g[G_DRCH];          /* a legacy (FUN1..5) autosave: its GLO > DRUMS > CH, now a */
         song.g[G_DRCH] = q->g[G_DRCH];                /* setting of the FM-1, kept in the settings once */
         settings_later = 1;
@@ -843,7 +886,8 @@ static void persist_boot(void)                    /* before settings_init / pane
         for (i = 0; i < 4u; i++) {
             if (!proj_ok(&proj_slot[i])) {             /* a format 5 slot of the firmware before: converted through */
                 memcpy(&proj_tmp, &proj_slot[i], sizeof proj_slot[i]);   /* the staging, never read in place */
-                if (proj_tmp.v5.magic != PROJ_MAGIC_V5 || !proj_import(&proj_slot[i], &proj_tmp, sizeof proj_tmp.v5)) {
+                if ((proj_tmp.v5.magic != PROJ_MAGIC_V5 && proj_tmp.v5.magic != PROJ_MAGIC_V7) ||
+                    !proj_import(&proj_slot[i], &proj_tmp, sizeof proj_tmp.v5)) {
                     proj_fetch(i);
                     continue;
                 }

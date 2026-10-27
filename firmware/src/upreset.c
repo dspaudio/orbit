@@ -5,10 +5,11 @@
  * records each, mirrored in RAM so browsing never reads flash. A record:
  * engine, name, the instrument parameters, a 16-step pattern.
  *
- * Banks: "OPB2" (ORBIT 0.7.0, written): 196-byte records of version 2, the
- * sound plus its four HOME macro assignments. "UPB1" (before, frozen): 192-byte
+ * Banks: "OPB3" (ORBIT 0.8, written): 198-byte records of version 3, all 73
+ * sound values plus four HOME macro assignments. "OPB2" (0.7, frozen):
+ * 196-byte version 2 records with 72 values. "UPB1" (before, frozen): 192-byte
  * records of version 1, no assignments; read and converted in RAM (macros: the
- * engine's own), written as OPB2 at the next save. A bank of another shape reads
+ * engine's own), written as OPB3 at the next save. A bank of another shape reads
  * as empty; so does a record of another version (never reinterpreted). A record
  * keeps np = the P_COUNT it was stored with; when that differs it is mapped by
  * count: its last 8 values are P_E0..P_E7, the first np - 8 are P_LEVEL.. in
@@ -18,12 +19,17 @@
  * With -DUP_HOST (host test) only the part above #ifndef UP_HOST is built;
  * it needs nothing but core.h. */
 #define UP_PER_BANK 16u
-#define UP_PMAX 72u                              /* room for P_COUNT to grow */
+#define UP_PMAX 73u
 #define UP_USED 0xA5u
-#define UP_VER 2u
-#define UP_BANK_MAGIC 0x3242504Fu                /* "OPB2" (bytes 4F 50 42 32) */
-#define UP_RECORD 196u
-#define UP_BANK_SIZE 3144u
+#define UP_VER 3u
+#define UP_BANK_MAGIC 0x3342504Fu                /* "OPB3" (bytes 4F 50 42 33) */
+#define UP_RECORD 198u
+#define UP_BANK_SIZE 3176u
+#define UP_PMAX_V2 72u
+#define UP_VER_V2 2u
+#define UP_BANK_MAGIC_V2 0x3242504Fu             /* "OPB2": read only */
+#define UP_RECORD_V2 196u
+#define UP_BANK_SIZE_V2 3144u
 #define UP_VER_V1 1u
 #define UP_BANK_MAGIC_V1 0x31425055u             /* "UPB1": read only */
 #define UP_RECORD_V1 192u
@@ -43,18 +49,32 @@ typedef struct {
 typedef struct {                                 /* version 1 (until ORBIT 0.6), frozen */
     uint8_t used, ver, engine, np;
     char name[12];
-    int16_t p[UP_PMAX];
+    int16_t p[UP_PMAX_V2];
     uint8_t note[16], flags[16];
 } up_rec_v1_t;
+typedef struct {                                 /* version 2 (ORBIT 0.7), frozen */
+    uint8_t used, ver, engine, np;
+    char name[12];
+    int16_t p[UP_PMAX_V2];
+    uint8_t note[16], flags[16], macro[MACRO_COUNT];
+} up_rec_v2_t;
+typedef struct {
+    uint32_t magic;
+    uint16_t rsize, nslot;
+    up_rec_v2_t r[UP_PER_BANK];
+} up_bank_v2_t;
 typedef struct {
     uint32_t magic;
     uint16_t rsize, nslot;
     up_rec_v1_t r[UP_PER_BANK];
 } up_bank_v1_t;
 _Static_assert(sizeof(up_rec_t) == UP_RECORD && __builtin_offsetof(up_rec_t, p) == 16u &&
-               __builtin_offsetof(up_rec_t, note) == 160u && __builtin_offsetof(up_rec_t, flags) == 176u &&
-               __builtin_offsetof(up_rec_t, macro) == 192u && sizeof(up_bank_t) == UP_BANK_SIZE &&
-               __builtin_offsetof(up_bank_t, r) == 8u, "OPB2 record and bank layout");
+               __builtin_offsetof(up_rec_t, note) == 162u && __builtin_offsetof(up_rec_t, flags) == 178u &&
+               __builtin_offsetof(up_rec_t, macro) == 194u && sizeof(up_bank_t) == UP_BANK_SIZE &&
+               __builtin_offsetof(up_bank_t, r) == 8u, "OPB3 record and bank layout");
+_Static_assert(sizeof(up_rec_v2_t) == UP_RECORD_V2 && sizeof(up_bank_v2_t) == UP_BANK_SIZE_V2 &&
+               __builtin_offsetof(up_rec_v2_t, note) == 160u && __builtin_offsetof(up_rec_v2_t, macro) == 192u,
+               "OPB2 as stored");
 _Static_assert(sizeof(up_rec_v1_t) == UP_RECORD_V1 && sizeof(up_bank_v1_t) == UP_BANK_SIZE_V1, "UPB1 as stored");
 _Static_assert(P_COUNT <= UP_PMAX && P_COUNT < 128, "user preset record: P_COUNT");
 static up_bank_t up_bank[UP_SLOTS / UP_PER_BANK];
@@ -97,7 +117,7 @@ static void up_params(const up_rec_t *r, int16_t *out, const int16_t *def)
         out[P_E0 + i] = r->p[nc + i];
 }
 
-/* a stored bank (n bytes of src: OPB2, or UPB1 converted) -> dst as OPB2. strict (a backup restore): a nonempty
+/* a stored bank (OPB3, OPB2 or UPB1) -> dst as OPB3. strict (a backup restore): a nonempty
  * record that is not valid rejects the bank; else (boot) it reads as empty, its neighbours kept. 1 = done; 0 = not a
  * bank this firmware reads (dst untouched). src and dst are distinct */
 static int up_bank_decode(up_bank_t *dst, const void *src, int n, int strict)
@@ -126,14 +146,19 @@ static int up_bank_decode(up_bank_t *dst, const void *src, int n, int strict)
         }
         return 1;
     }
-    if (magic == UP_BANK_MAGIC_V1) {
-        const up_bank_v1_t *b = (const up_bank_v1_t *)src;
-        if (n != (int)UP_BANK_SIZE_V1 || b->rsize != UP_RECORD_V1 || b->nslot != UP_PER_BANK)
+    if (magic == UP_BANK_MAGIC_V1 || magic == UP_BANK_MAGIC_V2) {
+        const uint8_t *b = (const uint8_t *)src;
+        uint16_t rsize, nslot;
+        uint32_t stride = magic == UP_BANK_MAGIC_V1 ? UP_RECORD_V1 : UP_RECORD_V2;
+        uint32_t ver = magic == UP_BANK_MAGIC_V1 ? UP_VER_V1 : UP_VER_V2;
+        memcpy(&rsize, b + 4, 2);
+        memcpy(&nslot, b + 6, 2);
+        if (n != (int)(8u + stride * UP_PER_BANK) || rsize != stride || nslot != UP_PER_BANK)
             return 0;
         for (i = 0; strict && i < UP_PER_BANK; i++) {
-            const up_rec_v1_t *s = &b->r[i];
-            if (!up_empty(s, UP_RECORD_V1) && !(s->used == UP_USED && s->ver == UP_VER_V1 && s->engine < NENGINES &&
-                                                s->np >= 8u && s->np <= UP_PMAX && s->name[0]))
+            const uint8_t *s = b + 8u + i * stride;
+            if (!up_empty(s, stride) && !(s[0] == UP_USED && s[1] == ver && s[2] < NENGINES &&
+                                          s[3] >= 8u && s[3] <= UP_PMAX_V2 && s[4]))
                 return 0;
         }
         memset(dst, 0, sizeof *dst);
@@ -141,9 +166,11 @@ static int up_bank_decode(up_bank_t *dst, const void *src, int n, int strict)
         dst->rsize = UP_RECORD;
         dst->nslot = UP_PER_BANK;
         for (i = 0; i < UP_PER_BANK; i++) {
-            const up_rec_v1_t *s = &b->r[i];
+            up_rec_v2_t old = {0};
+            const up_rec_v2_t *s = &old;
             up_rec_t *r = &dst->r[i];
-            if (!(s->used == UP_USED && s->ver == UP_VER_V1 && s->engine < NENGINES && s->np >= 8u && s->np <= UP_PMAX &&
+            memcpy(&old, b + 8u + i * stride, stride);
+            if (!(s->used == UP_USED && s->ver == ver && s->engine < NENGINES && s->np >= 8u && s->np <= UP_PMAX_V2 &&
                   s->name[0]))
                 continue;                                   /* (empty) */
             r->used = UP_USED;
@@ -151,10 +178,12 @@ static int up_bank_decode(up_bank_t *dst, const void *src, int n, int strict)
             r->engine = s->engine;
             r->np = s->np;                                  /* (the values as stored: mapped by count when read) */
             memcpy(r->name, s->name, sizeof r->name);
-            memcpy(r->p, s->p, sizeof r->p);
+            memcpy(r->p, s->p, sizeof s->p);
             memcpy(r->note, s->note, sizeof r->note);
             memcpy(r->flags, s->flags, sizeof r->flags);
-            memset(r->macro, MACRO_DEFAULT, sizeof r->macro);
+            for (k = 0; k < MACRO_COUNT; k++)
+                r->macro[k] = ver == UP_VER_V2 && param_id_by_count(s->macro[k], s->np) < P_COUNT ?
+                              s->macro[k] : MACRO_DEFAULT;
         }
         return 1;
     }

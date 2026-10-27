@@ -721,9 +721,9 @@ int main(int argc, char **argv)
         sec = mi_sec(ui.menu_sel);
         check(sec == MS_SYSTEM, "menu: SELECT stops at the last section, SYSTEM");
         encs[panel.enc[EN_K4]] = 1; ui.force = 1; frame(); ppm("menu-system");
-        check(ui.menu_sel == MI_DEMO && swap16(screen[193u * 240u + 4u]) == C_WHITE &&
+        check(ui.menu_sel == MI_PANEL && MI_COUNT == MI_ABOUT + 1 &&
               swap16(screen[233u * 240u + 4u]) == C_BLACK,
-              "menu SYSTEM: fourth row selection fits above the screen edge without footer overlap");
+              "menu SYSTEM: unused fourth knob leaves selection unchanged and footer clear");
         encs[panel.enc[EN_K2]] = 1; frame();
         check(ui.menu == 1 && ui.menu_sel == MI_LCLEAR, "menu SYSTEM: KNOB 2 is MIDI LEARN CLEAR (2.6), nothing cleared by a turn");
         encs[panel.enc[EN_K3]] = 1; frame();
@@ -763,14 +763,39 @@ int main(int argc, char **argv)
         tap(B_FX); SEL(1);
         check(!strcmp(PT(), "FILTER"), "SELECT on FX: next page, the track FILTER");
         TSEL->p[P_TFLT] = -32; ui.force = 1; frames(2); ppm("page-filter");
-        check(!strcmp(ui.big_l[0], "FILT") && !strcmp(ui.big_v[0], "LP50") && !ui.big_l[1][0],
-              "FILTER page: its one value drawn large (LP50 %)");
+        check(!strcmp(ui.big_l[0], "FILT") && !strcmp(ui.big_v[0], "LP50") &&
+              !strcmp(ui.big_l[1], "RES") && !strcmp(ui.big_l[2], "TYPE") &&
+              !strcmp(ui.big_v[2], "LP/HP") && !ui.big_l[3][0],
+              "FILTER page: FILT, RES and TYPE controls, fourth column unused");
         {   /* the big value in the graph strip: white pixels in the middle of the screen */
             uint32_t x, y, lit = 0;
             for (y = Y_GRAPH + 30; y < Y_GRAPH + 90; y++)
                 for (x = 40; x < 200; x++)
                     lit += screen[y * 240u + x] != 0;
             check(lit > 300u, "FILTER page: the graph strip shows it");
+        }
+        {
+            uint32_t t;
+            for (t = 0; t < 2; t++) {
+                int16_t res;
+                song.sel = t ? TRK_DRUM : 0;
+                TSEL->p[P_TFLT] = -32; TSEL->p[P_TRES] = 40; TSEL->p[P_TFTYPE] = 0;
+                ui.force = 1; frame();
+                ppm(t ? "page-track-filter-drum-lphp" : "page-track-filter-synth-lphp");
+                check(page_for_drum(cur_page()), "track FILTER is available on the drum track");
+                encs[panel.enc[EN_K2]] = 1; frame(); res = TSEL->p[P_TRES];
+                encs[panel.enc[EN_K3]] = 1; frame();
+                check(res > 40 && TSEL->p[P_TFTYPE] == 1 &&
+                      !strcmp(ui.big_v[0], "BP25") && !strcmp(ui.big_v[2], "BP"),
+                      "synth/drum FILTER knobs edit RES and TYPE and redraw BP formatting");
+                ui.force = 1; frame(); ppm(t ? "page-track-filter-drum-bp" : "page-track-filter-synth-bp");
+                encs[panel.enc[EN_K1]] = 1; frame();
+                check(TSEL->p[P_TFLT] > -32, "synth/drum FILTER knob 1 edits the BP centre");
+                TSEL->p[P_TFLT] = 0; ui.force = 1; frame();
+                check(!strcmp(ui.big_v[0], "OFF"), "BP FILTER zero displays OFF");
+                TSEL->p[P_TRES] = 40; TSEL->p[P_TFTYPE] = 0;
+            }
+            song.sel = 0;
         }
         TSEL->p[P_TFLT] = 0;
         SEL(9);

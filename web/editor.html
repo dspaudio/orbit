@@ -721,7 +721,7 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   WIDE: 77, MACRO: 78, UP_GET_MAP: 79, UP_PUT_MAP: 80, MACRO_DESC: 81 };
 /* v7: the parameters a step can lock (firmware seq.c p_lockable: the sound, not the sequencer / arp / key / voice
    mode); ids as core.h: LEVEL .. LFO dests, GATE, the sends, GLIDE, PAN, DETUNE, the SLICER, the engine's 8 */
-const lockable = (id, pe0 = 63) => id <= 16 || id === 32 || (id >= 33 && id <= 36) || id === 38 || id === 39 || id === 44 || (id >= 45 && id <= 48) || id === 50 || (id >= pe0 && id < pe0 + 8) || (pe0 >= 63 && id >= 54 && id <= 57);
+const lockable = (id, pe0 = 65) => id <= 16 || id === 32 || (id >= 33 && id <= 36) || id === 38 || id === 39 || id === 44 || (id >= 45 && id <= 48) || id === 50 || (pe0 >= 65 && id === 63) || (id >= pe0 && id < pe0 + 8) || (pe0 >= 63 && id >= 54 && id <= 57);
 const MICRO = { MIN: -32, MAX: 31 };                 /* a step's nudge in 1/64 of a step (- early, + late), sent + 64 */
 /* v8: a step's fill condition (firmware core.h FC_*): 0 normal, 1 plays only during a fill, 2 silent during one; 2 bits a
    step, 4 steps a byte (step i: byte i >> 2, bits 2 (i & 3)..), the 16 bytes sent pack7 */
@@ -734,13 +734,13 @@ const PUSH = new Set([CMD.CHANGED, CMD.RELOAD, CMD.STEP_CHANGED, CMD.TRACK_CHANG
 const UP = { NAME_MAX: 12, PAT: 16, LIST_MAX: 16 };
 const MACRO = { COUNT: 4, DEFAULT: 127 };
 function macroIds(ids, pe0) {
-  if (!Number.isInteger(pe0) || pe0 < 0 || pe0 > 64 || !Array.isArray(ids) || ids.length !== MACRO.COUNT ||
+  if (!Number.isInteger(pe0) || pe0 < 0 || pe0 > 65 || !Array.isArray(ids) || ids.length !== MACRO.COUNT ||
       ids.some((id) => !Number.isInteger(id) || (id !== MACRO.DEFAULT && (id < 0 || id >= pe0 + 8))))
     throw new Error("Invalid macro assignments");
   return ids.slice();
 }
 const F = { INT: 0, PCT: 1, BIPCT: 2, TIME: 3, LFOHZ: 4, CUTOFF: 5, DB: 6, SEMI: 7, ENUM: 8, BPM: 9, NOTE: 10, ONOFF: 11, OCT: 12, STEPS: 13,
-  SWING: 14, FILT: 15 };
+  SWING: 14, FILT: 15, BPF: 16 };
 /* v5 (SLOOP 2.0): the drum track's 16 sounds (firmware drums.c LANE_NOTE / LANE_NAME), one per white key
    F3..G5; a hit has a level (NORM, GHOST, SOFT, HARD: OCT- / OCT+ held on the device) and a ratchet x1..x4 */
 const DRUM_LANES = [[36, "KICK"], [35, "KICK 2"], [38, "SNARE"], [39, "CLAP"], [42, "HAT"], [46, "OPEN HAT"], [44, "PEDAL"], [37, "RIM"],
@@ -863,7 +863,7 @@ const parse = {
   [CMD.MACRO](a, info) {
     const r = new Reader(a), o = { track: r.b(), rc: r.b(), macroIds: [r.b(), r.b(), r.b(), r.b()] };
     if (r.i !== a.length) throw new Error("Invalid MACRO reply");
-    o.macroIds = macroIds(o.macroIds, info ? info.pe0 : 63);
+    o.macroIds = macroIds(o.macroIds, info ? info.pe0 : 65);
     return o;
   },
   [CMD.UP_GET_MAP](a, info) {
@@ -1022,7 +1022,7 @@ const req = {
   upGet: (s) => valueReq(CMD.UP_GET, [s & 0x7F]),
   macro: (track, ids) => {
     if (!Number.isInteger(track) || track < 0 || track >= 3) throw new Error("Invalid macro track");
-    return [CMD.MACRO, ids == null ? [track] : [track, ...macroIds(ids, 63)]];
+    return [CMD.MACRO, ids == null ? [track] : [track, ...macroIds(ids, valueProtocol >= 13 ? 65 : 63)]];
   },
   macroDesc: (track, id) => {
     if (!Number.isInteger(track) || track < 0 || track >= 3 || !Number.isInteger(id) || id < 0 || id > 126)
@@ -1228,6 +1228,7 @@ function fmtValue(d, v) {
     case F.PCT: return [String(d.max > 0 ? Math.trunc((v * 100 + Math.trunc(d.max / 2)) / d.max) : v), "%"];
     case F.SWING: return [String(Math.max(0, Math.min(100, v))), ""];   /* 0 straight .. 100 the most (as the FM-1, 2.5) */
     case F.FILT: return !v ? ["OFF", ""] : v < 0 ? ["LP" + Math.trunc((-v * 100 + 32) / 64), "%"] : ["HP" + Math.trunc((v * 100 + 31) / 63), "%"];
+    case F.BPF: return !v ? ["OFF", ""] : ["BP" + Math.trunc((v + 64) * 100 / 127), "%"];
     case F.BIPCT: return [sign(Math.trunc(v * 100 / 64)), "%"];
     case F.TIME: {
       const ms10 = Math.round(10 * Math.pow(10000, (v & 127) / 127));
@@ -1612,7 +1613,7 @@ function zipStore(files) {
    the right values; parameters the file does not have are null (left at the engine default). Engines are
    matched by name. The old single-sound file ("felucca-patch" version 1, "Save to file") is read too. */
 const LIB = { FORMAT: "felucca-library", VERSION: 2 };
-const historicCounts = new Set([53, 57, 58, 61, 71]);
+const historicCounts = new Set([53, 57, 58, 61, 71, 73]);
 function paramsByCount(p, count) {
   const nc = p.length - 8, target = count - 8, out = new Array(count).fill(null);
   for (let i = 0; i < Math.min(nc, target); i++) out[i] = p[i] ?? null;
@@ -1805,7 +1806,7 @@ function b64dec(s) {
    6..7 the user preset banks, 32..35 the sample slots USR1..4 (35, USR4: SLOOP 2.4) */
 /* RESTORE: the objects in the order they are written back (banks first; 8 = the FM6 patch bank, firmware v9: a
    file without it restores fine, a v8 device gets no object 8 sent; 9 = the SYN drum kits, firmware v10, likewise) */
-const BK = { FORMAT: "sloop-backup", VERSION: 2, PROJECT_MAGIC: 0x3750524F,
+const BK = { FORMAT: "sloop-backup", VERSION: 2, PROJECT_MAGIC: 0x3850524F, PROJECT_MAGIC_V7: 0x3750524F,
   SAMPLES: [32, 33, 34, 35], RESTORE: [6, 7, 8, 9, 2, 3, 4, 5, 0, 1, 10] };
 class BackupError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
 function projectHash(bytes) {
@@ -1820,27 +1821,30 @@ function backupShape(id, d) {
   if (id === 0 || (id >= 2 && id <= 5)) {
     if (d.length < 4) bad();
     const magic = v.getUint32(0, true), sizes = new Map([[0x46554E31, 688], [0x46554E32, 2552],
-      [0x46554E33, 2584], [0x46554E34, 3112], [0x46554E35, 3840], [BK.PROJECT_MAGIC, 3840]]);
+      [0x46554E33, 2584], [0x46554E34, 3112], [0x46554E35, 3840], [BK.PROJECT_MAGIC_V7, 3840], [BK.PROJECT_MAGIC, 3840]]);
     if (magic === 0x46554E36) throw new BackupError("bkNewer", "FUN6 is not an ORBIT project");
     if ((magic & 0xFFFFFF00) === 0x46554E00 && (magic & 255) > 0x35 ||
-        (magic & 0x00FFFFFF) === 0x0050524F && (magic >>> 24) > 0x37)
+        (magic & 0x00FFFFFF) === 0x0050524F && (magic >>> 24) > 0x38)
       throw new BackupError("bkNewer", "Unsupported project version");
     if (d.length < 12) bad();
     if (sizes.get(magic) !== d.length || v.getUint32(4, true) !== d.length ||
         projectHash(d.subarray(0, d.length - 4)) !== v.getUint32(d.length - 4, true)) bad();
-    if (magic === BK.PROJECT_MAGIC) for (let k = 0; k < 4; k++) {
+    if (magic === BK.PROJECT_MAGIC || magic === BK.PROJECT_MAGIC_V7) for (let k = 0; k < 4; k++) {
       const at = 76 + k * 940;
-      if (d[at + 939] || (k < 3 && (d[at + 132] >= 17 || d[at + 938] > 32))) bad();
+      if ((magic === BK.PROJECT_MAGIC_V7 && d[at + 939]) || d[at + 938] > 32 || (k < 3 && d[at + 132] >= 17)) bad();
     }
   } else if (id === 6 || id === 7) {
     if (d.length < 8) bad();
-    const magic = v.getUint32(0, true), old = magic === 0x31425055, size = old ? 192 : 196;
-    if ((!old && magic !== 0x3242504F) || d.length !== 8 + 16 * size ||
+    const magic = v.getUint32(0, true), shape = new Map([[0x31425055, [192, 1, 72]],
+      [0x3242504F, [196, 2, 72]], [0x3342504F, [198, 3, 73]]]).get(magic);
+    if (!shape) bad();
+    const [size, version, pmax] = shape;
+    if (d.length !== 8 + 16 * size ||
         v.getUint16(4, true) !== size || v.getUint16(6, true) !== 16) bad();
     for (let k = 0; k < 16; k++) {
       const r = d.subarray(8 + k * size, 8 + (k + 1) * size);
-      if (r.some((b) => b !== 0) && (r[0] !== 0xA5 || r[1] !== (old ? 1 : 2) || r[2] >= 17 ||
-          r[3] < 8 || r[3] > 72 || !r[4])) bad();
+      if (r.some((b) => b !== 0) && (r[0] !== 0xA5 || r[1] !== version || r[2] >= 17 ||
+          r[3] < 8 || r[3] > pmax || !r[4])) bad();
     }
   } else if (id === 1) {
     if (d.length < 4 || ![[0x50455233, 88], [0x50455232, 52], [0x50455231, 40]]
@@ -1878,14 +1882,15 @@ async function backupCapture(rq, info, progress = () => {}) {
     objects.push({ id: it.id, len: it.len, crc: it.crc, data: b64enc(data) });
   }
   return { format: BK.FORMAT, version: info.proto >= 12 ? BK.VERSION : 1, product: "ORBIT", protocol: info.proto,
-    projectMagic: BK.PROJECT_MAGIC, firmware: info.version, date: new Date().toISOString(), objects };
+    projectMagic: info.proto >= 13 ? BK.PROJECT_MAGIC : BK.PROJECT_MAGIC_V7, firmware: info.version, date: new Date().toISOString(), objects };
 }
 /* a backup file -> {id: Uint8Array}; every object checked against its length and CRC */
 function backupObjects(file) {
   if (!file || file.format !== BK.FORMAT || ![1, 2].includes(file.version) || !Array.isArray(file.objects))
     throw new BackupError("bkBad", "Unsupported backup format or version");
   if (!/(^|\W)ORBIT(\W|$)/i.test(file.firmware || "") || (file.version === 2 &&
-      (file.product !== "ORBIT" || file.protocol !== 12 || file.projectMagic !== BK.PROJECT_MAGIC)))
+      (file.product !== "ORBIT" || ![12, 13].includes(file.protocol) ||
+       file.projectMagic !== (file.protocol === 13 ? BK.PROJECT_MAGIC : BK.PROJECT_MAGIC_V7))))
     throw new BackupError("bkForeign", "Raw backups must identify ORBIT");
   const m = new Map();
   for (const o of file.objects) {
@@ -1903,9 +1908,15 @@ async function backupRestore(rq, file, progress = () => {}) {
   const m = backupObjects(file);
   const info = parse[CMD.INFO](await rq(req.info(), { timeout: 1000, retries: 2 }));
   if (!/(^|\W)ORBIT(\W|$)/i.test(info.version)) throw new BackupError("bkForeign", "Target is not ORBIT");
+  const projects = [...m].filter(([id, d]) => (id === 0 || id >= 2 && id <= 5) && d.length >= 4)
+    .map(([, d]) => new DataView(d.buffer, d.byteOffset).getUint32(0, true));
+  const banksV3 = [...m].some(([id, d]) => (id === 6 || id === 7) && d.length >= 4 &&
+    new DataView(d.buffer, d.byteOffset).getUint32(0, true) === 0x3342504F);
+  if (info.proto < 13 && (projects.includes(BK.PROJECT_MAGIC) || banksV3))
+    throw new BackupError("bkNewer", "ORP8 and OPB3 require ORBIT protocol 13");
   const modern = m.has(10) || [...m].some(([id, d]) => d.length >= 4 &&
-    ((id === 0 || id >= 2 && id <= 5) && new DataView(d.buffer, d.byteOffset).getUint32(0, true) === BK.PROJECT_MAGIC ||
-     (id === 6 || id === 7) && new DataView(d.buffer, d.byteOffset).getUint32(0, true) === 0x3242504F));
+    ((id === 0 || id >= 2 && id <= 5) && [BK.PROJECT_MAGIC_V7, BK.PROJECT_MAGIC].includes(new DataView(d.buffer, d.byteOffset).getUint32(0, true)) ||
+     (id === 6 || id === 7) && [0x3242504F, 0x3342504F].includes(new DataView(d.buffer, d.byteOffset).getUint32(0, true))));
   if (modern && info.proto < 12) throw new BackupError("bkNewer", "ORP7, OPB2 and MIDI settings require ORBIT protocol 12");
   const readable = info.pcount >= 61 ? 5 : 4;
   if ([0, 2, 3, 4, 5].some((id) => {
@@ -2028,7 +2039,7 @@ async function capturePatch(rq, info, name) {
 
 /* what loading a sound leaves alone (firmware ui.c param_kept): the mix (LEVEL, PAN, MUTE), the pattern
    parameters (LEN, DIV, SWG, GATE) and the key the part plays in (ROOT, SCL, QNT; CHORD from SLOOP 2.0); the track FILTER (2.4) */
-const keptIds = (info) => new Set([0, 25, 26, 27, 29, 30, 31, 32, 39, 40, ...(info.pe0 > 49 ? [49] : []), ...(info.pe0 > 50 ? [50] : []), ...(info.pe0 > 52 ? [51, 52] : [])]);
+const keptIds = (info) => new Set([0, 25, 26, 27, 29, 30, 31, 32, 39, 40, ...(info.pe0 > 49 ? [49] : []), ...(info.pe0 > 50 ? [50] : []), ...(info.pe0 > 52 ? [51, 52] : []), ...(info.pe0 >= 65 ? [63, 64] : [])]);
 /* play a patch without writing flash, as UP_LOAD would load it: SET the engine (G_ENGSEL, engine defaults),
    then every parameter of the sound that differs. Never the pattern (LIVE: a sound never changes the
    sequence), the mix or the key. opt: {gEng: G_ENGSEL id, progress(i, n)} -> {wrote: false} */
@@ -2487,6 +2498,7 @@ function makeMockDevice(opt = {}) {
   const v10 = v9 && !opt.v9;                         /* SLOOP 2.5: the SYN drum kits */
   const v11 = v10 && !opt.v10;
   const v12 = v11 && !opt.v11;
+  const v13 = v12 && !opt.v12;
   const ESYNC = ["0", "1/64T", "1/64", "1/32T", "1/64D", "1/32", "1/16T", "1/32D", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D",
     "1/4", "1/2T", "1/4D", "1/2", "1/1T", "1/2D", "1/1", "1/1D", "2BAR", "3BAR", "4BAR"];
   if (v12) {
@@ -2504,6 +2516,7 @@ function makeMockDevice(opt = {}) {
       E("RATE", ["1BAR", "2BAR", "4BAR", "8BAR", "16BAR"], 2), E("WHEN", ["PLAY", "ALWAYS"], 0),
       E("DUCK", NONOFF, 0), D("BEND", F.SEMI, 1, 12, 2));
   }
+  if (v13) TP.push(D("RES", F.PCT, 0, 127, 40), E("TYPE", ["LP/HP", "BP"], 0));
   if (v11) {
     ENG.push({ name: "CLUSTER", titles: ["OSC RAW", "RESERVED"],
       edit: [D("COUNT", F.INT, 2048, 18431, 4000), D("WAVE", F.INT, -32768, 32767, 4000),
@@ -2600,14 +2613,15 @@ function makeMockDevice(opt = {}) {
       return rows[id - 54];
     }
     if (v12 && t.p[59] && [1, 2, 4].includes(id)) return { ...TP[id], fmt: F.INT, names: ESYNC };
+    if (v13 && id === 50 && t.p[64]) return { ...TP[id], fmt: F.BPF };
     return t.drum && id === P_E0 ? KIT : id >= P_E0 ? ENG[t.engine].edit[id - P_E0] : TP[id];
   };
   const eligible = (t, id) => {
     if (!t || t.drum || id < 0 || id >= P_COUNT || (v12 && id === 58 && t.engine !== 0)) return false;
     const d = tdesc(t, id); return !!d && !!d.label && d.label !== "--" && d.max > d.min;
   };
-  const desc = (scope, id) => scope === 0 && id < P_COUNT ? st.sel === TRK_DRUM && id === P_E0 ? KIT
-    : id >= P_E0 ? ENG[st.engine].edit[id - P_E0] : TP[id] : scope === 1 && id < G_COUNT ? GP[id] : null;
+  const desc = (scope, id) => scope === 0 && id < P_COUNT ? tdesc(st.tracks[st.sel], id)
+    : scope === 1 && id < G_COUNT ? GP[id] : null;
   const seqEmpty = () => st.step.every((s) => !s.n);
   function loadPat16(pat) {                       /* ui.c load_pat16 */
     const ps = stepsFromPattern(pat);
@@ -2628,7 +2642,7 @@ function makeMockDevice(opt = {}) {
     st.p[33] = 0; st.p[34] = 24; st.p[35] = 28; st.p[36] = 36;
     if (e.name === "CLUSTER") for (let i = 33; i <= 36; i++) st.p[i] = 0;
     for (let i = P_SLCR; i < P_CHORD; i++) st.p[i] = TP[i].def;   /* a factory preset turns the SLICER off (CHORD stays: the key) */
-    if (v12) for (let i = 53; i < P_E0; i++) st.p[i] = TP[i].def;
+    if (v12) for (let i = 53; i < 63; i++) st.p[i] = TP[i].def;
     if (pr.common) {
       const kept = keptIds({ pe0: P_E0 });
       pr.common.forEach((v, i) => { if (!kept.has(i)) st.p[i] = v; });
@@ -2690,7 +2704,7 @@ function makeMockDevice(opt = {}) {
   /* Binary mock objects use the firmware layouts; this transport model is not native audio. */
   function projectEncode(o) {
     const b = new Uint8Array(3840), v = new DataView(b.buffer);
-    v.setUint32(0, v12 ? BK.PROJECT_MAGIC : 0x46554E35, true); v.setUint32(4, b.length, true);
+    v.setUint32(0, v13 ? BK.PROJECT_MAGIC : v12 ? BK.PROJECT_MAGIC_V7 : 0x46554E35, true); v.setUint32(4, b.length, true);
     for (let i = 0; i < 32; i++) v.setInt16(8 + i * 2, o.g[i], true);
     b[72] = o.sel; b[73] = o.g[32] || 0;
     if (v12) {
@@ -2704,6 +2718,7 @@ function makeMockDevice(opt = {}) {
         for (let i = 0; i < 8; i++) v.setInt16(at + 106 + i * 2, t.p[P_E0 + i], true);
         for (let i = 0; i < 10; i++) b[at + 122 + i] = t.p[53 + i];
         b.set(t.drum ? [127, 127, 127, 127] : t.macroIds, at + 934); b[at + 938] = t.drum ? 0 : t.user;
+        if (v13) b[at + 939] = (t.p[63] & 127) | (t.p[64] ? 128 : 0);
       }
       b[at + (v12 ? 132 : 122)] = t.drum ? 0 : t.engine; b[at + (v12 ? 133 : 123)] = t.drum ? 0 : t.preset;
       for (let i = 0; i < 64; i++) {
@@ -2729,8 +2744,10 @@ function makeMockDevice(opt = {}) {
   }
   function projectDecode(b) {
     backupShape(0, b);
-    const v = new DataView(b.buffer, b.byteOffset, b.byteLength), modern = v.getUint32(0, true) === BK.PROJECT_MAGIC;
-    if (!modern && v.getUint32(0, true) !== 0x46554E35) throw new Error("Mock project reader supports FUN5 and ORP7");
+    const v = new DataView(b.buffer, b.byteOffset, b.byteLength), magic = v.getUint32(0, true),
+      current = magic === BK.PROJECT_MAGIC, modern = current || magic === BK.PROJECT_MAGIC_V7;
+    if (current && !v13) throw new BackupError("bkNewer", "ORP8 requires ORBIT protocol 13");
+    if (!modern && magic !== 0x46554E35) throw new Error("Mock project reader supports FUN5, ORP7 and ORP8");
     const o = { tracks: [0, 1, 2, 3].map(newTrack), sel: b[72] < 4 ? b[72] : 0, g: st.g.slice() };
     for (let i = 0; i < 32; i++) if (![12, 13, 14, 15, 24].includes(i)) o.g[i] = v.getInt16(8 + i * 2, true);
     o.g[32] = b[73];
@@ -2745,7 +2762,9 @@ function makeMockDevice(opt = {}) {
       const p = Array.from({ length: modern ? 71 : 61 }, (_, i) => modern && i >= 53 && i < 63 ? b[at + 122 + i - 53]
         : v.getInt16(at + (modern && i >= 63 ? 106 + (i - 63) * 2 : i * 2), true));
       t.p = paramsByCount(p, P_COUNT).map((x, i) => { const d = tdesc(t, i); return clamp(x ?? d.def, d.min, d.max); });
-      t.macroIds = modern && !t.drum ? Array.from(b.subarray(at + 934, at + 938), (x) => x < P_COUNT ? x : 127) : [127, 127, 127, 127];
+      if (v13) { t.p[63] = current ? b[at + 939] & 127 : 40; t.p[64] = current ? b[at + 939] >> 7 : 0; }
+      t.macroIds = modern && !t.drum ? remapMacros(Array.from(b.subarray(at + 934, at + 938),
+        (x) => x < (current ? 73 : 71) ? x : 127), current ? 65 : 63, P_E0) : [127, 127, 127, 127];
       t.user = modern && !t.drum ? b[at + 938] : 0;
       for (let i = 0; i < 64; i++) {
         const pos = stepAt + i * 10;
@@ -2758,33 +2777,38 @@ function makeMockDevice(opt = {}) {
         if (modern) fillSet(t.fill, i, b[at + 774 + i] >> 6);
       }
       for (let i = 0; i < 24; i++) {
-        const pos = lockAt + i * 4, param = b[pos + 1], id = !modern && param >= 53 ? P_E0 + param - 53 : param;
+        const pos = lockAt + i * 4, param = b[pos + 1], id = !modern && param >= 53 ? P_E0 + param - 53
+          : modern && !current && param >= 63 && param < 71 ? P_E0 + param - 63 : param;
         if (b[pos] < 64 && id < P_COUNT) t.locks.push({ step: b[pos], param: id, value: v.getInt16(pos + 2, true) });
       }
       if (!modern) t.fill = Array.from(b.subarray(at + 924, at + 940));
     }); return o;
   }
   function bankEncode(h) {
-    const size = v12 ? 196 : 192, b = new Uint8Array(8 + 16 * size), v = new DataView(b.buffer);
-    v.setUint32(0, v12 ? 0x3242504F : 0x31425055, true); v.setUint16(4, size, true); v.setUint16(6, 16, true);
+    const size = v13 ? 198 : v12 ? 196 : 192, pat = v13 ? 162 : 160,
+      b = new Uint8Array(8 + 16 * size), v = new DataView(b.buffer);
+    v.setUint32(0, v13 ? 0x3342504F : v12 ? 0x3242504F : 0x31425055, true); v.setUint16(4, size, true); v.setUint16(6, 16, true);
     for (let k = 0; k < 16; k++) {
       const p = st.bank[h * 16 + k]; if (!p) continue; const at = 8 + k * size;
-      b.set([0xA5, v12 ? 2 : 1, p.engine, P_COUNT], at); b.set(strEnc(p.name).slice(0, 12), at + 4);
+      b.set([0xA5, v13 ? 3 : v12 ? 2 : 1, p.engine, P_COUNT], at); b.set(strEnc(p.name).slice(0, 12), at + 4);
       p.p.forEach((x, i) => v.setInt16(at + 16 + i * 2, x, true));
-      for (let i = 0; i < 16; i++) { b[at + 160 + i] = p.pattern[i][0]; b[at + 176 + i] = p.pattern[i][1]; }
-      if (v12) b.set(p.macroIds, at + 192);
+      for (let i = 0; i < 16; i++) { b[at + pat + i] = p.pattern[i][0]; b[at + pat + 16 + i] = p.pattern[i][1]; }
+      if (v12) b.set(p.macroIds, at + pat + 32);
     } return b;
   }
   function bankDecode(b) {
     if (!b.length) return new Array(16).fill(null); backupShape(6, b);
-    const v = new DataView(b.buffer, b.byteOffset, b.byteLength), modern = v.getUint32(0, true) === 0x3242504F, size = modern ? 196 : 192;
+    const v = new DataView(b.buffer, b.byteOffset, b.byteLength), magic = v.getUint32(0, true),
+      current = magic === 0x3342504F, modern = current || magic === 0x3242504F,
+      size = current ? 198 : modern ? 196 : 192, pat = current ? 162 : 160;
+    if (current && !v13) throw new BackupError("bkNewer", "OPB3 requires ORBIT protocol 13");
     return Array.from({ length: 16 }, (_, k) => {
       const at = 8 + k * size; if (!b[at]) return null; const np = b[at + 3], engine = b[at + 2];
       return { engine, name: String.fromCharCode(...b.subarray(at + 4, at + 16)).replace(/\0.*$/, ""),
         p: paramsByCount(Array.from({ length: np }, (_, i) => v.getInt16(at + 16 + i * 2, true)), P_COUNT)
           .map((x, i) => x ?? (i >= P_E0 ? ENG[engine].edit[i - P_E0] : TP[i]).def),
-        pattern: Array.from({ length: 16 }, (_, i) => patNorm(b[at + 160 + i], b[at + 176 + i])),
-        macroIds: modern ? remapMacros(Array.from(b.subarray(at + 192, at + 196), (id) => id < np ? id : 127), np - 8, P_E0) : [127, 127, 127, 127],
+        pattern: Array.from({ length: 16 }, (_, i) => patNorm(b[at + pat + i], b[at + pat + 16 + i])),
+        macroIds: modern ? remapMacros(Array.from(b.subarray(at + pat + 32, at + pat + 36), (id) => id < np ? id : 127), np - 8, P_E0) : [127, 127, 127, 127],
         macroPE0: P_E0 };
     });
   }
@@ -2879,10 +2903,10 @@ function makeMockDevice(opt = {}) {
         b(0);
         break;
       case CMD.INFO:
-        s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : opt.v3 ? "FELUCCA 0.8 (MOCK)" : v12 ? "ORBIT 0.7.1 (MOCK)" : "ORBIT 0.6.0 (MOCK)"); b(ENG.length); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0);
+        s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : opt.v3 ? "FELUCCA 0.8 (MOCK)" : v13 ? "ORBIT 0.8.0 (MOCK)" : v12 ? "ORBIT 0.7.1 (MOCK)" : "ORBIT 0.6.0 (MOCK)"); b(ENG.length); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0);
         ENG.forEach((e) => s(e.name));
         if (!opt.legacy) b(NTRK);
-        if (v5) b(opt.noBackup ? 5 : opt.v7 ? 7 : opt.v8 ? 8 : opt.v9 ? 9 : opt.v10 ? 10 : opt.v11 ? 11 : 12);
+        if (v5) b(opt.noBackup ? 5 : opt.v7 ? 7 : opt.v8 ? 8 : opt.v9 ? 9 : opt.v10 ? 10 : opt.v11 ? 11 : v13 ? 13 : 12);
         break;
       case CMD.GET: case CMD.SET: {
         if (a.length < 2) return null;
@@ -4413,7 +4437,7 @@ function selfLoad() {
 const stepEdit = new Map(); /* index -> time of the last edit */
 
 /* parameter ids (firmware/src/core.h); used only when P_COUNT / G_COUNT match */
-const EXPECT = { pcount: [61, 71], gcount: [32, 33, 45], pe0: [53, 63] };
+const EXPECT = { pcount: [61, 71, 73], gcount: [32, 33, 45], pe0: [53, 63, 65] };
 const P = { LEVEL: 0, SLEN: 29, CHORD: 49 };
 const LAYOUT = (pe0) => [
   { t: "ENV", pages: [["ENV", 0, [1, 2, 3, 4]], ["ENV DEST", 0, [5, 6, 7, pe0 >= 63 ? 59 : 8]]] },
@@ -4421,7 +4445,7 @@ const LAYOUT = (pe0) => [
   { t: "EDIT", engine: true, pages: [["EDIT 1", 0, [pe0, pe0 + 1, pe0 + 2, pe0 + 3]], ["EDIT 2", 0, [pe0 + 4, pe0 + 5, pe0 + 6, pe0 + 7]],
     ...(pe0 >= 63 ? [["FILTER TYPE", 0, [58, pe0 + 4, pe0 + 5, pe0 + 7]]] : [])] },
   { t: "VOICE", pages: [["LEVEL", 0, [0]], ["VOICE", 0, [37, 38, 41, 42]], ["VOICE 2", 0, [43, 44, 39, 40]]] },
-  { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ["FILTER", 0, [50]], ["SLICER", 0, [45, 46, 47, 48]],
+  { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ["FILTER", 0, pe0 >= 65 ? [50, 63, 64] : [50]], ["SLICER", 0, [45, 46, 47, 48]],
     ...(pe0 >= 63 ? [["INSERT", 0, [53, 54, 55, 56]], ["INSERT 2", 0, [57]]] : []), ["DLY", 1, [4, 5, 6, 7]], ["REV/CHO", 1, [8, 9, 10, 11]]] },
   { t: "SEL", pages: [["SEL", 0, [25, 26, 27, 49]], ["SEL 2", 0, [28, 51, 52]]] },
   { t: "ARP", pages: [["ARP", 0, [17, 18, 19, 20]], ["ARP 2", 0, [21, 22, 23, 24]]] },
@@ -4684,6 +4708,7 @@ async function rereadEngineDesc() {
   const before = JSON.stringify(dev.pdesc.slice(pe0));
   for (let i = 0; i < 8 && pe0 + i < dev.info.pcount; i++) dev.pdesc[pe0 + i] = await getDescOrNull(0, pe0 + i);
   if (dev.info.proto >= 12) for (const id of [1, 2, 4, 54, 55, 56]) dev.pdesc[id] = await getDescOrNull(0, id);
+  if (dev.info.proto >= 13) dev.pdesc[50] = await getDescOrNull(0, 50);
   const kd = dev.pdesc[pe0];
   if (kd && kd.label === "KIT" && kd.names.length) dev.kitNames = kd.names;   /* the drum track's kits, for the mixer */
   fm6Names();
@@ -4800,7 +4825,7 @@ function updateBrowser() {
   $("factlib").disabled = drum;
   $("drumnote").hidden = !drum;
   $("browser").hidden = drum;
-  $("groups").hidden = drum;
+  $("groups").hidden = drum && dev.info.proto < 13;
   $("ctlhelp").hidden = drum;
   if (document.activeElement !== sel) sel.value = drum ? "" : String(e);
   const ps = $("preset");
@@ -4824,11 +4849,13 @@ function buildGroups() {
   if (EXPECT.pcount.includes(info.pcount) && EXPECT.gcount.includes(info.gcount) &&
       EXPECT.pe0.includes(info.pe0) && info.pcount === info.pe0 + 8) {
     for (const g of LAYOUT(info.pe0)) {
+      if (isDrum() && !g.tab && g.t !== "FX") continue;
       /* a card per button of the device (ENV, LFO, EDIT ...), its pages as rows of four knobs, one colour per knob */
       const div = el("div", { class: "group", "data-fam": g.t, tabindex: "-1" }, el("h2", { ic: HEAD_IC[g.t] },
         g.engine ? `EDIT ${info.engines[dev.dump.engine] || ""}` : g.t));
       let pages = 0;
       for (const [title, s, ids] of g.pages) {
+        if (isDrum() && !g.tab && title !== "FILTER") continue;
         if (title === "FILTER TYPE" && info.engines[dev.dump.engine] !== "ANALOG") continue;
         const rows = ids.map((id) => paramRow(s, id)).filter(Boolean);
         if (!rows.length) continue;
@@ -5003,7 +5030,7 @@ async function sendSet(s, id, k) {
       mixFromDump();
       if (!s && id === pSlen() && r.value !== v) lenChanged();   /* (clamped by the device) */
       if (!s && id === dev.info.pe0 + 7 && fm6On()) fm6Later();   /* PTCH: the device loaded that patch */
-      if (!s && dev.info.proto >= 12 && [53, 59].includes(id)) needReload = true;
+      if (!s && (dev.info.proto >= 12 && [53, 59].includes(id) || dev.info.proto >= 13 && id === 64)) needReload = true;
     }
   } catch (e) { if (e.message !== "closed") console.warn(e); }
 }
@@ -7205,7 +7232,7 @@ function onPush(f) {
       if (!c.scope && c.id === pSlen() && old !== c.value) { $("steptables").dataset.len = ""; renderSteps(); }
       if (!c.scope && c.id === d.info.pe0 && drumGrid() && d.dstepsOk) renderDrumBar();   /* the kit, changed on the device */
       if (!c.scope && c.id === d.info.pe0 + 7 && fm6On()) fm6Later();   /* PTCH turned on the device: another patch */
-      if (!c.scope && d.info.proto >= 12 && [53, 59].includes(c.id)) needReload = true;
+      if (!c.scope && (d.info.proto >= 12 && [53, 59].includes(c.id) || d.info.proto >= 13 && c.id === 64)) needReload = true;
     } else if (f.cmd === CMD.RELOAD) {
       d.sel = parse[CMD.RELOAD](f.a).track;          /* v3: another track may be selected on the device */
       if (selfReload.n > 0 && Date.now() < selfReload.until) { selfReload.n--; return; }

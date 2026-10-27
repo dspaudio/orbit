@@ -6,12 +6,10 @@
  * its row), PRESETS moves the cursor; OCT+ steps the cursor's setting round or opens it (CALIBRATION, ABOUT),
  * OCT- closes (from ABOUT: back to the section). */
 /* ------------------------------------------------------------ menu --- */
-enum { MI_COLOR, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_LOWCUT, MI_USB, MI_SERIAL, MI_PANEL, MI_LCLEAR, MI_ABOUT, MI_DEMO,
+enum { MI_COLOR, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_LOWCUT, MI_USB, MI_SERIAL, MI_PANEL, MI_LCLEAR, MI_ABOUT,
        MI_COUNT };
 static const char *const MI_NAME[MI_COUNT] = {"STYLE", "ZOOM", "LIGHTS", "KEYS", "NOTES", "SPEAKER LOWCUT", "USB AUDIO",
-                                              "USB SERIAL", "HARDWARE CALIBRATION", "MIDI LEARN CLEAR", "ABOUT",
-                                              "DEMO SONG"};
-static uint8_t orbit_demo_pending;
+                                              "USB SERIAL", "HARDWARE CALIBRATION", "MIDI LEARN CLEAR", "ABOUT"};
 enum { MS_SCREEN, MS_LIGHTS, MS_AUDIO, MS_SYSTEM, MS_COUNT };
 static const char *const MS_NAME[MS_COUNT] = {"SCREEN", "LIGHTS", "AUDIO", "SYSTEM"};   /* (AUDIO: and USB) */
 static const uint8_t MS_FIRST[MS_COUNT + 1] = {MI_COLOR, MI_LIGHTS, MI_LOWCUT, MI_PANEL, MI_COUNT};   /* rows of each */
@@ -34,7 +32,6 @@ static const char *mi_value(uint32_t i, uint16_t *c)
 {
     *c = C_HI;
     switch (i) {
-    case MI_DEMO: return song.playing ? "STOP FIRST" : orbit_demo_pending ? "PRESS AGAIN" : "FIRST LIGHT";
     case MI_COLOR: return PALETTES[settings.palette].name;
     case MI_ZOOM: return settings.zoom ? "ON" : "OFF";
     case MI_LIGHTS: return LIGHTS_NAME[lights_lvl % LIGHTS_N];
@@ -67,7 +64,7 @@ static void draw_menu(void)
     uint32_t i, pass, sec = mi_sec(ui.menu_sel % MI_COUNT);
     uint32_t sig = ui.menu * 7u + ui.menu_sel * 131u + settings.palette * 1009u + settings.lowcut * 7919u +
                    settings.zoom * 104729u + lights_lvl * 1299709u + lights_keys * 15485863u + ml_count() * 2654435u +
-                   lights_notes * 32452843u + usb_full * 49979687u + usb_serial * 86028121u + orbit_demo_pending * 17u + song.playing;
+                   lights_notes * 32452843u + usb_full * 49979687u + usb_serial * 86028121u;
     if (!ui.force && sig == ui.menu_sig)
         return;
     ui.menu_sig = sig;
@@ -161,7 +158,6 @@ static void enc_drop(void)                             /* knob turns nobody take
 
 static void menu_close(void)
 {
-    orbit_demo_pending = 0;
     if (song.playing || transport_req)
         settings_later = 1;                            /* (a flash write stops the audio: once stopped) */
     else
@@ -209,13 +205,6 @@ static void mi_set(uint32_t i, int32_t s)
             lights_lvl = LIGHTS_LOW;                   /* keys lit need a level: the lowest */
         break;
     }
-    case MI_DEMO:
-        if (s || song.playing) { orbit_demo_pending = 0; break; }
-        if (!orbit_demo_pending) { orbit_demo_pending = 1; ui.force = 1; break; }
-        orbit_demo_load();
-        menu_close();
-        ui_message("DEMO: FIRST LIGHT");
-        break;
     case MI_LCLEAR:                                    /* (2.6) every learned CC: OCT+ */
         if (!s)
             ui_message(ml_clear_all() ? "LEARN CLEARED" : "NOTHING LEARNED");
@@ -244,7 +233,6 @@ static void menu_input(uint32_t pressed)
     uint32_t k, ok = (pressed >> panel.btn[B_OCTUP]) & 1u, back = (pressed >> panel.btn[B_OCTDN]) & 1u;
     uint32_t sel = ui.menu_sel % MI_COUNT, sec = mi_sec(sel), n = MS_FIRST[sec + 1u] - MS_FIRST[sec];
     if (back) {
-        orbit_demo_pending = 0;
         if (ui.menu == 2)
             ui.menu = 1, ui.force = 1;
         else
@@ -265,7 +253,6 @@ static void menu_input(uint32_t pressed)
         return;
     }
     if ((s = panel_enc(EN_PRESET)) != 0) {
-        orbit_demo_pending = 0;
         ui.menu_sel = (uint8_t)(MS_FIRST[sec] + (sel - MS_FIRST[sec] + (s > 0 ? 1u : n - 1u)) % n);
     }
     for (k = 0; k < 4u; k++)

@@ -496,8 +496,6 @@ static void project_new(void)
     ui.force = 1;
 }
 
-#include "orbit_demo.c"
-
 static void edit_param(uint32_t slot, int32_t steps)
 {
     int16_t *vp;

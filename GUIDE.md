@@ -1,6 +1,8 @@
-# ORBIT 0.7.0 User Guide
+# ORBIT 0.8.0 User Guide
 
-ORBIT turns the M-VAVE FM-1 into three synth parts and a drum machine. This guide describes the current ORBIT controls, not the upstream SLOOP engine registry or installer. [Install/build](BUILDING.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [Release notes](docs/releases/0.7.0.md)
+ORBIT turns the M-VAVE FM-1 into three synth parts and a drum machine. This guide describes ORBIT 0.8.0, not the upstream SLOOP engine registry or installer. [Install/build](BUILDING.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [0.8.0 release notes](docs/releases/0.8.0.md)
+
+SMK-37 source support is merged. The controls below use the FM-1 panel labels; see [SMK37.md](SMK37.md) for the SMK-37 Pro, SMK-37 Elite and MKE-P37 mappings, faders, wheels and pad sound picker. SMK-37 has only USR1/USR2 sample storage and no TRS MIDI IN. **Official v0.8.0 binaries are FM-1 only; SMK-37 binaries are not included.**
 
 ## Get started
 
@@ -146,13 +148,32 @@ Macros belong to a **synth sound**, not to HOME or the global MIDI-learn table. 
 5. Turn **KNOB 4 SAVE** one positive detent: AGAIN: SAVE. Turn it positively again within the confirmation window (about 1.5 s) to store the sound and its four assignments.
 6. To recall on another synth track, select it, return to USER, pick the slot and turn **KNOB 2 LOAD** twice. **KNOB 3 ERASE** uses the same two-turn confirmation and removes the stored slot.
 
-Changing the slot cancels an armed action. Factory sound loads, engine changes and INIT restore engine-default maps. A USER sound loads its saved map. Loading a USER sound keeps the track's live sequence and mix context; it is not a project load.
+Changing the slot cancels an armed action. Factory sound loads, engine changes and INIT restore engine-default maps. A USER sound loads its saved map, including custom RES or TYPE assignments. Loading a USER sound keeps the destination track's live sequence and mix context, including **FILT, RES and TYPE**; it is not a project load. The OPB3 bank stores all 73 parameter values and the four macro assignments for backup/export, but sound recall does not replace those live filter values. Use a project/section to recall the whole track state.
 
 Saving a project/section captures the current sound values and assignments as a snapshot; recall does not look up the USER slot again. Editing or erasing that USER slot later therefore does not rewrite an already saved section. Working autosave and full backups retain maps too. PERFORM's resolved destination can be used for step locks or MIDI learn where that parameter supports them.
 
 ## Effects and texture
 
 FX pages provide drive and chorus/delay/reverb sends, track FILTER, SLICER, INSERT/INSERT 2 and global delay/reverb/chorus settings. INSERT supports **SOFT, HARD, FOLD, FUZZ, CRUSH, PHASR, FLANG, CHOR** plus OFF. Type changes the three control labels; INSERT 2 sets MIX. Drum INSERT is available too.
+
+### Track filter
+
+Select a synth track or track 4, tap **FX**, then use **SELECT** to reach **FILTER**.
+
+| Control | Setting | Range and default |
+| --- | --- | --- |
+| KNOB 1 | FILT | -64..63; 0 is OFF/bypass in both types |
+| KNOB 2 | RES | 0..127, displayed as a percentage; default 40/127, about 31% |
+| KNOB 3 | TYPE | LP/HP (default) or BP |
+| KNOB 4 | Unused | |
+
+With **LP/HP**, negative FILT values close a low-pass filter and positive values open a high-pass filter. **BP** uses the same signed range to sweep the band-pass centre from low to high. Zero still bypasses it, rather than selecting the midpoint frequency. RES controls resonance in both types; its default retains the previous fixed-resonance setting.
+
+This filter applies to every track, including drums. It is separate from ANALOG's engine filter and from the master filter, whose controls are unchanged. FILT and RES support step locks; TYPE is a live setting, not a lock destination. On synth tracks, RES and TYPE can be assigned on MACROS and edited through PERFORM.
+
+Project/section saves retain each track's filter settings. Factory and USER sound changes leave the destination track's FILT, RES and TYPE alone, even when a USER sound restores macros that point to them.
+
+### Performance effects and texture
 
 Hold **FX** for 27 punch-in effects. White keys retain loops, stutter, reverse, stop, half-speed, filter sweeps, phone, crush, alias, gate, echo and wobble. The eleven black keys, left to right, add **KILL LOW, KILL MID, KILL HIGH, REWIND, OCT UP, FLANGER, AUTO-PAN, FREEZE, LOOP 8T, MONO, FADE OUT**. FX + OCT- / OCT+ triggers **REV / ECHO THROW**. Delay TIME now includes **1/4D** alongside the existing dotted choices.
 
@@ -175,16 +196,18 @@ On Tape, **GLO** opens Mixer. SELECT moves through four-track LEVEL, four-track 
 
 Actions require confirmation; flash writes require stopped playback. PROJECT ERASE removes the chosen saved section, not simply the current track. Autosave keeps the working project after stopped inactivity; it is not a substitute for exporting a backup before updates.
 
+**Demo removal and existing autosave:** 0.8.0 removes the built-in FIRST LIGHT loader and DEMO SONG menu, but updating doesn't erase an earlier working autosave. Old demo patterns can therefore return from storage. To clear them, back up any work you want to keep, stop playback, open an editing page, then tap **SAVE** and use **SELECT** to reach **TOOLS**. Confirm **KNOB 4 NEW**; the screen shows **NEW PROJECT**. Leave playback stopped so autosave can retain the empty working project. Saved sections are separate.
+
 Hold SAVE and press white keys **5-8** to store A-D. Overwriting an occupied section asks for another press. Keys **1-4** recall sections, on the next bar while playing. Tap several while SAVE remains held for a quick chain (up to eight). Key **13** switches loop/song; **14** records the section order; **16** opens SONG. The SONG screen edits section order and bar lengths; stop before changing its settings.
 
 ## Samples, editor and USB audio
 
-Use the Web MIDI editor in Chrome/Edge with SysEx access, served locally as described in [BUILDING.md](BUILDING.md), or from the intended installer site when published. Connect to the FM-1 before expecting a hardware operation to succeed. **?mock=1** exercises a simulation, not a connected instrument.
+Use the Web MIDI editor in Chrome/Edge with SysEx access, served locally as described in [BUILDING.md](BUILDING.md), or from the installer site. Connect to the FM-1 before expecting a hardware operation to succeed. **?mock=1** exercises a simulation, not a connected instrument.
 
 - **Sound/Library:** engine and sound editing, macro assignment, 32 USER slots, sound files and a browser-local library. Export the library before moving browsers/origins.
 - **Sequencer/Event Tape:** tiles or piano roll, MIDI file import/export, locks, nudge/fill and drum lanes. This remains event editing.
 - **Song/Tracks:** arrangement and mix.
-- **Samples/CHOP/Drum kit:** USR1-USR4, up to 16 WAV zones per slot, chop imported audio and fit selected material to slot capacity. USR3+4 can hold a combined drum kit. Upload replaces slot contents, so back them up first.
+- **Samples/CHOP/Drum kit:** USR1-USR4 on FM-1, USR1/USR2 only on SMK-37, with up to 16 WAV zones per slot. Chop imported audio and fit selected material to slot capacity. On FM-1, USR3+4 can hold a combined drum kit. Upload replaces slot contents, so back them up first.
 - **Drum synth:** edit and store SYN1-SYN4.
 - **FM6:** edit operators, import/export DX7 SysEx, store selected cartridge voices in B1-B27.
 - **Projects/Backup/Settings:** slots, whole-device export/restore and globals. The full backup includes MIDI-learn settings.
@@ -193,29 +216,29 @@ USB audio is the master output, 16-bit stereo at 44.1 or 48 kHz. Select the Felu
 
 The [native preview](README.md#try-the-native-preview) runs the real C DSP/UI, but its save/load is nonpersistent, sample upload is unsupported and browser buffering is not FM-1 latency. Its controls support taps, not hardware hold layers.
 
-## FIRST LIGHT demo
-
-Stop and save the working loop first. Hold HOME, select SYSTEM, move PRESETS to DEMO SONG, press OCT+ and confirm with OCT+ again; OCT- cancels. Press PLAY.
-
-FIRST LIGHT is an original 64-step, four-bar loop at 108 BPM, Am7 / Fmaj7 / Cmaj7 / G7: FM4 bass, SWARM chords, PULSE melody and 808 drums. It replaces working patterns and sounds; numbered slots are not written by the loader, but normal autosave still applies. Its notes are editable, not a prerecorded backing track. [Host-rendered audio](docs/audio/orbit-first-light.mp3).
-
 ## Menu and visualizer
 
-Hold HOME for settings. SELECT chooses SCREEN / LIGHTS / AUDIO / SYSTEM. SCREEN provides STYLE and ZOOM; LIGHTS provides button/key/note illumination; AUDIO provides LOWCUT, USB AUDIO and USB SERIAL; SYSTEM includes calibration, MIDI LEARN CLEAR, DEMO SONG and ABOUT. PRESETS moves the cursor, OCT+ acts, OCT- closes. These device settings are separate from song sound snapshots.
+Hold HOME for settings. SELECT chooses SCREEN / LIGHTS / AUDIO / SYSTEM. SCREEN provides STYLE and ZOOM; LIGHTS provides button/key/note illumination; AUDIO provides LOWCUT, USB AUDIO and USB SERIAL; SYSTEM includes calibration, MIDI LEARN CLEAR and ABOUT. PRESETS moves the cursor, OCT+ acts, OCT- closes. These device settings are separate from song sound snapshots.
 
 Tap HOME on Tape for Visualizer; SELECT chooses its style and HOME returns to Tape. It displays the real mix, not a raw sample-trim waveform. It does not turn HOME into macro editing.
 
 ## Backup, updates and downgrades
 
-**BACKUP before an update**, including before returning to an older firmware. Stop, connect the editor, open Projects / Backup and save the full file off the device. Preserve the pre-update backup separately from new 0.7.0 exports. Restore replaces contents and needs stopped playback.
+**BACKUP before an update**, including before returning to an older firmware. Stop, connect the editor, open Projects / Backup and save the full file off the device. Preserve the pre-update backup separately from new 0.8.0 exports. Restore replaces contents and needs stopped playback.
 
-ORBIT 0.7.0 writes **ORP7 projects** and **OPB2 user-preset banks**, retaining macro assignments and new controls. Frozen readers import legacy ORBIT FUN1-FUN5 projects and UPB1 banks. Existing ORBIT engine IDs/order are retained; engine-control and lock IDs are migrated by the old parameter count. **Raw SLOOP 2.6 FUN6 is rejected**, because its registry/layout is not ORBIT's. Matching a legacy magic does not establish foreign-data compatibility.
+ORBIT 0.8.0 writes **ORP8 projects** and **OPB3 USER preset banks**:
 
-**Older ORBIT cannot read new saves.** A downgrade can see slots as invalid/empty, and autosave can overwrite new work. Restore the matching pre-update backup on the matching old firmware. Do not promise SYN-kit/MIDI-setting preservation by old firmware that cannot read the new settings. Keep a 0.7.0 backup for returning to 0.7.0.
+- **Projects remain 3840 bytes.** ORP8 adds each track's RES and TYPE without increasing the saved project size. ORP7 imports keep their sound and sequence data, remap engine-control lock and macro IDs to the new numbering, and set RES to 40 and TYPE to LP/HP.
+- **OPB3 stores all 73 parameter values and four macro assignments.** Frozen readers import OPB2 and UPB1 banks. Old values and OPB2 macro destinations are mapped by their stored parameter count; missing controls take defaults. UPB1 has no saved custom macro map, so it uses engine-default assignments. Loading a USER sound still preserves the destination track's live mix, as described under [User macros](#user-macros-and-saving-sounds).
+- Legacy ORBIT FUN1-FUN5 projects remain readable. Existing ORBIT engine IDs/order are retained. **Raw SLOOP 2.6 FUN6 is rejected**, because its registry/layout is not ORBIT's. Matching a legacy magic does not establish foreign-data compatibility.
 
-The intended [Pages installer](https://dspaudio.github.io/orbit/) validates the latest published package before Connect and checks identity before Install. Availability/deployment is not certified here. For local installation, use [BUILDING.md](BUILDING.md); default build identity is FM-1_900. Keep USB/power connected through the write and reboot. A failed download is not an invitation to skip validation.
+**Older ORBIT, including 0.7.0 and 0.7.1, cannot read ORP8 or OPB3.** A downgrade can see slots as invalid/empty, and autosave can overwrite new work. Restore the matching pre-update backup on the matching old firmware. Don't assume SYN-kit/MIDI-setting preservation by old firmware that cannot read the new settings.
 
-If a write is interrupted, reconnect and use the installer resume path only when it identifies ORBIT's loader. The implemented recovery entry is OCT- at power-on; physical recovery/power-loss behavior in 0.7.0 is not yet tested. A device that no longer boots may require [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter). Historical 0.6.0 installation is not 0.7.0 hardware evidence. See [VALIDATION](docs/VALIDATION.md).
+The [Pages installer](https://dspaudio.github.io/orbit/) validates the latest published package before Connect and checks identity before Install. Check that it shows 0.8.0 before installing this release. For local installation, use [BUILDING.md](BUILDING.md); default build identity is FM-1_900. Keep USB/power connected through the write and reboot. A failed download is not an invitation to skip validation.
+
+The no-demo **0.8 hardware candidate** was installed on an FM-1 on 2026-10-27: write 100%, reboot and returned identity succeeded. The device owner confirmed the normal screen, cleared the earlier autosave with NEW PROJECT and accepted the hardware for release. INFO/PING timed out, so the firmware version was not confirmed by a successful query. The version-only **0.8.0 rebuild has not been separately hardware-tested**. Earlier 0.7.1 software checks, 0.7.0 installation/version/PING checks and the 0.6.0 USB recording remain historical. See [VALIDATION](docs/VALIDATION.md) for the full record.
+
+If a write is interrupted, reconnect and use the installer resume path only when it identifies ORBIT's loader. The implemented recovery entry is OCT- at power-on; successful installation doesn't establish power-loss recovery. An FM-1 that no longer boots may require [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter); SMK-37 owners should follow the [board-specific safety guidance](SMK37.md#safety).
 
 ## Troubleshooting
 
@@ -228,7 +251,9 @@ If a write is interrupted, reconnect and use the installer resume path only when
 | LFO moves but sound does not | Enable a LFO DEST depth; check engine modulation destination |
 | Chord thins out | POLY mode, engine cap, global eight-voice allocation and CPU shedding; reduce held voices/heavy effects |
 | Macro value appears blank | Destination unavailable for this engine; choose a valid MACROS assignment |
-| New save fails on old firmware | Use its pre-update backup, not ORP7/OPB2 |
-| Unwanted physical crackle | Report engine/preset/notes/FX and version; 0.7.0 hardware resolution is unverified |
+| New save fails on old firmware | Use its pre-update backup, not ORP8/OPB3 |
+| USER sound keeps the current filter | Expected: sound recall preserves FILT/RES/TYPE; use a project/section to recall the whole track state |
+| Old demo patterns return after updating | The working autosave survives updates; back up wanted work, then confirm TOOLS > NEW |
+| Unwanted physical crackle | Report engine/preset/notes/FX and the firmware version |
 
 Full controller routing and reserved CCs: [MIDI-CONTROL.md](docs/MIDI-CONTROL.md). Original SLOOP/Felucca authors, GPL notices and third-party rights remain: [README credits](README.md#origin-credits-and-licensing), [LICENSING.md](LICENSING.md), [CLUSTER assets](assets/op1-cluster/README.md).

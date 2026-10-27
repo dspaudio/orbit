@@ -8,6 +8,7 @@ protocol v3; commands 31-32 (any track's parameters) form protocol v4; command 3
 steps' fill conditions) protocol v8, commands 68-71 (the FM6 engine's patches) protocol v9, and commands
 72-76 (SYN drum kits) protocol v10. ORBIT's signed16 envelope command 77 forms protocol v11.
 Commands 78-81 and MIDI backup object 10 form ORBIT protocol v12.
+ORBIT 0.8 reports protocol v13 for the track FILTER's RES and BP controls and ORP8 projects.
 
 **v3 (four tracks):** the device has four tracks: 1..3 are synth parts, 4 is the drum track. One
 of them is *selected* (the TRACKS page on the device, or `TRACK`). Every v1 / v2 command acts on the
@@ -48,9 +49,50 @@ after an engine change.
 
 ## Commands
 
-### ORBIT v12: sound-owned macros and SLOOP 2.6 controls
+### ORBIT v13: track FILTER resonance and band-pass (ORBIT 0.8)
 
-The default build reports 17 engines, 71 track parameters, 45 globals, 64 steps,
+INFO reports 17 engines, P_COUNT=73, P_E0=65, G_COUNT=45, 64 steps,
+four tracks and ED_PROTO=13. IDs 0..62 are unchanged from v12.
+P_TRES=63 is `RES` (F_PCT, 0..127, default 40). P_TFTYPE=64 is `TYPE`
+(F_ENUM, 0=`LP/HP`, 1=`BP`, default 0). Engine controls move to 65..72.
+Both controls apply to synth and drum tracks. RES is lockable; TYPE is not.
+
+P_TFLT=50 remains -64..63 with zero bypassing the filter. Its dynamic DESC
+uses F_FILT=15 for LP/HP and F_BPF=16 for BP. F_BPF displays `OFF` at zero,
+otherwise `BP` followed by integer `(value + 64) * 100 / 127` and `%`.
+This is a low-to-high band center, not separate LP and HP amounts.
+Re-read descriptors after a TYPE SET or CHANGED, including drum tracks.
+MACRO accepts IDs 0..72 or 127; RES and TYPE are eligible on synth tracks.
+Use INFO counts and live descriptors rather than the historical v12 IDs below.
+
+New projects use ORP8 (`0x3850524F`), the same 3840-byte layout as ORP7.
+Each 940-byte track begins at project offset `76 + track * 940`; byte 939
+packs `RES & 127 | TYPE << 7`. Maps remain at 934..937 and provenance at 938.
+ORP7 (`0x3750524F`) remains readable with byte 939 required to be zero.
+Migration defaults RES=40 and TYPE=0 and shifts engine lock and macro IDs
+63..70 to 65..72; other IDs, raw engine values, steps and mix are retained.
+FUN1..FUN5 readers remain supported.
+
+New user banks use OPB3 (`0x3342504F`), 3176 bytes: an 8-byte header and
+16 version3 records of 198 bytes. Each record stores all 73 signed16 values
+at offset 16, pattern notes at 162, flags at 178 and macro IDs at 194..197.
+RES/TYPE values and assignments are retained. Loading or auditioning a sound
+preserves the track's current FILT/RES/TYPE mix, as `param_kept` requires.
+Frozen OPB2 (3144 bytes, 196-byte version2 records, capacity 72) and UPB1
+(3080 bytes, 192-byte version1 records) remain readers. Migration uses each
+record's np, defaults missing RES/TYPE to 40/0 and remaps the engine tail and
+macro IDs. UPB1 maps default to 127. The next save writes OPB3.
+
+Raw backups retain version2 and now identify `protocol:13` and
+`projectMagic:0x3850524F`. Historical protocol12/ORP7 metadata remains
+accepted. Any ORP8 working project, saved slot or OPB3 bank requires protocol>=13;
+restore refuses the entire file before any destructive request to an older
+target, even if its outer metadata claims protocol12. ORP7 backups migrate
+on protocol13. No automatic ORP8/OPB3 downgrade is attempted.
+
+### ORBIT v12: sound-owned macros and SLOOP 2.6 controls (historical)
+
+The v12 build reports 17 engines, 71 track parameters, 45 globals, 64 steps,
 P_E0=63, four tracks and protocol 12. Engine IDs 0..15 stay in place; CLOUD is 16.
 Common IDs 0..52 stay in place. New IDs are INSERT TYPE/A/B/C/MIX=53..57,
 ANALOG FILTER TYPE=58, ENV SYNC=59 and LFO SYNC/TRIG/POL=60..62.
@@ -91,7 +133,7 @@ The boot Tape view and drum Tape controls remain available. Factory/engine/INIT 
 assignments to engine defaults. Save a customised factory sound as a user preset
 to retain its mapping. Plain parameter edits keep the mapping.
 
-New projects use ORP7 (`0x3750524F`), exactly 3840 bytes, not FUN6. Per-track
+Protocol12 projects use ORP7 (`0x3750524F`), exactly 3840 bytes, not FUN6. Per-track
 maps are bytes 934..937 of each 940-byte track at project offset 76; user
 provenance is byte 938 and byte 939 is zero. ORP7 stores p[53], raw signed16
 e[8], ten new byte parameters, steps, micro/fill, locks, maps and provenance.
@@ -109,12 +151,12 @@ Portable libraries retain format `felucca-library`, write version 2 and accept
 versions 1/2 plus legacy `felucca-patch` version1. Every new patch exports
 `macroIds` (exactly four integers) and `macroPE0` (source common count).
 Absent maps become four 127 entries. Reject malformed fields with a skipped
-reason. Known historical positional counts 53/57/58/61/71 move the engine tail
+reason. Known positional counts 53/57/58/61/71/73 move the engine tail
 by count; identified heterogeneous labeled files still map by keys. Macro IDs
 always use their own source namespace. Resolve engine names before numeric IDs.
 Custom-map application to a pre-v12 device is refused before engine SET or PUT.
 
-New raw backups write `sloop-backup` version2, `product:"ORBIT"`,
+Protocol12 raw backups write `sloop-backup` version2, `product:"ORBIT"`,
 `protocol:12`, `projectMagic:0x3750524F`, firmware, date and objects.
 Version1 remains readable only with ORBIT lineage. Validate the entire file,
 duplicate IDs, lengths, CRCs, project magic/size/FNV and bank shapes before
@@ -160,7 +202,7 @@ Plain commands retain their v14 encoding and command numbers.
 CLUSTER is appended as engine 15 in the default registry; existing IDs 0..14 are unchanged.
 Factory raw knobs are signed16. Legacy v14-only clients read values clamped to
 -8192..8191, so preserving original values requires v11.
-ORP7/OPB2 retain raw signed16 engine controls; FUN5/UPB1 remain legacy readers.
+ORP7/ORP8/OPB2 retain raw signed16 engine controls; FUN5/UPB1 remain legacy readers.
 
 | cmd | Request args | Reply args |
 | --- | --- | --- |

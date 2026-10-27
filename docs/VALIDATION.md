@@ -1,5 +1,50 @@
 # ORBIT validation record
 
+## ORBIT 0.8.0 release package, 2026-10-27
+
+The final default build embeds `FELUCCA ORBIT 0.8.0` and retains identity
+`FM-1_900`. The version-only rebuild after user acceptance of the 0.8
+no-demo candidate has an app of 564888 bytes, RAM 97272/98304 bytes and
+pool 333948/344064 bytes. Existing target-cost budgets passed unchanged.
+The package is 610019 bytes, SHA-256:
+`6103c21d9b0f5268568ae3b8be0bd59c38021545446317640f59e2fbed38dbaf`.
+
+The underlying implementation passed the complete host regression suite with
+218 unchanged audio goldens, plus filter, migration, macro and sanitizer
+checks described below. The installed no-demo candidate was accepted by the
+user; its restored working patterns were cleared using NEW PROJECT, without
+disabling autosave restoration. The final version-only 0.8.0 binary has not
+been separately installed. Editor INFO/PING and physical audio/timing claims
+are not inferred from the updater's identity response.
+
+## ORBIT 0.8 hardware candidate, 2026-10-27
+
+This unpublished candidate adds track FILTER RES and BP, ORP8 project migration
+and OPB3 preset banks, and removes the built-in FIRST LIGHT loader and DEMO SONG
+menu. Source version: `ORBIT 0.8`; prospective release: `0.8.0`, pending the
+user's hardware check.
+
+The no-demo pi32v2 build passed with an app of 564888 bytes, RAM 97272/98304
+bytes and pool 333948/344064 bytes. All existing target-cost budgets passed.
+The `FM-1_900` package is 610019 bytes, SHA-256:
+`f8c6c766824b9c2090e9c5b392dcb5b41c9d4822ff298766a361a78ad2ed62db`.
+
+The full host suite passed using Homebrew LLVM with the explicit macOS SDK.
+All 218 audio goldens remained unchanged, with zero health, routing, CPU-budget
+or crash failures. Native preview and web tests passed. Focused filter tests
+cover resonance, BP response, bypass ramps and default-output compatibility;
+storage tests cover old-format migration and RES/TYPE macro persistence.
+The separate `orbit_check.py` IRQ test retains its known macOS incompatibility.
+After removing the demo menu, its stale UI fixture was corrected and the full
+suite passed again (`build/host/issue5-nodemo-full.log`).
+
+The CLI updater installed this exact no-demo package over USB MIDI: package
+check, write 100%, restart and returned `FM-1_900` identity succeeded (exit 0).
+The user reported no data requiring preservation. An earlier candidate showed
+a normal ORBIT screen according to the user. Editor INFO requests timed out;
+the displayed version and listening/timing behavior of the final no-demo
+candidate remain for the user's physical check. No GitHub publication was made.
+
 ## ORBIT 0.7.1 release package, 2026-10-15
 
 The default pi32v2 build reports `FELUCCA ORBIT 0.7.1` and retains install

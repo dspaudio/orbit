@@ -76,6 +76,8 @@ $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/punch_test" tests/punch_test.c -l
 run "punch-in FX: 27 effects, bounded, dry after release, FX-held keys, FREEZE, THROW, drum mutes" "$OUT/punch_test" "$OUT/punch-fx.wav"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/insert_test" tests/insert_test.c -lm
 run "2.6 sound: INSERT, ANALOG TYPE, mutes, TEXTURE, limiter, THROW, clicks, boundary matrix" "$OUT/insert_test"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/track_filter_test" tests/track_filter_test.c -lm
+run "track FILTER: resonance, band-pass response, bypass transitions and default compatibility" "$OUT/track_filter_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/modulation_test" tests/modulation_test.c -lm
 run "2.6 modulation: ENV SYNC, LFO 2 SYNC / TRIG / POL, bend, learn, tempo matrix" "$OUT/modulation_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/midi_learn_test" tests/midi_learn_test.c -lm

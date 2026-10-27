@@ -9,7 +9,7 @@ FM-1 앱 펌웨어 본체(61개 파일, 약 21.3k LOC C). 점수 17(파일 수·
   - `engines.c` → `dsp.c`, `eng_analog.c`, `eng_digital.c`, `eng_phase.c`, `eng_lofi.c`, `eng_sample.c`, `eng_formant.c`, `eng_trio.c`, `eng_drawbar.c`, `eng_grain.c`, `eng_fm6.c`(→`fm6_core.c`), `eng_slice.c`, `eng_orbit.c`
   - `drums.c` → `drum_synth.c`, `fx.c` → `punch.c`, `editor.c` → `editor_fm6.c`
   - `project.c` → `arranger_scene.c`, `fm6_bank.c`
-  - `ui_draw.c` → `orbit_modes.c`, `ui_input.c` → `orbit_demo.c`, `ui_studio.c` → `orbit_ui.c`
+  - `ui_draw.c` → `orbit_modes.c`, `ui_studio.c` → `orbit_ui.c`
 - 새 `.c`는 Makefile이 아니라 위 include 사슬에 넣어야 컴파일됩니다. 심볼은 대부분 `static`이며, 전역 상태는 `core.h`의 `static track_t trk[NTRK]`(NTRK=4: 신스 3 + 드럼 1), `static song_t song`입니다.
 - 기능 플래그: `FELUCCA_FLASH`, `FELUCCA_OTA`, `FELUCCA_OTA_DRYRUN`, `FELUCCA_CDC`, `FELUCCA_UART`, `FELUCCA_ICONS`, `FELUCCA_SLICE`(tools/build.py가 설정). `eng_slice.c`/`slice_test.c`는 `FELUCCA_SLICE=1`일 때만 의미가 있습니다.
 - 생성 헤더(`build/gen/felucca_tables.h`, `felucca_fm6.h`, `felucca_font.h` 등)에 의존합니다. 손으로 편집하지 말고 `tools/gen_*.py`를 고칩니다. ORBIT 부트 화면은 `splash.c`가 직접 렌더링하며 SLOOP 로고 헤더를 생성하지 않습니다.

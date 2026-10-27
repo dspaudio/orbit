@@ -3,10 +3,9 @@
 /* Felucca user interface. Four columns map to KNOB 1..4. Rendering is lazy:
  * every element remembers what it last drew and is redrawn only on change. */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "ORBIT 0.7.1"  /* the beat machine firmware for the FM-1 (based on Felucca) */
+#define FELUCCA_VERSION "ORBIT 0.8.0"  /* the beat machine firmware for the FM-1 (based on Felucca) */
 #endif
 static void project_save(uint32_t slot);
-static void orbit_demo_load(void);
 static void arrangement_save(void);
 static void panel_setup(void);
 static void project_load(uint32_t slot);
@@ -395,7 +394,7 @@ static void track_defaults_steps(track_t *t) { steps_clear(t); }
 static int param_kept(uint32_t i)
 {
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_SLEN && i <= P_SGATE) ||
-           (i >= P_ROOT && i <= P_QUANT) || i == P_CHORD || i == P_TFLT || i == P_STRUM || i == P_VLEAD;
+           (i >= P_ROOT && i <= P_QUANT) || i == P_CHORD || i == P_TFLT || i == P_TRES || i == P_TFTYPE || i == P_STRUM || i == P_VLEAD;
 }
 
 /* preset pi of the engine the track asked for: the whole sound (not the pattern parameters) */
