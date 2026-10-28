@@ -28,6 +28,12 @@ static int eng_sampled(const engine_t *e) { return e == &ENG_SAMPLE || e == &ENG
 #else
 static int eng_sampled(const engine_t *e) { return e == &ENG_SAMPLE; }
 #endif
+/* SLOOP 2.8.3 sample retrigger: a note waiting for its voice's ~1.5 ms fade-out. Kept here (not in voice_t, which
+ * core.h owns) per part and voice: VP_ON = a note waits, VP_OFF = it was let go meanwhile, VP_GLIDE = glide into it */
+#define VP_ON 1u
+#define VP_OFF 2u
+#define VP_GLIDE 4u
+static uint8_t vpend[NTRK][NVOICE], vpnote[NTRK][NVOICE], vpvel[NTRK][NVOICE];
 static int32_t lfo_wave(track_t *t, uint32_t ph)
 {
     switch (t->p[P_LWAVE]) {
@@ -215,8 +221,12 @@ static voice_t *voice_alloc(track_t *t, uint32_t note)
     uint32_t i, np = trk_nvoice(t), best = np, low = np, nfree = 0;
     int32_t bd = 0x7FFFFFFF;
     for (i = 0; i < np; i++) {
-        if (t->v[i].active && t->v[i].note == note)
+        if (t->v[i].active && t->v[i].note == note) {
+            if (t->v[i].stage == 4u && voices_busy() >= NVOICE)
+                voice_room(t, 0);                       /* (2.8.3) a voice fading out sounds again: it counts toward
+                                                         * the NVOICE budget as a new one */
             return &t->v[i];
+        }
         nfree += !t->v[i].active;
     }
     if (nfree && voices_busy() >= NVOICE) {
@@ -297,6 +307,22 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
     int sounding = v->active && v->stage != 0;
     uint32_t ph0 = v->ph[0], ph1 = v->ph[1], ph2 = v->ph[2];
     int32_t s0 = v->s[0], s1 = v->s[1], s4 = v->s[4], s5 = v->s[5], s6 = v->s[6], s7 = v->s[7];
+    uint32_t pi = (uint32_t)(t - trk) % NTRK, vi = (uint32_t)(v - t->v);
+    if (sounding && eng_sampled(e)) {                   /* (2.8.3) a sample starts over at its first frame: fade the
+                                                         * old output out (KILL_BLOCKS, stage 4), then the new note
+                                                         * from silence with its ATK (track_render) */
+        v->note = (uint8_t)note;                        /* (the same note again finds this voice: voice_alloc) */
+        vpnote[pi][vi] = (uint8_t)note;
+        vpvel[pi][vi] = (uint8_t)vel;
+        vpend[pi][vi] = (uint8_t)(VP_ON | (glide ? VP_GLIDE : 0u));
+        v->gate = 0;
+        if (v->stage != 4u)
+            v->kill = KILL_BLOCKS;
+        v->stage = 4;
+        v->age = ++vage;
+        return;
+    }
+    vpend[pi][vi] = 0;
     v->note = (uint8_t)note;
     v->vel = (uint8_t)vel;
     v->gate = 1;
@@ -506,12 +532,16 @@ static void trk_note_off(track_t *t, uint32_t note)
             }
         }
     }
-    for (i = 0; i < NVOICE; i++)                        /* POLY voices (also ones left from another mode: */
+    for (i = 0; i < NVOICE; i++) {                      /* POLY voices (also ones left from another mode: */
+        uint8_t *pe = &vpend[(uint32_t)(t - trk) % NTRK][i];
         if (t->v[i].note == note && t->v[i].gate &&     /* VOICE changed while they were held) */
             (mode == V_POLY || i >= (mode == V_UNISON ? trk_nvoice(t) : 1u) || t->mono_note != note)) {
             t->v[i].gate = 0;
             t->v[i].stage = 3;
         }
+        if ((*pe & VP_ON) && vpnote[(uint32_t)(t - trk) % NTRK][i] == note && t->mono_note != note)
+            *pe |= VP_OFF;                              /* (2.8.3) waiting for its fade: it starts, then releases */
+    }
 }
 
 static void trk_all_off(track_t *t)
@@ -521,6 +551,7 @@ static void trk_all_off(track_t *t)
     for (i = 0; i < NVOICE; i++) {
         t->v[i].gate = 0;
         t->v[i].stage = t->v[i].active ? 3 : 0;
+        vpend[(uint32_t)(t - trk) % NTRK][i] = 0;       /* (2.8.3: a note waiting for its voice's fade: gone too) */
     }
     t->nmono = 0;
     t->mono_note = 0;
@@ -750,6 +781,19 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
         voice_t *v = &t->v[i];
         vmod_t m;
         int32_t env, pitch;
+        uint8_t *pe = &vpend[(uint32_t)(t - trk) % NTRK][i];
+        if ((*pe & VP_ON) && !v->active && !fade) {     /* (2.8.3) faded out: the sample's note, from silence */
+            uint32_t pf = *pe;
+            *pe = 0;
+            if (voice_room(t, 0)) {                     /* (not counted while fading: within the budget now) */
+                voice_start(t, v, vpnote[(uint32_t)(t - trk) % NTRK][i], vpvel[(uint32_t)(t - trk) % NTRK][i],
+                            (pf & VP_GLIDE) != 0);
+                if (pf & VP_OFF) {                      /* let go within the fade: released as it starts */
+                    v->gate = 0;
+                    v->stage = 3;
+                }
+            }
+        }
         if (!v->active)
             continue;
         {

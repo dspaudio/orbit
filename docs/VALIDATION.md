@@ -1,5 +1,132 @@
 # ORBIT validation record
 
+## ORBIT 0.8.1 release package, 2026-10-28
+
+This release ports selected SLOOP 2.8 / 2.8.3 behavior, with credit to
+the SLOOP authors. The default FM-1 software integration passed, with the
+documented macOS IRQ-check exception below. The package was subsequently
+installed on an FM-1. The device owner confirmed normal screen and basic
+playing operation and authorized release.
+See the [release notes](releases/0.8.1.md).
+
+Local integration evidence is preserved in `build/host/orbit-081-evidence/`:
+`integrate.md` and the `drums.md`, `voice.md`,
+`seqb.md`, `layer.md` and `rescue.md` lane reports. Baseline HEAD:
+`3cbd2502ddd375484574837ae8e7e6a46c5c1e2d`. The default build used
+`sh build.sh`, not `--release`, and embeds `FELUCCA ORBIT 0.8.1`.
+Identity/board remain `FM-1_900` / `fm1`. ORP8, OPB3, the `step_t` layout
+and flag meanings, and editor protocol 13 are unchanged.
+
+### Package and measured resources
+
+| Item | Measured result |
+| --- | --- |
+| `build/orbit.fwsc` | 610032 bytes |
+| `build/felucca.bin` | 566360 bytes |
+| `build/loader/ota.bin` | 6876 bytes |
+| Static RAM `.data + .bss` | 97544 / 98304 bytes; 760 B region headroom |
+| Pool | 333948 / 344064 bytes; 10116 B region headroom |
+| `.ram_text` | 925 instructions, no calls |
+
+Package SHA-256:
+
+```text
+77fd12eefc0c2e156a5bea73c0856b2279166068452d2b30a76d358c11b1149c
+```
+
+The **760 B** is unused capacity in the static `.data`/`.bss` RAM region,
+not total runtime free RAM. The [linker map](../firmware/app.ld) places
+POOL in a separate region and reserves user/supervisor stacks separately.
+Actual stack high-water usage is unmeasured. Neither these static figures
+nor the target instruction-cost checks prove hardware timing.
+
+Existing target-budget checks passed without changing their baselines.
+`drums_mix` measured cost 6563 against budget 6153 and passed within the
+checker's tolerance. The final target register-access check also passed.
+
+### Software checks
+
+The integration runner recorded these actual exit codes:
+
+| Command | Exit | Result |
+| --- | ---: | --- |
+| `PYTHON=$HOME/.jieli/orbit-venv/bin/python sh build.sh` | 0 | Default pi32v2 FM-1 package built |
+| `python tests/target_budget.py build/felucca.dis tests/target_budget.txt` | 0 | Existing target budgets passed |
+| `strings build/felucca.bin \| grep "FELUCCA ORBIT 0.8.1"` | 0 | Embedded version matched |
+| `python tools/orbit_check.py` | 1 | 34 PASS / 1 FAIL; only `irq_init_test` failed |
+| `python tests/orbit_preview_test.py` | 0 | Native DSP/HTTP preview: 44100 Hz stereo, non-silent sequence, panel events and invalid-input checks passed |
+| `sh tests/run_tests.sh` | 0 | `ALL HOST TESTS PASSED` |
+| `node web/test_web.mjs` | 0 | `web tests passed` |
+
+The Python commands used `$HOME/.jieli/orbit-venv/bin/python`. The full
+suite used that environment on PATH and
+`CC_UB="/opt/homebrew/opt/llvm/bin/clang -isysroot $(xcrun --show-sdk-path)"`.
+It retained the default 10-minute simulated soak, 40000-frame stress,
+15000-frame ASan/UBSan stress, arena sanitizer and divide-by-zero checks;
+none was shortened. The arena check covered 128 engine pairs with
+bit-identical fresh-start results.
+
+The separate `orbit_check.py` run is **not all green**: `irq_init_test`
+cannot compile on macOS because its section attribute is not valid
+Mach-O syntax and `MAP_FIXED_NOREPLACE` is unavailable. The test was not
+deleted, skipped or weakened. Existing preview macro-redefinition and
+32-bit MMIO pointer-cast warnings remain.
+
+Focused checks passed for drum allocation (kits 0, 5 and 42), SAMPLE
+retrigger/voice budget, live-held POLY and MIDI overflow (11 cases),
+external clock (4 cases), layer timing, and recovery. Layer tests confirm
+no page during or after 0.2 s, display at 0.4 s, and immediate display on
+held-knob use for the 350 ms threshold. The final rescue path uses the HAL
+backlight helper before the early key scan; the lane report's direct
+register-write description predates that correction.
+
+### Reviewed audio changes
+
+Six of 218 golden hashes changed relative to the baseline: five SAMPLE
+renders due to fade-out and restart from silence, and one drum render due
+to voice selection when all drum voices are busy. The other 212 are
+unchanged; none was added or removed.
+
+| Render | Baseline hash | Release hash |
+| --- | --- | --- |
+| `preset/SAMPLE/00_GRAND_PNO` | `d923a2cd58dd6c07` | `9c5d53a1ab12d0fc` |
+| `preset/SAMPLE/02_VIBES` | `b990857c2a729642` | `6e14271dc9c6ebf0` |
+| `preset/SAMPLE/05_LOFI_FLUTE` | `9e8271d7e51eedda` | `4f9e9c62f7c4dff6` |
+| `preset/SAMPLE/08_DUSTY_PNO` | `3918c5839bb7a848` | `09c7cc02bc9e2468` |
+| `preset/SAMPLE/09_LOFI_KEYS` | `6fa2f6b1e30b1f3d` | `9c85a710ae9edfa6` |
+| `drums/gm_kit` | `97750328f0896d25` | `b56f39d6452ad27c` |
+
+Source-isolation runs attributed the changes: baseline `voice.c` with
+the drum fix left only the drum mismatch; baseline `drums.c` with the
+voice fix left only the five SAMPLE mismatches; both baseline files
+matched all 218 original renders. The final suite matched all reviewed
+goldens, with zero health failures, voice/routing failures, CPU entries
+over budget or crashes.
+
+### FM-1 installation and remaining checks
+
+On **2026-10-28**, the package with the SHA-256 above was installed using:
+
+```sh
+python tools/fm1_install.py build/orbit.fwsc --port Felucca --yes
+```
+
+The installation monitor returned **exit 0**. The inspected log,
+`build/host/orbit-081-install.log`, records package checking, write 100%,
+`restarting`, and `done: the FM-1 runs FM-1_900`.
+
+This confirms the update, restart and returned identity. The device owner
+subsequently confirmed normal screen and basic playing operation and
+approved release. A displayed ORBIT version or firmware-version query,
+measured audio quality/timing and OCT- power-on rescue remain unverified.
+
+The default build has **`FELUCCA_SLICE=0`**; neither a SLICE-enabled build
+nor SLICE retrigger behavior was tested. SAMPLE is the tested engine.
+Sequencer changes protect **live-held POLY** notes only. The original
+storage-dependent continuation request in `seq.md` remains superseded
+and excluded; `seqb.md` covers the implemented runtime ownership, MIDI
+overflow and clock behavior, not a stored continuation feature.
+
 ## ORBIT 0.8.0 release package, 2026-10-27
 
 The final default build embeds `FELUCCA ORBIT 0.8.0` and retains identity

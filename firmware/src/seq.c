@@ -1218,6 +1218,27 @@ static uint32_t in_chord_n, in_chord_i;
  * again meanwhile is held by its key again. Per track: the pedal, the notes waiting */
 static uint8_t sus_on[NTRK];
 static uint32_t sus_wait[NTRK][4];
+/* Live ownership is independent of recorded step lengths (SLOOP 2.8.3, after Melodee's
+ * live_held by Kerem Kilic, GPL-3.0). No continuation flags are needed to protect a held key. */
+static uint32_t live_held[NTRK][4], mi_trk_held[NTRK][4];
+static void live_set(const track_t *t, uint32_t note, int on)
+{
+    uint32_t *w = &live_held[trk_index(t) % NTRK][(note >> 5) & 3u], bit = 1u << (note & 31u);
+    *w = on ? *w | bit : *w & ~bit;
+}
+static int live_has(const track_t *t, uint32_t note)
+{
+    uint32_t ti = trk_index(t) % NTRK, w = (note >> 5) & 3u, bit = 1u << (note & 31u);
+    return t->p[P_VOICE] == V_POLY && ((live_held[ti][w] | sus_wait[ti][w]) & bit) != 0u;
+}
+static int seq_has(const track_t *t, uint32_t note)
+{
+    uint32_t i;
+    for (i = 0; i < t->seq_n && i < 4u; i++)
+        if (t->seq_notes[i] == note)
+            return 1;
+    return 0;
+}
 static void input_off_now(track_t *t, uint32_t note);
 static void input_on(track_t *t, uint32_t note, uint32_t vel)
 {
@@ -1241,6 +1262,7 @@ static void input_on(track_t *t, uint32_t note, uint32_t vel)
         arp_add(t, note);                         /* (the arp records the notes it plays) */
         return;
     }
+    live_set(t, note, 1);                         /* the sequencer must not retrigger a player's held POLY note */
     if (((song.rec >> trk_index(t)) & 1u) && song.playing)
         rec_note(t, note, vel, 0, 1);
     if (in_chord)                                 /* a chord from the keys: maybe strummed (voice.c) */
@@ -1268,7 +1290,9 @@ static void input_off_now(track_t *t, uint32_t note)
         ft_note_off(note);
     rec_release(t, note);
     arp_remove(t, note);                            /* both: the note may have started in the */
-    trk_note_off(t, note);                          /* other mode (ARP switched while held) */
+    live_set(t, note, 0);
+    if (!(t->p[P_VOICE] == V_POLY && song.playing && seq_has(t, note)))
+        trk_note_off(t, note);                      /* other mode (ARP switched while held); the pattern owns its gate */
 }
 
 /* a drum hit from a key, MIDI or a roll: lane, level; rat: its ratchet when recorded (rolls); rec: it
@@ -1966,7 +1990,8 @@ static void seq_release(track_t *t)
 {
     uint32_t i;
     for (i = 0; i < t->seq_n; i++) {
-        trk_note_off(t, t->seq_notes[i]);
+        if (!live_has(t, t->seq_notes[i]))
+            trk_note_off(t, t->seq_notes[i]);
         seq_out_off(t, t->seq_notes[i]);
     }
     if (is_drum(t))
@@ -2040,8 +2065,8 @@ static void seq_step(track_t *t, const step_t *s, uint32_t slen, uint32_t skip)
     if (!slide_in)
         seq_release(t);
     for (i = 0; i < s->n; i++)
-        if (roll_has(t, s->note[i]))
-            skip |= 1u << i;                        /* (a roll plays it) */
+        if (roll_has(t, s->note[i]) || live_has(t, s->note[i]))
+            skip |= 1u << i;                        /* a roll or a live POLY key already plays it */
     for (i = 0; i < s->n; i++)
         if (!((skip >> i) & 1u)) {
             if (slide_in)
@@ -2056,7 +2081,8 @@ static void seq_step(track_t *t, const step_t *s, uint32_t slen, uint32_t skip)
             for (j = 0; j < s->n && s->note[j] != t->seq_notes[i]; j++)
                 ;
             if (j == s->n) {
-                trk_note_off(t, t->seq_notes[i]);
+                if (!live_has(t, t->seq_notes[i]))
+                    trk_note_off(t, t->seq_notes[i]);
                 seq_out_off(t, t->seq_notes[i]);
             }
         }
@@ -2109,7 +2135,7 @@ static void seq_ratchets(track_t *t, uint32_t into, uint32_t slen)
             return;
         for (i = 0; i < s->n; i++) {
             uint32_t hits = 1u + ((s->rat >> (2u * i)) & 3u), h;
-            if (hits == 1u || roll_has(t, s->note[i]))
+            if (hits == 1u || roll_has(t, s->note[i]) || live_has(t, s->note[i]))
                 continue;
             h = into * hits / slen;
             if (h > t->rat_done[i] && h < hits) {
@@ -2416,17 +2442,39 @@ static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t 
  * (the slicer, delay and arp follow it). START restarts from the top, CONTINUE carries on where it
  * stopped, STOP stops. With no pulse for 0.5 s, the internal tempo takes over (PLAY works as ever). */
 #define MCLK_PULSE_U (BEAT_U / 24u)
+#define MCLK_NB 8u
 static struct {
     uint32_t pos, done;          /* units: the master's position (pulses since START), ours */
     uint32_t last_ms, iv_ms;     /* the last pulse, the interval between pulses (smoothed) */
     uint32_t beat_ms;            /* when pulse 0 of the last 24 came: the tempo */
     uint8_t have, n24;           /* a pulse since START; pulses towards the next tempo reading */
     uint8_t alive;               /* pulses are coming (from the SYNC source) */
+    uint8_t nb, bi;              /* recent beat durations; bi is the next slot */
+    uint16_t bdt[MCLK_NB];
 } mclk;
 
 static int mclk_on(void)                          /* the clock drives the sequencer */
 {
     return song.g[G_SYNC] && mclk.alive && fm1_ms - mclk.last_ms < 500u;
+}
+
+/* SLOOP 2.8: average eight beats, with 0.8 BPM hysteresis once full. A >=5 BPM
+ * jump resets the average immediately; pulse-based transport timing is unchanged. */
+static void mclk_tempo(uint32_t dt)
+{
+    uint32_t k, sum = 0, t10;
+    int32_t one = (int32_t)((60000u + dt / 2u) / dt), cur = song.g[G_BPM];
+    if (mclk.nb && (one - cur >= 5 || cur - one >= 5))
+        mclk.nb = 0;
+    mclk.bdt[mclk.bi] = (uint16_t)dt;
+    mclk.bi = (uint8_t)((mclk.bi + 1u) % MCLK_NB);
+    if (mclk.nb < MCLK_NB)
+        mclk.nb++;
+    for (k = 0; k < mclk.nb; k++)
+        sum += mclk.bdt[(mclk.bi + MCLK_NB - 1u - k) % MCLK_NB];
+    t10 = (600000u * mclk.nb + sum / 2u) / sum;
+    if (mclk.nb < MCLK_NB || (int32_t)t10 - cur * 10 >= 8 || cur * 10 - (int32_t)t10 >= 8)
+        song.g[G_BPM] = (int16_t)clamp((int32_t)((t10 + 5u) / 10u), 40, 240);
 }
 
 static void mclk_event(uint32_t st, uint32_t src)  /* a realtime message; src 1 USB, 2 TRS */
@@ -2455,13 +2503,14 @@ static void mclk_event(uint32_t st, uint32_t src)  /* a realtime message; src 1 
     }
     if (!mclk.alive || now - mclk.last_ms >= 500u) {   /* (re)started: count a fresh beat */
         mclk.n24 = 0;
+        mclk.nb = 0;
         mclk.beat_ms = now;
     } else if (++mclk.n24 == 24u) {                /* a beat: the tempo */
         uint32_t dt = now - mclk.beat_ms;
         mclk.n24 = 0;
         mclk.beat_ms = now;
         if (dt >= 250u && dt <= 1500u)             /* 40..240 BPM */
-            song.g[G_BPM] = (int16_t)clamp((int32_t)((60000u + dt / 2u) / dt), 40, 240);
+            mclk_tempo(dt);
     }
     mclk.alive = 1;
     mclk.last_ms = now;
@@ -2618,6 +2667,8 @@ static void events_block(uint32_t n)
             } else {
                 trk_all_off(t);
             }
+            memset(live_held[i], 0, sizeof live_held[i]);
+            memset(mi_trk_held[i], 0, sizeof mi_trk_held[i]);
             sus_wait[i][0] = sus_wait[i][1] = sus_wait[i][2] = sus_wait[i][3] = 0;   /* (what the pedal held: gone too, */
             sus_on[i] = 0;                                                         /* and the pedal: never stuck) */
             t->nheld = 0;
@@ -2723,12 +2774,26 @@ static void events_block(uint32_t n)
                 mi_pen[d1 >> 5] |= 1u << (d1 & 31u);
             }
             step_in_push(d1 | 0x80u | trk_index(t) << 8);
+            mi_trk_held[trk_index(t) % NTRK][d1 >> 5] |= 1u << (d1 & 31u);
             input_on(t, d1, d2);
         } else {
             mi_pen[d1 >> 5] &= ~(1u << (d1 & 31u));
             step_in_push(d1 | trk_index(t) << 8);
+            mi_trk_held[trk_index(t) % NTRK][d1 >> 5] &= ~(1u << (d1 & 31u));
             input_off(t, d1);
         }
+    }
+    if (midi_in_lost) {                             /* drain first: even a queued note-on may have lost its note-off */
+        uint32_t ti, w, b;
+        midi_in_lost = 0;
+        for (ti = 0; ti < NTRK; ti++)
+            for (w = 0; w < 4u; w++)
+                for (b = 0; b < 32u; b++)
+                    if ((mi_trk_held[ti][w] >> b) & 1u) {
+                        mi_trk_held[ti][w] &= ~(1u << b);
+                        input_off(&trk[ti], w * 32u + b);
+                    }
+        mi_pen[0] = mi_pen[1] = mi_pen[2] = mi_pen[3] = 0;
     }
     for (i = 0; i < NTRK; i++)
         seq_tick(&trk[i], adv);

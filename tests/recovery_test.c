@@ -14,6 +14,13 @@ static struct { uint8_t ota_req, uboot_req; } usb;
 static struct { uint32_t buttons; } fm1_in;
 static uint32_t input_buttons, stop_at_retry;
 static jmp_buf exit_loop;
+/* PA2 (backlight, active low) gates the FM-1 key matrix: modelled by the HAL pin setup recovery.c calls. */
+static uint32_t pa_out = 1u << 2, pa_dir = 1u << 2, scans_matrix_off, scans_matrix_on, input_inits_matrix_on, input_inits;
+#define FM1_LCD_PA_OUT pa_out
+#define FM1_LCD_PA_DIR pa_dir
+#define FM1_LCD_BL (1u << 2)
+#define MATRIX_POWERED() (!(pa_out & FM1_LCD_BL) && !(pa_dir & FM1_LCD_BL))
+static void fm1_lcd_backlight_on(void) { FM1_LCD_PA_OUT &= ~FM1_LCD_BL; FM1_LCD_PA_DIR &= ~FM1_LCD_BL; }   /* PA2 */
 #define FM1_TICKS_PER_US 24u
 #define FL_FAR(x) x
 #define FL_JEDEC_OK(id) ((id) == 0x856014u)   /* as firmware/hal/fm1_flash.h */
@@ -40,8 +47,18 @@ static int ota_session(void)
     for (i = 0; i < 200; i++) { ticks += 12000u; recovery_poll(); }
     return -13;  /* failed update must leave rescue available for another try */
 }
-static void fm1_input_init(void) { fm1_in.buttons = 0; }
-static void fm1_input_scan(void) { scans++; ticks += 24000u; fm1_in.buttons = input_buttons; }
+static void fm1_input_init(void)
+{
+    input_inits++;
+    if (MATRIX_POWERED()) input_inits_matrix_on++;
+    fm1_in.buttons = 0;
+}
+static void fm1_input_scan(void)
+{
+    scans++; ticks += 24000u;
+    if (MATRIX_POWERED()) { scans_matrix_on++; fm1_in.buttons = input_buttons; }
+    else { scans_matrix_off++; fm1_in.buttons = 0; }   /* an unpowered matrix reads no key */
+}
 static uint32_t fl_jedec_ram(void) { jedec_reads++; return jedec; }
 static void lcd_init(void) { lcd_calls++; }
 static void lcd_fill(int x, int y, int w, int h, int c) { (void)x;(void)y;(void)w;(void)h;(void)c; }
@@ -67,7 +84,11 @@ int main(void)
     assert(bootguard_begin(&b) == BOOT_NORMAL && b.failed == 0);
     assert(bootguard_manual(1) && !bootguard_manual(0) && !bootguard_manual(2) && !bootguard_manual(3));
 
-    input_buttons = 1; assert(recovery_key());
+    /* SLOOP 2.8: OCT- at power-on must be seen: the early scan powers the matrix (PA2 low) before it reads */
+    input_buttons = 1; assert(!MATRIX_POWERED());
+    assert(recovery_key());
+    assert(input_inits == 1 && input_inits_matrix_on == 1);
+    assert(scans_matrix_off == 0 && scans_matrix_on >= 50);
     input_buttons = 3; assert(!recovery_key());
     input_buttons = 0; assert(!recovery_key());
     assert(scans >= 150);

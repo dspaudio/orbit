@@ -36,6 +36,8 @@ Tracks 1/2/3 use blue/green/white; track 4 and the fourth encoder use orange. Op
 
 Tap a page button again to cycle its pages; turn SELECT to move backward/forward within that family, stopping at its ends. Each family remembers its last page. To reach SAVE pages from Tape, open an editing page first, then tap SAVE. Drum GRID/KIT navigation is described below. A locked layer frees both hands; another page/layer button unlocks it. PLAY, REC and octave controls remain available where the layer supports them.
 
+In **0.8.1**, hold a layer button for **0.35 s** to show its layer page; a quick tap does not flash that page. Using a layer control while holding the button, such as turning a knob, shows it immediately.
+
 Turning PRESETS on a synth track's Tape or Mixer **loads immediately** and opens a short list with nearby sounds. Further turns audition and extend the list. A value edit, navigation or Tape capture/drop dismisses it. Sound-design pages do not silently load sounds from PRESETS. Held-step locks keep their separate PRESETS meaning.
 
 ## Event Tape
@@ -118,6 +120,8 @@ The default build has **17 engines and 189 factory sounds**. The first twelve so
 | CLOUD | Original oscillator-source grains, eight new presets |
 
 The three synth parts share **eight sounding voices globally**. CLUSTER caps POLY/UNISON at four voices per part, CLOUD at three and FM6 at six; PHYS limits vary by model. MONO and LEGATO intentionally play one voice. UNISON spreads voices across one note; it is not a chord mode. New notes can steal voices, and CPU overload can fade extra voices. These are allocation limits, not guaranteed worst-case FM-1 polyphony. [CLUSTER details](docs/OP1-CLUSTER.md).
+
+In **0.8.1**, drums use a free voice first. When all **six drum voices** are busy, a repeated sound reuses its own voice; a new sound steals the oldest non-kick, or the oldest kick if all voices are kicks. Kick protection applies to notes 35/36. This applies to GM, sampled and SYN kits while retaining existing hat choke and declick tails.
 
 CLOUD's pages are **GRAINS** (WAVE, SIZE, DENS, SPRD) and **SPECTRUM** (DTUN, CHRP, STCK, TONE). WAVE morphs oscillator shapes; SIZE/DENS change grain length/start rate; SPRD adds timing/phase variation; DTUN spreads pitch; signed CHRP sweeps each grain; STCK introduces fifths/octaves; TONE filters it. It does not require a sample slot. GRAIN instead selects sample SRC and POS.
 

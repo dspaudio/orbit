@@ -43,6 +43,8 @@ $CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/cloud_test" tests/clo
 run "CLOUD: oscillator grains, presets, extrema, release and arena ownership" "$OUT/cloud_test"
 $CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/sample_replacement_test" tests/sample_replacement_test.c -lm
 run "synthesized sample replacements: preserved IDs/data and audible banks" "$OUT/sample_replacement_test"
+$CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/chop_attack_test" tests/chop_attack_test.c -lm
+run "chop attack (2.8.3): a sample retriggered fades out and restarts from silence, fading voices count in the budget" "$OUT/chop_attack_test"
 $CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/editor_wide_test" tests/editor_wide_test.c -lm
 run "editor WIDE: signed16 round trips and legacy frames" "$OUT/editor_wide_test"
 
@@ -63,6 +65,10 @@ $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/studio_drums_test" tests/studio_d
 run "drum lanes, kit audio, metronome, record arm, free take" "$OUT/studio_drums_test" "$OUT/drum-styles.wav"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/seq2_test" tests/seq2_test.c -lm
 run "sequencer 2.0: no drift, ratchets, roll, erase / undo, ghost / hard, chords, mute / solo, nudge, locks" "$OUT/seq2_test"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/hold_rec_test" tests/hold_rec_test.c -lm
+run "POLY live recording and MIDI overflow recovery" "$OUT/hold_rec_test"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/midi_clock_test" tests/midi_clock_test.c -lm
+run "external MIDI clock average and immediate tempo jumps" "$OUT/midi_clock_test"
 
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/drumkit_test" tests/drumkit_test.c -lm
 run "synthesised drum kits: every kit x sound bounded, audible, finite, levels, cost" "$OUT/drumkit_test" "$OUT/drum-kits.wav" "$OUT/drum-kits.txt"
@@ -70,6 +76,8 @@ $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/userkit_test" test
 run "user drum kits (KIT USR1..USR3): a user slot's sounds on the drum lanes" "$OUT/userkit_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/dsyn_test" tests/dsyn_test.c -lm
 run "SYN1..SYN4 drum kits and editor protocol v10" "$OUT/dsyn_test"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/drum_steal_test" tests/drum_steal_test.c -lm
+run "drum voice steal (2.8.3): free first, a sound's own voice, the oldest but a kick" "$OUT/drum_steal_test"
 $CC -O2 -w -DARENA_STATS -Ibuild/gen -Ifirmware/src -o "$OUT/arena_test" tests/arena_test.c -lm
 run "shared engine arena: clean takeover, ownership and random transitions" "$OUT/arena_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/punch_test" tests/punch_test.c -lm

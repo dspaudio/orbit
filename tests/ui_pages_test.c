@@ -210,14 +210,24 @@ int main(int argc, char **argv)
         song.g[G_MIDI] = (int16_t)m0; go_home(); frame();
     }
 
-    /* ---- taps open pages, holds are layers */
+    /* ---- taps open pages, holds show layers only after 0.35 s or use */
     go_home(); ui.force = 1; frame();
+    press(B_FX); frames(12);
+    check(ui.layer == LY_PLAY, "FX held 0.2 s: no layer page");
+    release(B_FX);
+    check(ui.layer == LY_PLAY, "FX held 0.2 s then released: no layer page");
+    go_home(); frame(); press(B_FX); frames(25);
+    check(ui.layer == LY_FX, "FX held 0.4 s: the layer page shows");
+    release(B_FX); go_home(); frame();
+    press(B_FX); encs[panel.enc[EN_K2]] = 1; frame();
+    check(ui.layer == LY_FX && song.g[G_DUST] > 0, "FX knob used while held: layer page shows at once");
+    release(B_FX); song.g[G_DUST] = 0; go_home(); frame();
     { uint8_t was = song.sel; song.sel = 0; check(keys_guide() == 0u, "synth track, no layer: no landmarks (a piano)"); song.sel = was; }
     tap(B_SEQ); check(cur_fam() == FAM_SEQ, "SEQ tapped: the SEQ pages");
     go_home(); frame();
     tap(B_FX); check(cur_fam() == FAM_FX, "FX tapped: the FX pages");
     go_home(); frame();
-    press(B_FX); frames(12); check(ui.layer == LY_FX && punch.hold, "FX held: the punch layer shows");
+    press(B_FX); frames(22); check(ui.layer == LY_FX && punch.hold, "FX held: the punch layer shows");
     check(keys_guide() == (1u << key_of_white(0) | 1u << key_of_white(4) | 1u << key_of_white(8) | 1u << key_of_white(12)),
           "FX held: keys 1, 5, 9, 13 lit dim (the rows of the grid)");
     ppm("layer-punch");
@@ -258,7 +268,7 @@ int main(int argc, char **argv)
     check(ly_lock == LY_PLAY && ui.layer == LY_PLAY && cur_fam() != FAM_FX, "locked, FX tapped: unlocked, no FX page");
     go_home(); frame();
     press(B_SEQ); frames(3); tap(B_HOME); release(B_SEQ); frames(3);
-    press(B_FX); frames(12);
+    press(B_FX); frames(22);
     check(ly_lock == LY_PLAY && ui.layer == LY_FX, "locked SEQ, FX held: unlocked, the FX layer");
     release(B_FX); frames(2); check(ui.layer == LY_PLAY, "and FX let go: back to playing");
     press(B_FX); frames(3); tap(B_HOME); release(B_FX); frames(3);
@@ -461,7 +471,7 @@ int main(int argc, char **argv)
     /* ---- SAVE: tap = the song page; held = the SONG layer (live sections, SONG REC) */
     go_home(); frame();
     song.playing = 0; live_sec = -1; live_req = -1; srec = 0; arrangement_enabled = 0;
-    press(B_SAVE); frames(15); check(ui.layer == LY_SONG, "SAVE held: the song layer");
+    press(B_SAVE); frames(22); check(ui.layer == LY_SONG, "SAVE held: the song layer");
     key(key_of_white(4)); check(sec_stores == 0 && sec_armed == 1u, "store over a used A: asks again");
     key(key_of_white(4)); check(sec_stores == 1 && live_sec == 0, "again: the loop stored in A");
     key(key_of_white(6)); check(sec_stores == 2 && live_sec == 2, "an empty C: stored at once");
@@ -472,7 +482,7 @@ int main(int argc, char **argv)
     release(B_SAVE); frames(2);
     check(chain_n == 0u && chain_taps == 0u && live_req == 0, "one tap, SAVE let go: no chain (as before)");
     live_req = -1;
-    press(B_SAVE); frames(15);                        /* (2.4) SAVE held: A, B, B tapped: a chain on release */
+    press(B_SAVE); frames(22);                        /* (2.4) SAVE held: A, B, B tapped: a chain on release */
     key(key_of_white(0)); key(key_of_white(1));
     check(live_req == 0 && chain_taps == 2u && chain_n == 0u, "SAVE held, A then B tapped: A asked for, the chain building");
     ui.force = 1; frame();
@@ -483,11 +493,11 @@ int main(int argc, char **argv)
     release(B_SAVE); frames(2);
     check(chain_n == 3u && chain_i == 0u && chain_sec[0] == 0 && chain_sec[1] == 1 && chain_sec[2] == 1 && chain_bars == 1u && live_req == 0,
           "SAVE let go: the chain A B B plays (A asked for, 1 bar)");
-    press(B_SAVE); frames(15);
+    press(B_SAVE); frames(22);
     check(str_eq(sub_line(), "chain A B B"), "SAVE held again: the chain shown");
     key(key_of_white(1)); release(B_SAVE); frames(2);
     check(chain_n == 0u && live_req == 1, "a single tap of B: the chain ends, B asked for");
-    press(B_SAVE); frames(15);
+    press(B_SAVE); frames(22);
     live_req = -1; song.playing = 0;
     key(key_of_white(13)); check(srec == 1u && !arrangement_enabled, "SONG REC armed (loop mode)");
     ui.force = 1; frame(); ppm("layer-song");

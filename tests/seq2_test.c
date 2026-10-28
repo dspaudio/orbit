@@ -55,8 +55,12 @@ static void reset(uint32_t bpm)
 {
     uint32_t i;
     host_tracks_init();
-    for (i = 0; i < NTRK; i++)
+    for (i = 0; i < NTRK; i++) {
         steps_clear(&trk[i]);
+        trk_all_off(&trk[i]);
+    }
+    memset(live_held, 0, sizeof live_held);
+    memset(mi_trk_held, 0, sizeof mi_trk_held);
     memset(&drums, 0, sizeof drums);
     drums.set = -2;
     nhits = 0;

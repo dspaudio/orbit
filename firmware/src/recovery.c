@@ -38,9 +38,22 @@ static void recovery_step(void)
     }
 }
 
+/* The FM-1 key matrix is read only while PA2, the backlight (active low), is driven low. The ROM and the bootloaders
+ * leave it undriven and lcd_init() runs after this scan, so OCT- was never seen and USB RESCUE never opened. Drive it
+ * on first (SLOOP 2.8): only that pin; the LCD's SPI setup stays in lcd_init(). The SMK-37 Pro has no backlight
+ * control and its matrix needs no such step. */
+#ifndef RECOVERY_KEYS_ON
+#if BOARD_SMK37
+#define RECOVERY_KEYS_ON() ((void)0)
+#else
+#define RECOVERY_KEYS_ON() fm1_lcd_backlight_on()
+#endif
+#endif
+
 static int recovery_key(void)
 {
     uint32_t start = fm1_ticks();
+    RECOVERY_KEYS_ON();
     fm1_input_init();
     do {
         fm1_wdt_feed();
