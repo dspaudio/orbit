@@ -42,7 +42,7 @@
 #define PROJ_NG 32u                            /* the globals a project holds (G_DRDLY rides in its own byte) */
 #define PROJ_NC7 53u                           /* format 7: common parameters kept in 16 bits, P_LEVEL .. P_VLEAD */
 #define PROJ_NX7 10u                           /* .. the 2.6 ones in a byte each, P_ITYPE .. P_LPOL (then format 8's flt) */
-_Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u && G_COUNT == G_BEND + 1u && G_COUNT == 45u,
+_Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u && G_DTYPE == G_BEND + 1u && G_COUNT == G_DTYPE + 1u && G_COUNT == 46u,
                "the globals a project holds, then G_DRDLY, then the 2.6 device settings and TEXTURE");
 _Static_assert(PROJ_NC7 == (uint32_t)P_ITYPE && PROJ_NX7 == (uint32_t)(P_TRES - P_ITYPE) && P_TFTYPE == P_TRES + 1 &&
                P_E0 == P_TFTYPE + 1 && P_E0 == PROJ_E0_V7 + 2u && P_COUNT == 73 && PROJ_NC7 == PROJ_NP_V5 - 8u,
@@ -487,29 +487,32 @@ static int proj_import(project_t *q, const void *b, int n)
 /* ---- the working project <-> a project_t */
 /* 2.6: GLO > TEXTURE in a project (a song section has its own): in the slots of two globals a project does not apply
  * (G_DRCH: a setting of the FM-1; G_INFO: the CPU readout) and the spare bytes. rsv[0]: 0x80 (there) | SRC
- * | WHEN << 4 | DUCK << 5, rsv[1]: RATE, g[G_DRCH]: LEVEL | (TONE + 64) << 7, g[G_INFO]: MOVE. Without the 0x80 (a
+ * | WHEN << 4 | DUCK << 5, rsv[1]: RATE, g[G_DRCH]: LEVEL | (TONE + 64) << 7 | the delay TYPE << 14 (ORBIT 0.8.2:
+ * bits a project before it left 0, MONO; older firmware masks them off), g[G_INFO]: MOVE. Without the 0x80 (a
  * project before it, converted): the defaults, OFF */
 static void proj_tx_put(project_t *p)
 {
     p->rsv[0] = (uint8_t)(0x80u | ((uint32_t)song.g[G_TXSRC] & 15u) | ((uint32_t)song.g[G_TXWHEN] & 1u) << 4 |
                           ((uint32_t)song.g[G_TXDUCK] & 1u) << 5);
     p->rsv[1] = (uint8_t)song.g[G_TXRATE];
-    p->g[G_DRCH] = (int16_t)((song.g[G_TXLVL] & 127) | ((song.g[G_TXTONE] + 64) & 127) << 7);
+    p->g[G_DRCH] = (int16_t)(uint16_t)((song.g[G_TXLVL] & 127) | ((song.g[G_TXTONE] + 64) & 127) << 7 |
+                                       (song.g[G_DTYPE] & 3) << 14);
     p->g[G_INFO] = song.g[G_TXMOVE];
 }
 static void proj_tx_get(const project_t *p)
 {
-    static const uint8_t ID[7] = {G_TXSRC, G_TXLVL, G_TXTONE, G_TXMOVE, G_TXRATE, G_TXWHEN, G_TXDUCK};
-    int32_t v[7];
+    static const uint8_t ID[8] = {G_TXSRC, G_TXLVL, G_TXTONE, G_TXMOVE, G_TXRATE, G_TXWHEN, G_TXDUCK, G_DTYPE};
+    int32_t v[8];
     uint32_t i;
     if (!(p->rsv[0] & 0x80u)) {
-        for (i = 0; i < 7u; i++)
+        for (i = 0; i < 8u; i++)
             v[i] = GP[ID[i]].def;
     } else {
         v[0] = p->rsv[0] & 15u, v[5] = (p->rsv[0] >> 4) & 1u, v[6] = (p->rsv[0] >> 5) & 1u, v[4] = p->rsv[1];
         v[1] = p->g[G_DRCH] & 127, v[2] = ((p->g[G_DRCH] >> 7) & 127) - 64, v[3] = p->g[G_INFO];
+        v[7] = ((uint16_t)p->g[G_DRCH] >> 14) & 3u;
     }
-    for (i = 0; i < 7u; i++)
+    for (i = 0; i < 8u; i++)
         song.g[ID[i]] = (int16_t)clamp(v[i], GP[ID[i]].min, GP[ID[i]].max);
 }
 
@@ -631,6 +634,10 @@ static union {
     project_v2_t v2;
     project_v1_t v1;
 } proj_tmp;
+#if !UP_RAM
+_Static_assert(sizeof proj_tmp >= sizeof(up_bank_t), "a user preset bank is staged in the project buffer");
+static void *up_stage(void) { return &proj_tmp; }   /* upreset.c: a user preset bank staged for a write */
+#endif
 static void proj_fetch(uint32_t slot)
 {
     project_t *q = &proj_slot[slot & 3u];
@@ -900,7 +907,7 @@ static void persist_boot(void)                    /* before settings_init / pane
         }
     }
     dsu_boot();
-    up_boot(&proj_tmp, sizeof proj_tmp);           /* user presets (staged, then decoded: OPB2 or UPB1) */
+    up_boot(&proj_tmp, sizeof proj_tmp);           /* user presets (read in place; OPB2 / UPB1 converted once) */
     fm6_bank_boot();                               /* the FM6 patch bank (fm6_bank.c) */
 #endif
 }

@@ -40,7 +40,6 @@ try:
     assert state == {'track': 0, 'view': 'synth', 'module': 0}
     assert api({'op':'button','button':'ENV'})['state']['module'] == 1
     assert api({'op':'button','button':'HOME'})['state']['view'] == 'tape'
-    assert api({'op':'button','button':'HOME'})['state']['view'] == 'visualizer'
     assert api({'op':'button','button':'HOME'})['state']['view'] == 'tape'
     assert api({'op':'button','button':'GLO'})['state']['view'] == 'mixer'
     assert api({'op':'knob','role':0,'delta':1})['state']['view'] == 'mixer'
@@ -105,7 +104,7 @@ context = vm.createContext({
     if (request.op === "knob" && request.role === 1)
       state.track = Math.max(0, Math.min(3, state.track + Math.sign(request.delta)));
     if (request.op === "button") {
-      if (request.button === "HOME") { state.view = state.view === "tape" ? "visualizer" : "tape"; state.module = -1; }
+      if (request.button === "HOME") { state.view = "tape"; state.module = -1; }
       else if (request.button === "GLO") { state.view = state.view === "tape" ? "mixer" : "other"; state.module = -1; }
       else if (["EDIT", "ENV", "FX", "LFO"].includes(request.button)) {
         state.view = state.track === 3 ? "drum" : "synth";
@@ -195,11 +194,10 @@ int main(int argc, char **argv)
         uint32_t pos=(base+k)&(SCOPE_N-1u);
         uint32_t sample=k*2u+1u;
         assert(scope_buf[pos]==vis_tap[sample*2u]);
-        assert(scope_bufr[pos]==vis_tap[sample*2u+1u]);
     }}
-    for(k=0;k<SCOPE_N;k++) nonzero+=scope_bufr[k]!=0;
+    for(k=0;k<SCOPE_N;k++) nonzero+=scope_buf[k]!=0;
     assert(nonzero);
-    puts("Native preview stereo scope: PASS (actual render command, left/right taps)");
+    puts("Native preview scope: PASS (actual render command, left tap)");
     return 0;
 }}
 ''')

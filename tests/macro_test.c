@@ -8,6 +8,7 @@
 static uint32_t host_slots[4u * 0x14000u / 4u];
 #define SMP_USER_XIP(k) ((const uint8_t *)host_slots + (k) * SMP_USER_SIZE)
 #define FM6_BANK_XIP(copy) (nor + st_sector(OBJ_FM6BANK, copy) + ST_PAYLOAD_OFF)
+#define ST_XIP_PTR(off) (nor + (off))     /* storage.c st_xip: the user preset banks read in place */
 static uint8_t nor[0x100000];
 #define main hostsim_main
 #include "hostsim.c"
@@ -51,7 +52,7 @@ static int32_t fm1_adc_read(int c) { (void)c; return -1; }
 static struct { uint32_t magic, stage, page, home, ui_frames; } felucca_dbg;
 #define FELUCCA_ICONS 1
 #define SCOPE_N 512u
-static int16_t scope_buf[SCOPE_N], scope_bufr[SCOPE_N];
+static int16_t scope_buf[SCOPE_N];
 static uint32_t scope_w;
 #include "../firmware/src/panel.c"
 #include "../firmware/src/ui.c"
@@ -59,7 +60,6 @@ static uint32_t scope_w;
 #include "../firmware/src/ui_studio.c"
 #include "../firmware/src/icons.c"
 #include "../firmware/src/ui_draw.c"
-#include "../firmware/src/ui_vis.c"
 #include "../firmware/src/ui_layers.c"
 #include "../firmware/src/ui_menu.c"
 #include "../firmware/src/ui_input.c"
@@ -190,8 +190,8 @@ int main(void)
       mlu.on = 0; }
     turn(EN_K1, 99999); check(TSEL->p[P_ATK] == 127, "PERFORM clamps high input to descriptor range");
     turn(EN_K1, -99999); check(TSEL->p[P_ATK] == 0, "PERFORM clamps low input to descriptor range");
-    tap(B_HOME); check(ui.home && !vis_shown(), "PERFORM HOME returns directly to unchanged Event Tape");
-    tap(B_HOME); check(vis_shown(), "Tape HOME still opens Visualizer"); tap(B_HOME);
+    tap(B_HOME); check(ui.home, "PERFORM HOME returns directly to unchanged Event Tape");
+    tap(B_HOME); check(ui.home, "Tape HOME stays on Event Tape");
     /* Given every factory engine, When a sound loads, Then DEFAULT resolves its own descriptors. */
     for (i = 0; i < NENGINES; i++) {
         set_engine_of(TSEL, i); apply_preset_to(TSEL, 0);
@@ -214,7 +214,7 @@ int main(void)
     check(TSEL->eng_req == ENGI_CLUSTER, "actual USER LOAD knob loads sound onto another track");
     check(!memcmp(TSEL->macro, maps, 4) && TSEL->p[P_E1] == -32768 && TSEL->p[P_E3] == 32767,
           "another track receives signed16 CLUSTER values and assignments together");
-    memset(up_bank, 0, sizeof up_bank); up_boot(&proj_tmp, sizeof proj_tmp);
+    up_boot(&proj_tmp, sizeof proj_tmp);   /* (a cold start: the banks read in place again) */
     check(up_load(31) == 0 && !memcmp(TSEL->macro, maps, 4), "cold bank load retains slot32 assignments");
     transport_req = 0; backup_cycle(7);
     check(up_load(31) == 0 && !memcmp(TSEL->macro, maps, 4) && TSEL->p[P_E1] == -32768,
@@ -224,7 +224,7 @@ int main(void)
         TSEL->p[P_TRES] = 111, TSEL->p[P_TFTYPE] = 1;
         TSEL->macro[0] = P_TRES, TSEL->macro[1] = P_TFTYPE;
         check(up_store(30, "RES BP") == 0, "RES/BP preset saves all current parameters to NOR");
-        memset(up_bank, 0, sizeof up_bank); up_boot(&proj_tmp, sizeof proj_tmp);
+        up_boot(&proj_tmp, sizeof proj_tmp);   /* (a cold start: the banks read in place again) */
         up_values(up_rec(30), values);
         check(up_used(30) && values[P_TRES] == 111 && values[P_TFTYPE] == 1 &&
               up_macro(up_rec(30), 0) == P_TRES && up_macro(up_rec(30), 1) == P_TFTYPE,
@@ -238,6 +238,32 @@ int main(void)
         check(values[P_TRES] == 111 && values[P_TFTYPE] == 1 && up_macro(up_rec(30), 0) == P_TRES &&
               up_macro(up_rec(30), 1) == P_TFTYPE, "bank LIST/GET/PUT retains stored RES/BP values and assignments");
         check(up_load(31) == 0 && !memcmp(TSEL->macro, maps, 4), "original sound and map restored after RES/BP test");
+    }
+    /* Given an OPB2 bank in flash (ORBIT 0.7), When the FM-1 starts, Then it is written back once as OPB3, its values
+     * and macros kept, and read in place; a second start writes nothing. */
+    {
+        static up_bank_v2_t b2;
+        static uint8_t before[sizeof nor];
+        const up_bank_t *bk;
+        uint32_t len = 0;
+        int16_t values[P_COUNT];
+        memset(&b2, 0, sizeof b2);
+        b2.magic = UP_BANK_MAGIC_V2, b2.rsize = UP_RECORD_V2, b2.nslot = UP_PER_BANK;
+        b2.r[3].used = UP_USED, b2.r[3].ver = UP_VER_V2, b2.r[3].engine = ENGI_CLUSTER, b2.r[3].np = UP_PMAX_V2;
+        memcpy(b2.r[3].name, "OLD OPB2", 8);
+        b2.r[3].p[UP_PMAX_V2 - 7u] = -1234;                 /* (E1, mapped by count) */
+        b2.r[3].macro[0] = (uint8_t)(UP_PMAX_V2 - 8u), b2.r[3].macro[1] = b2.r[3].macro[2] = b2.r[3].macro[3] = MACRO_DEFAULT;
+        check(st_save(OBJ_UPRESET0, &b2, sizeof b2) == 0, "an OPB2 bank written to simulated NOR");
+        up_boot(&proj_tmp, sizeof proj_tmp);
+        bk = (const up_bank_t *)st_xip(OBJ_UPRESET0, &len);
+        up_values(up_rec(3), values);
+        check(bk && len == UP_BANK_SIZE && bk->magic == UP_BANK_MAGIC && up_rec(3) == &bk->r[3] && up_used(3) &&
+              !memcmp(up_rec(3)->name, "OLD OPB2", 8) && values[P_E1] == -1234 && up_macro(up_rec(3), 0) == P_E0,
+              "boot: OPB2 converted once to OPB3 in flash, value and macro kept, read in place");
+        memcpy(before, nor, sizeof nor);
+        up_boot(&proj_tmp, sizeof proj_tmp);
+        check(!memcmp(before, nor, sizeof nor) && up_rec(3) == &bk->r[3], "boot: an OPB3 bank is not written again");
+        check(up_put(3, 0) == 0 && !up_used(3), "erase through the staging leaves the slot empty in flash");
     }
     /* Given distinct maps in A..D, When cold loading or recalling a section, Then each sound owns its map. */
     for (i = 0; i < 4u; i++) {

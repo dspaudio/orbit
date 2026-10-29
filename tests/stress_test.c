@@ -6,14 +6,14 @@
  *   fuzz    FRAMES frames (16 ms each, the audio between them as on the device) of hard random use: FM6
  *           on the parts, chord steps with ratchets at up to 240 BPM, CHORD+ (white keys with black
  *           modifier keys held, changed while held), STRUM -60..60, VLEAD, the track filter swept, slicer,
- *           punch FX, the visualiser (every style), the menu, SELECT spun, layers, engines switched, MIDI in.
+ *           punch FX, HOME, the menu, SELECT spun, layers, engines switched, MIDI in.
  *           Every block: the output bounded, the strum queue sane; every frame: every draw on the screen.
  *           At the end, everything let go and stopped: no voice, drum hit or strummed note left after 30 s,
  *           and the output back to silence
  *   bench   (BENCH=1) host time per audio block of a worst case (3 FM6 parts, 4-note chords, ratchets,
  *           240 BPM) with the 2.4 additions (strum 60 ms, voice leading, the track filter on all four
- *           tracks) against the same without them; the visualiser's draw time per style against the
- *           TRACKS screen; FONT_L text drawn from S against a stored 2x copy
+ *           tracks) against the same without them; the TRACKS screen's draw time; FONT_L text drawn
+ *           from S against a stored 2x copy
  * Run it under -fsanitize=address,undefined too: any read or write out of bounds stops it.
  *   stress_test [FRAMES [SEED]]   (default 40000: about 11 minutes of use) */
 #define UI_PAGES_HARNESS_ONLY 1
@@ -112,7 +112,7 @@ static void t_font(void)
 
 /* ---- fuzz ---- */
 static int32_t peak;
-static uint32_t loud_blocks, play_blocks, stq_max, vis_frames, menu_seen;
+static uint32_t loud_blocks, play_blocks, stq_max, menu_seen;
 static double blk_ns;
 static uint32_t blk_hist[2001];                       /* host time per block, 1 us buckets */
 static uint32_t blk_n;
@@ -131,7 +131,6 @@ static void sframe(void)                              /* frame(), the output che
             if (v > peak) peak = v;
         }
         for (i = 1; i < CTL; i += 2u) {
-            scope_bufr[scope_w & (SCOPE_N - 1u)] = vis_tap[2u * i + 1u];
             scope_buf[scope_w++ & (SCOPE_N - 1u)] = vis_tap[2u * i];
         }
         {
@@ -150,7 +149,6 @@ static void sframe(void)                              /* frame(), the output che
             }
     }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
-    vis_frames += vis_shown();
     menu_seen += ui.menu != 0;
 }
 
@@ -175,7 +173,7 @@ static void chord_steps(uint32_t t)
 
 static void t_fuzz(uint32_t nframes)
 {
-    uint32_t home_hold = 0, f, nf, k, i, held_btn = 0, vis_seen = 0, menu_frames = 0, mods = 0, strums = 0;
+    uint32_t home_hold = 0, f, nf, k, i, held_btn = 0, menu_frames = 0, mods = 0, strums = 0;
     for (k = 0; k < 27u; k++) {
         if (chord_mod_of_key(k)) black_keys[nblack++] = k;
         else if (nwhite < 16u) white[nwhite++] = k;
@@ -236,8 +234,7 @@ static void t_fuzz(uint32_t nframes)
         } else if (r < 63) {
             if (!song.rec) transport_req = song.playing ? 2 : 1;
         } else if (r < 64) {
-            vis_style = (uint8_t)rn(VIS_N);
-            if (rn(8) == 0 && !ui.menu) { go_home(); vis_open(); }   /* (back to TRACKS, the visualiser open) */
+            if (rn(8) == 0 && !ui.menu) go_home();   /* (back to TRACKS) */
         } else if (r < 65) {
             trk[rn(NTRK)].p[P_MUTE] = (int16_t)(rn(4) == 0);
         }
@@ -248,9 +245,8 @@ static void t_fuzz(uint32_t nframes)
         if (rn(700) == 0) home_hold = 60u;          /* HOME held: the menu, then fuzzed like the rest */
         if (home_hold) { home_hold--; fm1_in.buttons |= 1u << panel.btn[B_HOME]; }
         sframe();
-        vis_seen |= vis_shown() ? 1u << vis_style : 0u;
         if (ui.menu && ++menu_frames % 300u == 0u) { ui.menu = 0; ui.force = 1; }
-        scheck(ui.page < NPAGES && vis_style < VIS_N && song.sel < NTRK, "fuzz: UI state in range");
+        scheck(ui.page < NPAGES && song.sel < NTRK, "fuzz: UI state in range");
         if (sfails > 20) break;
     }
     nf = f;
@@ -292,13 +288,11 @@ static void t_fuzz(uint32_t nframes)
             mix_block(o, CTL);
             for (i = 0; i < CTL * 2u; i++) if ((o[i] < 0 ? -o[i] : o[i]) > q) q = o[i] < 0 ? -o[i] : o[i];
         }
-        printf("fuzz: %u frames (%.1f min), peak %d, tail %d, visualiser styles seen %u/12, chords %u, strum changes %u\n",
-               nf, nf * 16.0 / 60000.0, peak, q, (unsigned)__builtin_popcount(vis_seen), mods, strums);
+        printf("fuzz: %u frames (%.1f min), peak %d, tail %d, chords %u, strum changes %u\n",
+               nf, nf * 16.0 / 60000.0, peak, q, mods, strums);
         scheck(q < 64, "end: silence after stop");
     }
     scheck(peak < (1 << 24), "fuzz: output bounded");
-    if (nframes >= 30000u)                            /* (a short run may not reach them all) */
-        scheck(__builtin_popcount(vis_seen) == (int)VIS_N, "fuzz: every visualiser style drawn");
 }
 
 /* ---- bench ---- */
@@ -336,13 +330,11 @@ static double bench_blocks(uint32_t on, uint32_t nb)
     return best;
 }
 
-static double bench_draw(int vis, uint32_t style, uint32_t n)
+static double bench_draw(uint32_t n)
 {
     uint32_t i;
     double t = 0;
-    vis_style = (uint8_t)style;
-    if (vis && !vis_on) vis_open();
-    if (!vis) { vis_on = 0; go_home(); }
+    go_home();
     for (i = 0; i < 8u; i++) frame();
     for (i = 0; i < n; i++) {
         double t0;
@@ -351,7 +343,7 @@ static double bench_draw(int vis, uint32_t style, uint32_t n)
         for (q = 0; q < 22u; q++) {
             uint32_t j;
             mix_block(o, CTL);
-            for (j = 1; j < CTL; j += 2u) { scope_bufr[scope_w & (SCOPE_N - 1u)] = vis_tap[2u * j + 1u]; scope_buf[scope_w++ & (SCOPE_N - 1u)] = vis_tap[2u * j]; }
+            for (j = 1; j < CTL; j += 2u) { scope_buf[scope_w++ & (SCOPE_N - 1u)] = vis_tap[2u * j]; }
         }
         ui_input(); ui_leds();
         t0 = st_ns(); ui_draw(); t += st_ns() - t0;
@@ -362,8 +354,8 @@ static double bench_draw(int vis, uint32_t style, uint32_t n)
 
 static void t_bench(void)
 {
-    double off, on, home, v[VIS_N], a = 0, b = 0;
-    uint32_t s, i;
+    double off, on, home, a = 0, b = 0;
+    uint32_t i;
     static const char *const TXT[] = {"120.0", "-64", "FILTER", "SLOOP", "C#m7", "2BAR"};
     for (i = 0; i < NPART; i++) host_preset(&trk[i], ENGI_FM6, i);
     off = bench_blocks(0, 6000);
@@ -371,11 +363,9 @@ static void t_bench(void)
     printf("bench: worst case (3 FM6 parts, 4-note chords x2 ratchets, 1/16 at 240 BPM): %.2f us a block without "
            "the 2.4 additions, %.2f us with strum 60 ms + VLEAD + the filter on 4 tracks (%+.1f %%)\n",
            off / 1000, on / 1000, (on / off - 1) * 100);
-    home = bench_draw(0, 0, 300);
-    for (s = 0; s < VIS_N; s++) v[s] = bench_draw(1, s, 300);
-    printf("bench: draw a frame: TRACKS screen %.1f us;", home / 1000);
-    for (s = 0; s < VIS_N; s++) printf(" %s %.1f%s", VIS_NAME[s], v[s] / 1000, s + 1u < VIS_N ? "," : " us\n");
-    vis_on = 0; go_home(); frames(4);
+    home = bench_draw(300);
+    printf("bench: draw a frame: TRACKS screen %.1f us\n", home / 1000);
+    go_home(); frames(4);
     for (i = 0; i < 3000u; i++) {                     /* FONT_L from S (shifts) against the stored 2x copy */
         double t0 = st_ns();
         cv_begin(240, 32, C_BLACK); cv_text(2, 0, &FONT_L, TXT[i % 6u], C_HI);
@@ -410,8 +400,8 @@ int main(int argc, char **argv)
     t_font();
     t_fuzz(nframes);
     printf("fuzz: audio playing in %.0f %% of blocks, sounding in %.0f %%; up to %u strummed notes waiting at once; "
-           "visualiser on %.0f %% of frames, menu %.0f %%\n", 100.0 * play_blocks / blk_n, 100.0 * loud_blocks / blk_n,
-           stq_max, 100.0 * vis_frames / nframes, 100.0 * menu_seen / nframes);
+           "menu %.0f %% of frames\n", 100.0 * play_blocks / blk_n, 100.0 * loud_blocks / blk_n,
+           stq_max, 100.0 * menu_seen / nframes);
     {   /* (a max on a shared host is its scheduler's, not ours: the 99.9 and 99.99 percentiles) */
         uint32_t i, acc = 0, p3 = 0, p4 = 0;
         for (i = 0; i <= 2000u; i++) {

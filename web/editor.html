@@ -2517,6 +2517,7 @@ function makeMockDevice(opt = {}) {
       E("DUCK", NONOFF, 0), D("BEND", F.SEMI, 1, 12, 2));
   }
   if (v13) TP.push(D("RES", F.PCT, 0, 127, 40), E("TYPE", ["LP/HP", "BP"], 0));
+  if (v13) GP.push(E("TYPE", ["MONO", "WIDE", "PING"], 0));   /* ORBIT 0.8.2: the delay TYPE (G_DTYPE 45) */
   if (v11) {
     ENG.push({ name: "CLUSTER", titles: ["OSC RAW", "RESERVED"],
       edit: [D("COUNT", F.INT, 2048, 18431, 4000), D("WAVE", F.INT, -32768, 32767, 4000),
@@ -2903,7 +2904,7 @@ function makeMockDevice(opt = {}) {
         b(0);
         break;
       case CMD.INFO:
-        s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : opt.v3 ? "FELUCCA 0.8 (MOCK)" : v13 ? "ORBIT 0.8.1 (MOCK)" : v12 ? "ORBIT 0.7.1 (MOCK)" : "ORBIT 0.6.0 (MOCK)"); b(ENG.length); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0);
+        s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : opt.v3 ? "FELUCCA 0.8 (MOCK)" : v13 ? "ORBIT 0.8.2 (MOCK)" : v12 ? "ORBIT 0.7.1 (MOCK)" : "ORBIT 0.6.0 (MOCK)"); b(ENG.length); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0);
         ENG.forEach((e) => s(e.name));
         if (!opt.legacy) b(NTRK);
         if (v5) b(opt.noBackup ? 5 : opt.v7 ? 7 : opt.v8 ? 8 : opt.v9 ? 9 : opt.v10 ? 10 : opt.v11 ? 11 : v13 ? 13 : 12);
@@ -4437,16 +4438,16 @@ function selfLoad() {
 const stepEdit = new Map(); /* index -> time of the last edit */
 
 /* parameter ids (firmware/src/core.h); used only when P_COUNT / G_COUNT match */
-const EXPECT = { pcount: [61, 71, 73], gcount: [32, 33, 45], pe0: [53, 63, 65] };
+const EXPECT = { pcount: [61, 71, 73], gcount: [32, 33, 45, 46], pe0: [53, 63, 65] };
 const P = { LEVEL: 0, SLEN: 29, CHORD: 49 };
-const LAYOUT = (pe0) => [
+const LAYOUT = (pe0, gcount = 0) => [
   { t: "ENV", pages: [["ENV", 0, [1, 2, 3, 4]], ["ENV DEST", 0, [5, 6, 7, pe0 >= 63 ? 59 : 8]]] },
   { t: "LFO", pages: [["LFO", 0, [9, 10, 11, 12]], ...(pe0 >= 63 ? [["LFO 2", 0, [60, 61, 62]]] : []), ["LFO DEST", 0, [13, 14, 15, 16]]] },
   { t: "EDIT", engine: true, pages: [["EDIT 1", 0, [pe0, pe0 + 1, pe0 + 2, pe0 + 3]], ["EDIT 2", 0, [pe0 + 4, pe0 + 5, pe0 + 6, pe0 + 7]],
     ...(pe0 >= 63 ? [["FILTER TYPE", 0, [58, pe0 + 4, pe0 + 5, pe0 + 7]]] : [])] },
   { t: "VOICE", pages: [["LEVEL", 0, [0]], ["VOICE", 0, [37, 38, 41, 42]], ["VOICE 2", 0, [43, 44, 39, 40]]] },
   { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ["FILTER", 0, pe0 >= 65 ? [50, 63, 64] : [50]], ["SLICER", 0, [45, 46, 47, 48]],
-    ...(pe0 >= 63 ? [["INSERT", 0, [53, 54, 55, 56]], ["INSERT 2", 0, [57]]] : []), ["DLY", 1, [4, 5, 6, 7]], ["REV/CHO", 1, [8, 9, 10, 11]]] },
+    ...(pe0 >= 63 ? [["INSERT", 0, [53, 54, 55, 56]], ["INSERT 2", 0, [57]]] : []), ["DLY", 1, [4, 5, 6, 7]], ...(gcount >= 46 ? [["DLY 2", 1, [45]]] : []), ["REV/CHO", 1, [8, 9, 10, 11]]] },
   { t: "SEL", pages: [["SEL", 0, [25, 26, 27, 49]], ["SEL 2", 0, [28, 51, 52]]] },
   { t: "ARP", pages: [["ARP", 0, [17, 18, 19, 20]], ["ARP 2", 0, [21, 22, 23, 24]]] },
   { t: "SEQ PATTERN", tab: "seqgroups", pages: [["PATTERN", 0, [29, 30, 31, 32]]] },
@@ -4848,7 +4849,7 @@ function buildGroups() {
   const { info } = dev;
   if (EXPECT.pcount.includes(info.pcount) && EXPECT.gcount.includes(info.gcount) &&
       EXPECT.pe0.includes(info.pe0) && info.pcount === info.pe0 + 8) {
-    for (const g of LAYOUT(info.pe0)) {
+    for (const g of LAYOUT(info.pe0, info.gcount)) {
       if (isDrum() && !g.tab && g.t !== "FX") continue;
       /* a card per button of the device (ENV, LFO, EDIT ...), its pages as rows of four knobs, one colour per knob */
       const div = el("div", { class: "group", "data-fam": g.t, tabindex: "-1" }, el("h2", { ic: HEAD_IC[g.t] },

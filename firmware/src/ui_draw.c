@@ -626,9 +626,11 @@ static void draw_tracks(void)
 }
 
 /* oscilloscope of the output, triggered on a rising zero crossing */
+#include "scratch.h"                                /* SLOOP 2.7 (sloop-lab): the snapshot in the main loop's shared scratch */
+_Static_assert(sizeof main_scratch.snap == SCOPE_N * sizeof(int16_t), "the scratch holds the snapshot");
 static void graph_scope(uint16_t c)
 {
-    static int16_t snap[SCOPE_N];
+    int16_t *snap = main_scratch.snap;
     uint32_t w = scope_w, i, trig = 0;
     int32_t py = 50, x, peak = 1500;
     for (i = 0; i < SCOPE_N; i++) {
@@ -1026,9 +1028,6 @@ static void fb_set(uint32_t b);
 static void fb_close(void);
 static void fb_expire(void);
 #endif
-static void vis_draw(void);                     /* ui_vis.c */
-static int vis_shown(void);
-static uint8_t vis_on, vis_shown_last, vis_name_t;   /* the visualiser (ui_vis.c): on, drawn last frame, its name's time */
 static void ui_draw(void)
 {
     ui.frame++;
@@ -1109,18 +1108,6 @@ static void ui_draw(void)
         ui_timers();
         ui.force = 0;
         return;
-    }
-    if (vis_shown()) {                                  /* the visualiser over the TRACKS screen */
-        vis_draw();
-        ui_timers();
-        ui.force = 0;
-        return;
-    }
-    if (vis_shown_last) {                               /* back from it */
-        vis_shown_last = 0;
-        vis_on = 0;
-        lcd_fill(0, 0, 240, 240, C_BLACK);
-        ui.force = 1;
     }
     if (ui.home) {
         orbit_screen_draw();

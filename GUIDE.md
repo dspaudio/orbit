@@ -22,12 +22,12 @@ Tracks 1/2/3 use blue/green/white; track 4 and the fourth encoder use orange. Op
 | --- | --- | --- |
 | ALGORITHM | Select track 1-4 | While holding a step: choose lock parameter |
 | PRESETS | Sound on Tape/Mixer; kit on drums | While holding a step: edit its lock |
-| SELECT | Tempo on Tape/in a layer; pages elsewhere | Menu section or Visualizer style in those screens |
+| SELECT | Tempo on Tape/in a layer; pages elsewhere | Menu section in the menu |
 | KNOB 1-4 | The displayed four values | The held layer's controls |
 | MASTER | Output volume | USB recording follows it in MASTER mode |
 | PLAY | Start/stop | Works inside layers |
 | REC | Arm, record, close a free take, stop overdub | Hold to clear selected track; release before confirmation completes to cancel |
-| HOME | Return to Event Tape; on Tape open Visualizer; again return to Tape | Settings menu; tap while holding a layer to lock that layer |
+| HOME | Return to Event Tape; on Tape it stays on Tape | Settings menu; tap while holding a layer to lock that layer |
 | EDIT / ENV / FX / LFO | Engine / envelope / effects / modulation pages | EDIT erases; FX performs punch-in effects |
 | SEL | Root/scale/chord pages | Key and chord layer |
 | ARP / SEQ / GLO | Arp / step / Mixer and global pages | Roll / step / mix layers |
@@ -42,7 +42,7 @@ Turning PRESETS on a synth track's Tape or Mixer **loads immediately** and opens
 
 ## Event Tape
 
-HOME remains the event editor, alternating with Visualizer. It is not the macro-value page. Tape uses no audio recording: its reels and four lanes represent sequencer notes and drum events.
+HOME remains the event editor. It is not the macro-value page. Tape uses no audio recording: its reels and four lanes represent sequencer notes and drum events.
 
 | Tape control | Action |
 | --- | --- |
@@ -54,11 +54,11 @@ HOME remains the event editor, alternating with Visualizer. It is not the macro-
 | SEL + OCT+ | DROP at the head, overwriting destination events |
 | ALGORITHM | Select source/destination track |
 | SELECT | Tempo |
-| HOME | Visualizer; HOME again returns to Tape |
+| HOME | Stays on Tape |
 
 COPY/LIFT/DROP carry chords, ties, hit levels, ratchets, nudges, fill conditions and parameter locks. A drop clips at the destination pattern end. Synth clips can move between synth tracks; drum clips only go to drums. A drop exceeding the 24-lock capacity is refused without changing the destination.
 
-The clipboard and selection are temporary. Note and drum DROP operations support EDIT + OCT- / OCT+ undo/redo; synth LIFT also supports it. To restore a lifted drum region, drop the clipboard before copying something else. A rejected DROP preserves the previous Undo. Plain OCT-/OCT+ change synth octave on Tape and Visualizer without altering events or the clipboard; on drums they retain ghost/hard hit levels. SEL + OCT only edits Tape, not Visualizer or other pages. Tape's idle hint shows both shortcuts and follows COPY/LIFT.
+The clipboard and selection are temporary. Note and drum DROP operations support EDIT + OCT- / OCT+ undo/redo; synth LIFT also supports it. To restore a lifted drum region, drop the clipboard before copying something else. A rejected DROP preserves the previous Undo. Plain OCT-/OCT+ change synth octave on Tape without altering events or the clipboard; on drums they retain ghost/hard hit levels. SEL + OCT only edits Tape, not other pages. Tape's idle hint shows both shortcuts and follows COPY/LIFT.
 
 ## Recording and steps
 
@@ -160,6 +160,8 @@ Saving a project/section captures the current sound values and assignments as a 
 
 FX pages provide drive and chorus/delay/reverb sends, track FILTER, SLICER, INSERT/INSERT 2 and global delay/reverb/chorus settings. INSERT supports **SOFT, HARD, FOLD, FUZZ, CRUSH, PHASR, FLANG, CHOR** plus OFF. Type changes the three control labels; INSERT 2 sets MIX. Drum INSERT is available too.
 
+The shared delay's **DLY 2** page sets its stereo **TYPE**: **MONO** (the original centred echo), **WIDE** (the right echo 13 ms after the left) or **PING** (echoes alternate left and right, each bounce lowered by FDBK). PING splits the delay line in two, so its longest time is 0.74 s; longer TIME settings are held at that length. Changing TYPE silences the delay for about 25 ms while the line is cleared. TYPE is saved with the project and its song sections; projects from earlier versions open as MONO.
+
 ### Track filter
 
 Select a synth track or track 4, tap **FX**, then use **SELECT** to reach **FILTER**.
@@ -220,11 +222,11 @@ USB audio is the master output, 16-bit stereo at 44.1 or 48 kHz. Select the Felu
 
 The [native preview](README.md#try-the-native-preview) runs the real C DSP/UI, but its save/load is nonpersistent, sample upload is unsupported and browser buffering is not FM-1 latency. Its controls support taps, not hardware hold layers.
 
-## Menu and visualizer
+## Menu
 
 Hold HOME for settings. SELECT chooses SCREEN / LIGHTS / AUDIO / SYSTEM. SCREEN provides STYLE and ZOOM; LIGHTS provides button/key/note illumination; AUDIO provides LOWCUT, USB AUDIO and USB SERIAL; SYSTEM includes calibration, MIDI LEARN CLEAR and ABOUT. PRESETS moves the cursor, OCT+ acts, OCT- closes. These device settings are separate from song sound snapshots.
 
-Tap HOME on Tape for Visualizer; SELECT chooses its style and HOME returns to Tape. It displays the real mix, not a raw sample-trim waveform. It does not turn HOME into macro editing.
+The full-screen visualizer was removed to free static RAM for future features. HOME on Tape stays on Tape. Pages that draw the output oscilloscope still do.
 
 ## Backup, updates and downgrades
 

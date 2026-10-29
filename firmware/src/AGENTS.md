@@ -25,9 +25,9 @@ FM-1 앱 펌웨어 본체(61개 파일, 약 21.3k LOC C). 점수 17(파일 수·
 | FM6 | `eng_fm6.c`, `fm6_core.c`, `fm6_bank.c`, `editor_fm6.c` | `fm6_core.c`만 Apache-2.0(msfa) |
 | 웹 에디터 SysEx | `editor.c` `ed_handle` | 프로토콜 버전 `ED_PROTO`(=9), 명세는 `web/EDITOR_PROTOCOL.md` |
 | 프로젝트 저장 형식 | `project.c` | FUN5 저장, FUN1~FUN4 읽기 시 기본값 채움 |
-| 사용자 프리셋 | `upreset.c` | RAM 미러, 플래시는 `FELUCCA_FLASH` |
+| 사용자 프리셋 | `upreset.c` | 펌웨어는 플래시 XIP 창에서 직접 읽음(`storage.c` `st_xip`), 플래시 없는 호스트 빌드만 RAM 미러 |
 | USB MIDI/CDC/UAC | `usb.c` `usb_poll` | TIMER5 ISR 2 kHz |
-| 화면 | `ui.c`, `ui_draw.c`, `ui_studio.c`, `ui_layers.c`, `ui_vis.c`, `ui_menu.c`, `ui_song.c` | 시그니처 캐시로 재그리기 억제 |
+| 화면 | `ui.c`, `ui_draw.c`, `ui_studio.c`, `ui_layers.c`, `ui_menu.c`, `ui_song.c` | 시그니처 캐시로 재그리기 억제 |
 | 이벤트 Tape | `orbit_tape.h`, `orbit_ui.c`, `orbit_modes.c` | COPY/LIFT/DROP |
 
 ## CONVENTIONS

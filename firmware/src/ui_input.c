@@ -991,7 +991,7 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
         uint32_t press = *pressed & (ob | pb);
         if (press) {
             used[held] = 1;                               /* (SEL let go: not a tap) */
-            if (ui.home && !vis_shown())
+            if (ui.home)
                 orbit_edit(!(press & ob));
         }
     }
@@ -1104,8 +1104,8 @@ static void ui_input(void)
 {
     uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), now = fm1_ticks(), id, b, k;
 #if BOARD_SMK37
-    if (pressed & (1u << SMK_BTN_LEFT | 1u << SMK_BTN_RIGHT)) {   /* < >: SEQ held: the step pages; the visualiser:
-                                                                * its style; else the pages, as SELECT (never the tempo) */
+    if (pressed & (1u << SMK_BTN_LEFT | 1u << SMK_BTN_RIGHT)) {   /* < >: SEQ held: the step pages; else the pages,
+                                                                * as SELECT (never the tempo) */
         int32_t d = (pressed >> SMK_BTN_RIGHT) & 1u ? 1 : -1;
         if (pick_shown())
             pick_turn(d);
@@ -1115,8 +1115,6 @@ static void ui_input(void)
         if (ui.layer == LY_STEP) {
             uint32_t pages = (trk_len(TSEL) + 15u) / 16u;
             ui.step_page = (uint8_t)((ui.step_page + pages + (uint32_t)d) % (pages ? pages : 1u));
-        } else if (vis_shown()) {
-            vis_select(d);
         } else {
             page_walk(d);
         }
@@ -1236,14 +1234,8 @@ static void ui_input(void)
         return;
     }
 #endif
-    if (home == BT_TAP) {                               /* HOME acts on release: a hold opens the menu */
-        if ((ui.home || cur_page()->scope == SC_TRK) && !vis_on)
-            vis_open();                                 /* HOME on HOME: the visualiser (ui_vis.c) */
-        else {
-            vis_on = 0;                                 /* (HOME again: back to the TRACKS screen) */
-            go_home();
-        }
-    }
+    if (home == BT_TAP)                                 /* HOME acts on release: a hold opens the menu */
+        go_home();                                      /* (the visualiser was removed: HOME on HOME stays) */
     cursor_fix();                                       /* LEN may have changed (knob, editor, load) */
     for (id = 0; id < FM1_NBTN; id++) {
         if (!((pressed >> id) & 1u))
@@ -1316,13 +1308,6 @@ static void ui_input(void)
     }
     if ((s = panel_enc(EN_ALGO)) != 0 && !ft_on)     /* ALGORITHM: the selected track, on every page (not in a take) */
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
-    if (vis_shown() && !rec_wait && !ft_on) {           /* the visualiser: SELECT its style; KNOB 1..4 (the TRACKS
-                                                         * screen's, out of sight) do nothing */
-        if ((s = panel_enc(EN_SELECT)) != 0)
-            vis_select(s);
-        for (k = 0; k < 4u; k++)
-            panel_enc(EN_K1 + k);
-    }
     if ((s = panel_enc(EN_SELECT)) != 0 && (rec_wait || ft_on || !page_walk(s))) {   /* SELECT: the pages of the
                                                      * family shown, else (and on the REC screen) the tempo */
         song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_SELECT, s, 200), GP[G_BPM].min, GP[G_BPM].max);

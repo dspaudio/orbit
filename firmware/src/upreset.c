@@ -77,9 +77,25 @@ _Static_assert(sizeof(up_rec_v2_t) == UP_RECORD_V2 && sizeof(up_bank_v2_t) == UP
                "OPB2 as stored");
 _Static_assert(sizeof(up_rec_v1_t) == UP_RECORD_V1 && sizeof(up_bank_v1_t) == UP_BANK_SIZE_V1, "UPB1 as stored");
 _Static_assert(P_COUNT <= UP_PMAX && P_COUNT < 128, "user preset record: P_COUNT");
+#if defined(UP_HOST) || !FELUCCA_FLASH || !defined(ST_XIP_PTR)
+#define UP_RAM 1                                 /* host builds without the flash window: a RAM mirror */
 static up_bank_t up_bank[UP_SLOTS / UP_PER_BANK];
 
 static up_rec_t *up_rec(uint32_t k) { return &up_bank[k / UP_PER_BANK].r[k % UP_PER_BANK]; }
+#else
+/* SLOOP 2.7 (sloop-lab): no RAM mirror (6,352 B back); the banks are read where they are, in the flash's plain
+ * XIP window (storage.c st_xip), as the samples and the FM6 bank already are. up_boot keeps every bank there in
+ * the exact form the mirror held (OPB3, cleared records cleared); a write is staged in the project buffer */
+#define UP_RAM 0
+static const up_bank_t *up_bank_xip[UP_SLOTS / UP_PER_BANK];   /* each bank's current copy in the window, 0 = none */
+static const up_rec_t up_rec_none;                              /* an empty slot (up_valid says no) */
+static const up_rec_t *up_rec(uint32_t k)
+{
+    const up_bank_t *bk = up_bank_xip[(k / UP_PER_BANK) % NELEM(up_bank_xip)];
+    return bk ? &bk->r[k % UP_PER_BANK] : &up_rec_none;
+}
+static void *up_stage(void);                                    /* project.c: the project buffer (main loop) */
+#endif
 
 static int up_valid(const up_rec_t *r)
 {
@@ -119,11 +135,12 @@ static void up_params(const up_rec_t *r, int16_t *out, const int16_t *def)
 
 /* a stored bank (OPB3, OPB2 or UPB1) -> dst as OPB3. strict (a backup restore): a nonempty
  * record that is not valid rejects the bank; else (boot) it reads as empty, its neighbours kept. 1 = done; 0 = not a
- * bank this firmware reads (dst untouched). src and dst are distinct */
+ * bank this firmware reads (dst untouched). src may be dst (a restore converted where it was staged): the records
+ * grow (192 / 196 -> 198 B), so they are converted from the last one down, each read before its place is written */
 static int up_bank_decode(up_bank_t *dst, const void *src, int n, int strict)
 {
     uint32_t magic, i, k;
-    if (n < 8 || src == (const void *)dst)
+    if (n < 8)
         return 0;
     memcpy(&magic, src, 4);
     if (magic == UP_BANK_MAGIC) {
@@ -133,7 +150,8 @@ static int up_bank_decode(up_bank_t *dst, const void *src, int n, int strict)
         for (i = 0; strict && i < UP_PER_BANK; i++)
             if (!up_empty(&b->r[i], UP_RECORD) && !up_valid(&b->r[i]))
                 return 0;
-        memcpy(dst, b, sizeof *dst);
+        if ((const void *)dst != src)
+            memcpy(dst, b, sizeof *dst);
         for (i = 0; i < UP_PER_BANK; i++) {
             up_rec_t *r = &dst->r[i];
             if (!up_valid(r)) {
@@ -161,15 +179,12 @@ static int up_bank_decode(up_bank_t *dst, const void *src, int n, int strict)
                                           s[3] >= 8u && s[3] <= UP_PMAX_V2 && s[4]))
                 return 0;
         }
-        memset(dst, 0, sizeof *dst);
-        dst->magic = UP_BANK_MAGIC;
-        dst->rsize = UP_RECORD;
-        dst->nslot = UP_PER_BANK;
-        for (i = 0; i < UP_PER_BANK; i++) {
+        for (i = UP_PER_BANK; i-- > 0;) {
             up_rec_v2_t old = {0};
             const up_rec_v2_t *s = &old;
             up_rec_t *r = &dst->r[i];
             memcpy(&old, b + 8u + i * stride, stride);
+            memset(r, 0, sizeof *r);
             if (!(s->used == UP_USED && s->ver == ver && s->engine < NENGINES && s->np >= 8u && s->np <= UP_PMAX_V2 &&
                   s->name[0]))
                 continue;                                   /* (empty) */
@@ -185,6 +200,9 @@ static int up_bank_decode(up_bank_t *dst, const void *src, int n, int strict)
                 r->macro[k] = ver == UP_VER_V2 && param_id_by_count(s->macro[k], s->np) < P_COUNT ?
                               s->macro[k] : MACRO_DEFAULT;
         }
+        dst->magic = UP_BANK_MAGIC;
+        dst->rsize = UP_RECORD;
+        dst->nslot = UP_PER_BANK;
         return 1;
     }
     return 0;
@@ -300,6 +318,7 @@ static void up_values(const up_rec_t *r, int16_t *v)   /* mapped and clamped for
         v[i] = (int16_t)clamp(v[i], up_desc(r->engine, i)->min, up_desc(r->engine, i)->max);
 }
 
+#if UP_RAM
 /* persist_boot: the banks from flash, each read into the staging (cap bytes: an object fits) and decoded into its
  * RAM mirror; a bank of another shape reads as empty */
 static void up_boot(void *stage, uint32_t cap)
@@ -315,7 +334,36 @@ static void up_boot(void *stage, uint32_t cap)
     (void)stage, (void)cap;
 #endif
 }
+#else
+static void up_bank_find(uint32_t b)            /* bank b's current copy in the window, or none (after a save too) */
+{
+    uint32_t len = 0;
+    const up_bank_t *p = flash_ok ? (const up_bank_t *)st_xip(OBJ_UPRESET0 + b, &len) : 0;
+    up_bank_xip[b % NELEM(up_bank_xip)] = p && len == sizeof *p && p->magic == UP_BANK_MAGIC &&
+                                          p->rsize == UP_RECORD && p->nslot == UP_PER_BANK ? p : 0;
+}
 
+/* persist_boot: each bank read where it is. One that is not exactly what up_bank_decode makes of it (OPB2 or
+ * UPB1, or OPB3 with a record to clear) is converted in the staging and written back once as OPB3 (two copies:
+ * a power cut keeps the old one, converted again at the next start); a bank of another shape reads as empty */
+static void up_boot(void *stage, uint32_t cap)
+{
+    uint32_t b;
+    for (b = 0; b < UP_SLOTS / UP_PER_BANK; b++) {
+        uint32_t len = 0;
+        const void *p = flash_ok ? st_xip(OBJ_UPRESET0 + b, &len) : 0;
+        up_bank_xip[b] = 0;
+        if (!p || cap < sizeof(up_bank_t) || !up_bank_decode((up_bank_t *)stage, p, (int)len, 0))
+            continue;
+        if ((len != sizeof(up_bank_t) || memcmp(stage, p, sizeof(up_bank_t))) &&
+            st_save(OBJ_UPRESET0 + b, stage, sizeof(up_bank_t)))
+            continue;                                   /* (not written: the bank reads as empty, kept in flash) */
+        up_bank_find(b);
+    }
+}
+#endif
+
+#if UP_RAM
 /* record k = *r (0: erase), then the bank to flash: 0 ok, 2 flash error, 3 no flash (kept in RAM) */
 static int up_put(uint32_t k, const up_rec_t *r)
 {
@@ -340,6 +388,37 @@ static int up_put(uint32_t k, const up_rec_t *r)
 #endif
     return 3;
 }
+#else
+/* record k = *r (0: erase), then the bank to flash: 0 ok, 2 flash error or no flash (no RAM mirror keeps it).
+ * The bank is staged in the project buffer: its current copy, or an empty one, with the record put */
+static int up_put(uint32_t k, const up_rec_t *r)
+{
+    uint32_t b = (k / UP_PER_BANK) % NELEM(up_bank_xip), i;
+    up_bank_t *bk = (up_bank_t *)up_stage();
+    int rc;
+    if (!flash_ok)
+        return 2;
+    if (up_bank_xip[b])
+        memcpy(bk, up_bank_xip[b], sizeof *bk);
+    else
+        memset(bk, 0, sizeof *bk);
+    bk->magic = UP_BANK_MAGIC;
+    bk->rsize = sizeof(up_rec_t);
+    bk->nslot = UP_PER_BANK;
+    if (r)
+        bk->r[k % UP_PER_BANK] = *r;
+    else
+        memset(&bk->r[k % UP_PER_BANK], 0, sizeof(up_rec_t));
+    rc = st_save(OBJ_UPRESET0 + b, bk, sizeof *bk) ? 2 : 0;
+    up_bank_find(b);
+    if (!r && !rc)
+        for (i = 0; i < NTRK; i++)
+            if (trk[i].user == k + 1u)
+                trk[i].user = 0;
+    up_gen++;
+    return rc;
+}
+#endif
 
 static void up_slot_label(char *b, uint32_t k)  /* "U07" */
 {

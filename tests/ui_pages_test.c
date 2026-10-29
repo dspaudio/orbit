@@ -50,7 +50,7 @@ static int32_t fm1_adc_read(int c) { (void)c; return -1; }
 static struct { uint32_t magic, stage, page, home, ui_frames; } felucca_dbg;
 #define FELUCCA_ICONS 1
 #define SCOPE_N 512u
-static int16_t scope_buf[SCOPE_N], scope_bufr[SCOPE_N];
+static int16_t scope_buf[SCOPE_N];
 static uint32_t scope_w;
 #include "../firmware/src/panel.c"
 #include "../firmware/src/ui.c"
@@ -83,7 +83,6 @@ static void settings_save(void) {}
 #include "../firmware/src/ui_studio.c"
 #include "../firmware/src/icons.c"
 #include "../firmware/src/ui_draw.c"
-#include "../firmware/src/ui_vis.c"
 #include "../firmware/src/ui_layers.c"
 #include "../firmware/src/ui_menu.c"
 #include "../firmware/src/ui_input.c"
@@ -103,8 +102,7 @@ static void frame(void)
     for (q = 0; q < 22u; q++) {
         uint32_t i;
         mix_block(o, CTL);
-        for (i = 1; i < CTL; i += 2u) {             /* the scope, as audio.c fills it (the visualiser) */
-            scope_bufr[scope_w & (SCOPE_N - 1u)] = vis_tap[2u * i + 1u];
+        for (i = 1; i < CTL; i += 2u) {             /* the scope, as audio.c fills it (the HOME scope) */
             scope_buf[scope_w++ & (SCOPE_N - 1u)] = vis_tap[2u * i];
         }
     }
@@ -822,12 +820,10 @@ int main(int argc, char **argv)
         check(!strcmp(PT(), "VOICE 2"), "PERFORM keeps VOICE 2 independently accessible");
         SEL(1);
         tap(B_HOME);
-        check(ui.home && !vis_shown(), "HOME from EDIT returns directly to Event Tape");
+        check(ui.home, "HOME from EDIT returns directly to Event Tape");
         ui.force = 1; frame(); ppm("page-tape-from-perform");
         tap(B_HOME);
-        check(vis_shown(), "Event Tape HOME still opens Visualizer");
-        tap(B_HOME);
-        check(ui.home && !vis_shown(), "Visualizer HOME returns normally to Event Tape");
+        check(ui.home, "Event Tape HOME stays on Event Tape");
         tap(B_SEQ); SEL(9);
         check(!strcmp(PT(), "PATTERN"), "SELECT on SEQ: STEP <-> PATTERN, not into the SONG screen");
         tap(B_ENV);
@@ -1128,9 +1124,9 @@ int main(int argc, char **argv)
         check(t->step[2].n == 1u && t->step[2].note[0] % 12u == 0u, "STEP page, no chord mode: one note");
         steps_clear(t); song.sel = 0; go_home(); frames(4);
     }
-    {   /* the visualiser (2.4): HOME on HOME opens it, SELECT its 12 styles, HOME / a page closes it; a layer
-         * shows its screen over it; the style is kept with the settings */
-        uint32_t st, j, x, lit, k;
+    {   /* the visualiser was removed (RAM): HOME on HOME stays on the TRACKS screen; the HOME scope still reads
+         * the mix as if MASTER were all the way up; the settings word writes 0 in the old style bits */
+        uint32_t j, k;
         static const uint8_t BASS[2] = {38, 34};
         song.playing = 0; song.sel = 0;
         for (j = 0; j < NTRK; j++) { steps_clear(&trk[j]); trk[j].p[P_SLEN] = 16; }
@@ -1147,54 +1143,25 @@ int main(int argc, char **argv)
         }
         go_home(); frames(20);                      /* (the knobs quiet after the layers above) */
         transport_req = 1; frames(30);
-        check(!vis_shown(), "visualiser: closed on the TRACKS screen");
         tap(B_HOME); frames(2);
-        check(vis_shown() && vis_on, "visualiser: HOME on HOME opens it");
-        vis_style = 0; ui.force = 1;
-        for (st = 0; st < 12u; st++) {
-            char nm[80];
-            frames(st == 0u ? 40u : 70u);           /* (past the name's second) */
-            ui.force = 1; frames(2);
-            for (lit = 0, x = 0; x < 240u * 240u; x++)
-                lit += screen[x] != 0;
-            snprintf(nm, sizeof nm, "vis-%02u-%s", st + 1u, VIS_NAME[st]);
-            for (x = 0; nm[x]; x++) if (nm[x] == ' ') nm[x] = '-';
-            ppm(nm);
-            snprintf(nm, sizeof nm, "visualiser %2u %-12s draws (%u px lit)", st + 1u, VIS_NAME[st], lit);
-            check(lit > (st == 3u ? 400u : 1500u) && vis_style == st, nm);   /* (Lissajous: points) */
-            encs[panel.enc[EN_SELECT]] = 1; frame();
-        }
-        {   /* MASTER at 0: silence out, the picture as if MASTER were all the way up */
+        check(ui.home && !ui.menu, "HOME on HOME stays on the TRACKS screen");
+        tap(B_HOME); frames(2);
+        check(ui.home && !ui.menu, "HOME on HOME again: still the TRACKS screen");
+        {   /* MASTER at 0: silence out, the scope as if MASTER were all the way up */
             uint32_t m0 = song.master_q12, pk = 0, op = 0, b;
             static int32_t o2[CTL * 2];
             song.master_q12 = 0; frames(20);
             for (j = 0; j < SCOPE_N; j++) { uint32_t a = (uint32_t)(scope_buf[j] < 0 ? -scope_buf[j] : scope_buf[j]); if (a > pk) pk = a; }
             for (b = 0; b < 200u; b++) { mix_block(o2, CTL); for (j = 0; j < CTL * 2u; j++) { uint32_t a = (uint32_t)(o2[j] < 0 ? -o2[j] : o2[j]); if (a > op) op = a; } }
-            ui.force = 1; frames(2);
-            for (lit = 0, x = 0; x < 240u * 240u; x++) lit += screen[x] != 0;
-            check(op < 64u && pk > 2000u && lit > 1500u, "visualiser: MASTER at 0: no sound, the picture as at full volume");
+            check(op < 64u && pk > 2000u, "HOME scope: MASTER at 0: no sound, the scope as at full volume");
             song.master_q12 = m0; frames(4);
         }
-        check(vis_style == 0u, "visualiser: SELECT goes round (12 -> 1)");
-        encs[panel.enc[EN_SELECT]] = -1; frames(2);
-        check(vis_style == 11u && (lights_word() >> 17 & 15u) == 11u, "visualiser: SELECT left: SLOOP (12), kept in the settings word");
-        lights_from_word(lights_word());
-        check(vis_style == 11u, "visualiser: the style read back");
-        { int16_t bpm = song.g[G_BPM], lv = trk[0].p[P_LEVEL];
-          encs[panel.enc[EN_K2]] = 5; frame();
-          check(trk[0].p[P_LEVEL] == lv && song.g[G_BPM] == bpm, "visualiser: KNOB 2 (the hidden TRACKS screen) edits nothing, SELECT is not the tempo"); }
-        press(B_GLO); frames(40);                  /* (held past a tap) */
-        check(ui.layer == LY_MIX, "visualiser: a layer held shows its screen");
-        release(B_GLO); frames(4);
-        check(vis_shown(), "visualiser: ... and it comes back");
-        tap(B_HOME); frames(2);
-        check(!vis_shown() && !vis_on, "visualiser: HOME again closes it");
-        tap(B_HOME); frames(2);
+        check(((lights_word() >> 17) & 15u) == 0u, "settings word: the removed visualiser's style bits are written 0");
         tap(B_LFO); frames(2);
-        check(!vis_shown() && !vis_on && !strcmp(PAGES[ui.page].title, "LFO"), "visualiser: a page button closes it and opens its page");
+        check(!ui.home && !strcmp(PAGES[ui.page].title, "LFO"), "a page button from HOME opens its page");
         transport_req = 2; frames(4);
         for (j = 0; j < NTRK; j++) steps_clear(&trk[j]);
-        vis_style = 0; song.sel = 0; go_home(); frames(20);
+        song.sel = 0; go_home(); frames(20);
     }
 
     {   /* ENV / LFO knobs with a range of 100 or more move 1 per slow detent and 12 per fast detent (accel() x3, then

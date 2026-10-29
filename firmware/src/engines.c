@@ -30,6 +30,7 @@ static inline int32_t soft_knee(int32_t y, int32_t k)
 
 typedef union {
     gr_part_t grain;
+    drw_part_t drawbar;                  /* eng_drawbar.c: the part's wheels, percussion and rotary (SLOOP 2.7) */
     fm6_note_t fm6[FM6_POLY];
     uint32_t phys[PHYS_ARENA / 4u];
     cluster_part_t cluster;

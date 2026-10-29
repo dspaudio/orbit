@@ -79,7 +79,6 @@
 #include "ui_pick.c"          /* SMK-37 Pro: the pad sound picker */
 #endif
 #include "ui_draw.c"
-#include "ui_vis.c"           /* the full-screen visualiser (HOME on HOME, 2.4) */
 #include "ui_layers.c"       /* hold a function button: what the keys and knobs do (TE style) */
 #include "ui_menu.c"
 #if BOARD_SMK37
@@ -143,9 +142,10 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
         return -8;
     return fl_write(off, src, n);
 }
+#define ST_XIP_PTR(off) fm1_xip_ptr(off)   /* storage.c st_xip: an object read where it is (fm1_xip.h) */
 #include "storage.c"
 #endif
-#include "upreset.c"          /* user presets (RAM mirror; flash with FELUCCA_FLASH) */
+#include "upreset.c"          /* user presets (read in the XIP window; a RAM mirror without the flash) */
 #include "project.c"
 #if FELUCCA_OTA
 static uint8_t recovery_active;

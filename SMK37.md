@@ -57,7 +57,7 @@ update mode (UBOOT).
 | FM-1 printed | ORBIT function | SMK-37 printed | on the SMK-37 |
 |---|---|---|---|
 | MASTER (pot) | output volume | K1 | master volume (a virtual pot, 24 steps a click) |
-| SELECT | tempo on Tape and in layers, pages elsewhere, menu section, visualizer style | K2 | SELECT |
+| SELECT | tempo on Tape and in layers, pages elsewhere, menu section | K2 | SELECT |
 | ALGORITHM | track 1–4; held step: lock parameter | K3 | ALGORITHM |
 | PRESETS | sound on Tape / Mixer (with ORBIT's preset list), kit on drums; held step: its lock | K4 | PRESETS |
 | KNOB 1 | the first value (blue) | K5 | KNOB 1 |
@@ -75,7 +75,7 @@ update mode (UBOOT).
 |---|---|---|---|---|
 | PLAY | start / stop | — | SEQ PLAY | PLAY |
 | REC | arm, record, close a free take, stop overdub | clear the selected track | SEQ REC | REC |
-| HOME | Event Tape; on Tape: visualizer | settings menu | PATCH | HOME; also closes the FADER BANK screen and the pad sound picker |
+| HOME | Event Tape | settings menu | PATCH | HOME; also closes the FADER BANK screen and the pad sound picker |
 | ENV | envelope pages | — | CHORD | ENV |
 | LFO | modulation pages | — | NOTE REPEAT | LFO |
 | FX | effect pages | punch-in effects | FX | FX |
@@ -89,8 +89,8 @@ update mode (UBOOT).
 | OCT+ | on Tape: drop; elsewhere: octave up | — | OCTAVE+ | OCT+ |
 | — | — | — | KNOB BANK | opens and closes the pad sound picker (lit while open) |
 | — | — | — | FADER BANK | the FADER BANK screen; pressed again, `<` `>` or K2: the next bank A → B → C → D (closes after 4 s; lit while up) |
-| — | — | — | `<` | page back (as SELECT, never the tempo); SEQ held: step page back; visualizer: style |
-| — | — | — | `>` | page forward; SEQ held: step page forward; visualizer: style |
+| — | — | — | `<` | page back (as SELECT, never the tempo); SEQ held: step page back |
+| — | — | — | `>` | page forward; SEQ held: step page forward |
 
 One screen of these at a time: FADER BANK closes the pad sound picker, KNOB BANK the FADER BANK screen.
 

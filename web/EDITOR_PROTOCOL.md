@@ -57,6 +57,11 @@ P_TRES=63 is `RES` (F_PCT, 0..127, default 40). P_TFTYPE=64 is `TYPE`
 (F_ENUM, 0=`LP/HP`, 1=`BP`, default 0). Engine controls move to 65..72.
 Both controls apply to synth and drum tracks. RES is lockable; TYPE is not.
 
+ORBIT 0.8.2 keeps ED_PROTO=13 and adds one global: INFO reports G_COUNT=46.
+`G_DTYPE`=45 is the delay `TYPE` (F_ENUM, 0=`MONO`, 1=`WIDE`, 2=`PING`,
+default 0). The editor shows it as FX > DLY 2 when G_COUNT is 46; DUMP
+carries it as the last global value. Globals 0..44 are unchanged.
+
 P_TFLT=50 remains -64..63 with zero bypassing the filter. Its dynamic DESC
 uses F_FILT=15 for LP/HP and F_BPF=16 for BP. F_BPF displays `OFF` at zero,
 otherwise `BP` followed by integer `(value + 64) * 100 / 127` and `%`.
@@ -128,7 +133,7 @@ not remembered as permanent state across sounds, tracks or devices.
 On FM-1, tap EDIT and turn SELECT to **MACROS**. Each knob selects DEFAULT,
 then eligible parameter IDs in ascending order, one destination per detent.
 The adjacent **PERFORM** page edits the mapped sound values. HOME returns
-directly to Event Tape; subsequent HOME taps alternate Tape and Visualizer.
+directly to Event Tape; further HOME taps stay on Tape.
 The boot Tape view and drum Tape controls remain available. Factory/engine/INIT selection resets
 assignments to engine defaults. Save a customised factory sound as a user preset
 to retain its mapping. Plain parameter edits keep the mapping.

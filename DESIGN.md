@@ -63,7 +63,7 @@ Two reels and four track timelines represent actual sequencer events. Lift / Dro
 
 EDIT / SELECT reaches PERFORM for four mapped sound values and MACROS for destination assignments. Both use the existing four-column layout and blue / green / white / orange encoder roles. PERFORM labels and ranges come from the selected sound's actual descriptors; an unavailable destination is blank and cannot change a value. MACROS distinguishes engine defaults from explicit assignments. User presets and projects retain the mappings with the sound.
 
-HOME remains Event Tape and alternates with Visualizer. It does not add a third sound-control view or replace Tape's encoder actions.
+HOME remains Event Tape. It does not add a third sound-control view or replace Tape's encoder actions.
 
 ### Web Control States
 

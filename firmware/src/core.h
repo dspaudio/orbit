@@ -101,6 +101,8 @@ enum {                          /* global parameters */
     G_TXRATE, G_TXWHEN, G_TXDUCK,           /* source, level, tone, movement, rate, when it plays, DUCK pump.
                                              * Stored in the project's spare bytes */
     G_BEND,                     /* SLOOP 2.6: pitch bend range, 1..12 semitones (a device setting) */
+    G_DTYPE,                    /* ORBIT 0.8.2: the delay's stereo TYPE, 0 MONO, 1 WIDE, 2 PING (fx.c fx_buses).
+                                 * Stored in a project's spare bits (project.c proj_tx_put) */
     G_COUNT
 };
 

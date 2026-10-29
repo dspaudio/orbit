@@ -450,9 +450,16 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
         return (const uint8_t *)&proj_slot[id - 2u];
     }
     if (id == 6u || id == 7u) {
+#if UP_RAM
         if (up_bank[id - 6u].magic == UP_BANK_MAGIC)
             *len = sizeof up_bank[0];
         return (const uint8_t *)&up_bank[id - 6u];
+#else
+        const up_bank_t *bk = up_bank_xip[id - 6u];      /* (read where it is: upreset.c) */
+        if (bk)
+            *len = sizeof *bk;
+        return bk ? (const uint8_t *)bk : (const uint8_t *)&up_rec_none;
+#endif
     }
     if (id == 8u) {                                       /* the FM6 patch bank, in flash (XIP) */
         if (fm6_bank_cur >= 0)
@@ -495,16 +502,21 @@ static uint32_t ed_bk_commit(void)
     if (id <= 5u)
         return project_restore(id == 0u ? 4u : id - 2u, raw, n);
     if (id == 6u || id == 7u) {                           /* preset bank (n 0: empty): OPB3, or OPB2 / UPB1 converted */
-        static up_bank_t nb;
+        up_bank_t *nb = (up_bank_t *)raw;                 /* (converted in place, where it was staged: no copy) */
         uint32_t k;
         if (ed_flash_busy())
             return 3;
-        memset(&nb, 0, sizeof nb);
-        if (n && !up_bank_decode(&nb, raw, (int)n, 1))   /* (every record checked before anything is written) */
+        if (n && !up_bank_decode(nb, raw, (int)n, 1))    /* (every record checked before anything is written) */
             return 2;
-        if (!flash_ok || st_save(OBJ_UPRESET0 + id - 6u, &nb, n ? sizeof nb : 0u))
+        if (!n)
+            memset(nb, 0, sizeof *nb);
+        if (!flash_ok || st_save(OBJ_UPRESET0 + id - 6u, nb, n ? sizeof *nb : 0u))
             return 4;
-        memcpy(&up_bank[id - 6u], &nb, sizeof nb);
+#if UP_RAM
+        memcpy(&up_bank[id - 6u], nb, sizeof *nb);
+#else
+        up_bank_find(id - 6u);
+#endif
         for (k = 0; k < NTRK; k++)                        /* (a tag of a slot now empty: none) */
             if (trk[k].user > (id - 6u) * UP_PER_BANK && trk[k].user <= (id - 5u) * UP_PER_BANK &&
                 !up_used(trk[k].user - 1u))

@@ -46,7 +46,7 @@ static int32_t fm1_adc_read(int c) { (void)c; return -1; }
 static struct { uint32_t magic, stage, page, home, ui_frames; } felucca_dbg;
 #define FELUCCA_ICONS 1
 #define SCOPE_N 512u
-static int16_t scope_buf[SCOPE_N], scope_bufr[SCOPE_N];
+static int16_t scope_buf[SCOPE_N];
 static uint32_t scope_w;
 #include "../firmware/src/panel.c"
 #include "../firmware/src/ui.c"
@@ -79,7 +79,6 @@ static void settings_save(void) {}
 #include "../firmware/src/ui_studio.c"
 #include "../firmware/src/icons.c"
 #include "../firmware/src/ui_draw.c"
-#include "../firmware/src/ui_vis.c"
 #include "../firmware/src/ui_layers.c"
 #include "../firmware/src/ui_menu.c"
 #include "../firmware/src/ui_input.c"
@@ -99,7 +98,7 @@ static void frame(void)
     for (q = 0; q < 22u; q++) {
         uint32_t sample;
         mix_block(o,CTL);
-        for(sample=0;sample<CTL;sample++) { scope_bufr[scope_w&(SCOPE_N-1u)]=vis_tap[sample*2+1]; scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[sample*2]; }
+        for(sample=0;sample<CTL;sample++) { scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[sample*2]; }
     }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
 }
@@ -403,7 +402,7 @@ int main(int argc, char **argv)
         step_t original[NSTEP]; plock_t locks[NLOCK]; uint32_t revision=orbit_tape.revision, count=orbit_tape.count;
         memcpy(original,trk[0].step,sizeof original); memcpy(locks,trk[0].lock,sizeof locks);
         song.octave=0;
-        tap(B_OCTDN); check(ui.home && !vis_shown() && song.octave==-1,"Tape OCT- lowers octave");
+        tap(B_OCTDN); check(ui.home && song.octave==-1,"Tape OCT- lowers octave");
         tap(B_OCTUP); tap(B_OCTUP); check(song.octave==1,"Tape OCT+ raises octave");
         press(B_OCTDN); press(B_OCTUP); release(B_OCTUP); release(B_OCTDN);
         check(song.octave==0,"Tape OCT- then OCT+ held together resets octave");
@@ -446,19 +445,6 @@ int main(int argc, char **argv)
               !trk[0].lk_n && trk[0].p[P_TFLT]==7,"LIFT Redo clears metadata and restores active lock base");
         undo_swap(0);
     }
-    /* Visualizer에서 OCT±는 숨겨진 Tape와 클립보드를 바꾸지 않는다. */
-    tap(B_HOME);
-    {
-        step_t original[NSTEP]; uint32_t revision=orbit_tape.revision; int octave=song.octave;
-        memcpy(original,trk[0].step,sizeof original);
-        tap(B_OCTDN);
-        check(song.octave==octave-1,"Visualizer OCT- lowers octave");
-        tap(B_OCTUP);
-        check(vis_shown() && orbit_tape.revision==revision && !memcmp(original,trk[0].step,sizeof original),
-              "Visualizer OCT buttons preserve Tape and clipboard");
-        check(song.octave==octave,"Visualizer OCT buttons retain octave controls");
-    }
-    tap(B_HOME);
     open_family(FAM_ENV); frames(2);
     {
         uint32_t revision=orbit_tape.revision; int octave=song.octave;
@@ -604,19 +590,6 @@ int main(int argc, char **argv)
         check((i!=6u && i!=7u) || TE_COL[2]!=C_WHITE,"PASTEL and NEON keep their own third colour");
         ui.menu=1; ui.menu_sel=MI_COLOR; ui.force=1; frame(); ui.menu=0;
     }
-    /* 실제 활성 오디오 프레임의 모든 픽셀을 RGB565 양자화 오차 안에서 검사한다. */
-    settings.palette=4; palette_set(4); go_home(); vis_open(); fm1_in.notes=1;
-    for(i=0;i<VIS_N;i++) {
-        unsigned j, colored=0, visible=0; char label[100];
-        vis_style=(uint8_t)i; ui.force=1; frames(6);
-        for(j=0;j<240*240;j++) {
-            uint16_t p=swap16(screen[j]); int r=(p>>11)*255/31, g=((p>>5)&63)*255/63, b=(p&31)*255/31;
-            colored+=abs(r-g)>8 || abs(r-b)>8 || abs(g-b)>8; visible+=p!=0;
-        }
-        snprintf(label,sizeof label,"MONO Visualizer %u active framebuffer is grayscale",i);
-        check(!colored && visible>100,label);
-    }
-    fm1_in.notes=0; vis_on=0;
     printf("Undo storage: %zu bytes\n",sizeof undo);
     palette_set(5); settings.palette=5;
     /* 실제 페이지 경로에서 잔량 변경과 USB 애니메이션이 캐시를 무효화하는지 확인한다. */

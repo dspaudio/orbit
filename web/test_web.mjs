@@ -377,7 +377,7 @@ async function editorFilter() {
     E.req.protocol(info.proto);
     const res = E.parse[C.DESC](await current.rq(E.req.desc(0, PID.P_TRES)));
     const type = E.parse[C.DESC](await current.rq(E.req.desc(0, PID.P_TFTYPE)));
-    ok(info.proto === 13 && info.pcount === 73 && info.pe0 === 65 && /ORBIT 0\.8\.1 /.test(info.version) &&
+    ok(info.proto === 13 && info.pcount === 73 && info.pe0 === 65 && /ORBIT 0\.8\.2 /.test(info.version) &&
       oi.proto === 12 && oi.pcount === 71 && oi.pe0 === 63 && /ORBIT 0\.7\.1 /.test(oi.version) &&
       res.label === "RES" && res.fmt === E.F.PCT && res.min === 0 && res.max === 127 && res.def === 40 &&
       type.label === "TYPE" && type.def === 0 && js(type.names) === js(["LP/HP", "BP"]),

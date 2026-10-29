@@ -4,7 +4,9 @@
 
 ORBIT is a four-track groovebox firmware for the **M-VAVE FM-1**: three synth parts and a drum machine, played through a color-coded Synth / Drum / Event Tape / Mixer workflow. Record a loop, turn it into a song, and keep your favorite sound controls together with user macros. Based on SLOOP/Felucca, with original ORBIT engines and graphics inspired by the original OP-1's four encoder roles.
 
-[Install](#install) · [Get started](GUIDE.md#get-started) · [User guide](GUIDE.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [0.8.1 release notes](docs/releases/0.8.1.md) · [Try the native preview](#try-the-native-preview)
+[Install](#install) · [Get started](GUIDE.md#get-started) · [User guide](GUIDE.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [0.8.2 release notes](docs/releases/0.8.2.md) · [Try the native preview](#try-the-native-preview)
+
+**0.8.2:** a stereo delay **TYPE** (MONO / WIDE / PING), and about 19 KB of static RAM back from SLOOP 2.7 memory ports and the removed visualizer. The **FM-1** release keeps ORP8/OPB3 storage; the device owner confirmed normal operation and the delay types after installation.
 
 **0.8.1:** selected SLOOP 2.8 / 2.8.3 behavior fixes for SAMPLE retriggers, drum voices, live-held POLY notes, MIDI, layer pages and USB rescue, with credit to the SLOOP authors. The **FM-1** release retains ORP8/OPB3 storage. The device owner confirmed normal screen and basic playing operation after installation.
 
@@ -26,7 +28,7 @@ Tape edits **sequencer events**, including notes, drum hits, timing, fills and p
 - **Event Tape:** a four-track event timeline with reels, an inclusive selection and COPY / LIFT / DROP, alongside the step sequencer.
 - **Original sounds:** SWARM's six detuned harmonic oscillators, PULSE's dual pulse/PWM synthesis, FM4's four sine operators, and **CLOUD**, an oscillator-source granular engine. CLOUD makes grains from oscillators; **GRAIN** makes grains from samples.
 - **Controls that follow the sound:** four blue / green / white / orange encoders, one-index slow detents and accelerated fast turns through wide numeric ENV/LFO ranges, and an instant preset list that auditions each selection on Tape or Mixer.
-- **User macros:** assign four destinations on **MACROS**, edit their values on **PERFORM** through EDIT/SELECT, and save the map with a USER sound or project. HOME remains Tape / Visualizer.
+- **User macros:** assign four destinations on **MACROS**, edit their values on **PERFORM** through EDIT/SELECT, and save the map with a USER sound or project. HOME remains Tape.
 - **A real-firmware preview:** the native preview runs ORBIT's C sound engine, sequencer and display rather than a separate browser synth.
 
 ## Sounds and performance
@@ -72,13 +74,15 @@ python3 tools/fm1_install.py --info
 python3 tools/fm1_install.py build/orbit.fwsc
 ```
 
-The source version is **ORBIT 0.8.1**, and the default FM-1 install identity remains **FM-1_900**. Use the default build command, **not `--release`**, whose upstream version scheme changes the identity and appends BETA. See [BUILDING.md](BUILDING.md) for the toolchain, local site generation and CLI instructions. The official v0.8.1 firmware assets are **`orbit.fwsc` and `SHA256SUMS` for FM-1**. Generated firmware packages are not committed to this tree.
+The source version is **ORBIT 0.8.2**, and the default FM-1 install identity remains **FM-1_900**. Use the default build command, **not `--release`**, whose upstream version scheme changes the identity and appends BETA. See [BUILDING.md](BUILDING.md) for the toolchain, local site generation and CLI instructions. The official v0.8.2 firmware assets are **`orbit.fwsc` and `SHA256SUMS` for FM-1**. Generated firmware packages are not committed to this tree.
 
-**0.8.1 validation:** the full host suite, native preview, target build/budgets and web tests passed; all 218 renders match the reviewed goldens after six attributed changes. The separate `orbit_check.py` run returned 34 PASS / 1 FAIL (the known macOS IRQ compile limitation). Installation on 2026-10-28 reached 100%, restarted and returned `FM-1_900`. The device owner confirmed normal screen and basic playing operation and approved release; measured audio/timing, firmware-version query and physical OCT- rescue checks remain unverified. See the [validation record](docs/VALIDATION.md#orbit-081-release-package-2026-10-28).
+**0.8.2 validation:** the full host suite (with the new delay tests), native preview, target build/budgets and web tests passed; **all 218 renders match the goldens unchanged**. Static RAM headroom grows from 760 B to 19,720 B. The separate `orbit_check.py` run returned 35 PASS / 1 FAIL (the known macOS IRQ compile limitation). Installation on 2026-10-29 reached 100%, restarted and returned `FM-1_900`; the device owner confirmed normal operation and the MONO / WIDE / PING delay types by ear and approved release. Measured audio/timing, a firmware-version query and physical OCT- rescue remain unverified. See the [validation record](docs/VALIDATION.md#orbit-082-release-package-2026-10-29).
+
+**Historical 0.8.1 validation:** the full host suite, native preview, target build/budgets and web tests passed; all 218 renders match the reviewed goldens after six attributed changes. The separate `orbit_check.py` run returned 34 PASS / 1 FAIL (the known macOS IRQ compile limitation). Installation on 2026-10-28 reached 100%, restarted and returned `FM-1_900`. The device owner confirmed normal screen and basic playing operation and approved release; measured audio/timing, firmware-version query and physical OCT- rescue checks remain unverified. See the [validation record](docs/VALIDATION.md#orbit-081-release-package-2026-10-28).
 
 **Historical 0.8.0 validation:** the final no-demo firmware passed the full host, native-preview and target checks, with **218 audio goldens unchanged**. On 2026-10-27, the no-demo **0.8 hardware candidate** completed the FM-1 write, reboot and identity check. The device owner confirmed a normal screen, cleared the earlier autosave with NEW PROJECT and accepted the hardware for release. INFO/PING timed out, so no successful firmware-version query is claimed. The version-only **0.8.0 rebuild has not been separately hardware-tested**. Earlier 0.7.1 software checks, 0.7.0 installation/version/PING checks and the 0.6.0 USB recording remain historical. Final hashes, resource measurements and detailed evidence belong in the [validation record](docs/VALIDATION.md).
 
-**M-Vave SMK-37:** board support is merged, with model-specific source builds for SMK-37 Pro, SMK-37 Elite and MKE-P37. The port adds velocity keys/pads, fader banks, wheels and a pad sound picker. The feature list above describes the default FM-1 build: SMK-37 has only **USR1/USR2** sample storage and **no TRS MIDI IN**. Use a package for the matching model and read the [SMK-37 controls and safety instructions](SMK37.md). **The v0.8.1 release does not include SMK-37 binaries.**
+**M-Vave SMK-37:** board support is merged, with model-specific source builds for SMK-37 Pro, SMK-37 Elite and MKE-P37. The port adds velocity keys/pads, fader banks, wheels and a pad sound picker. The feature list above describes the default FM-1 build: SMK-37 has only **USR1/USR2** sample storage and **no TRS MIDI IN**. Use a package for the matching model and read the [SMK-37 controls and safety instructions](SMK37.md). **The v0.8.2 release does not include SMK-37 binaries.**
 
 ## Try the native preview
 
@@ -96,7 +100,7 @@ Open http://127.0.0.1:8080 and press **Start audio**. The preview includes its o
 - [GUIDE.md](GUIDE.md): panel workflow, recording, Event Tape, sound design, macros and saving.
 - [MIDI control](docs/MIDI-CONTROL.md): channels, CC learn, MiniLab routing and controller limits.
 - [BUILDING.md](BUILDING.md): build, local installer site and checks.
-- [0.8.1 release notes](docs/releases/0.8.1.md), [0.8.0 release notes](docs/releases/0.8.0.md) and [validation record](docs/VALIDATION.md).
+- [0.8.2 release notes](docs/releases/0.8.2.md), [0.8.1 release notes](docs/releases/0.8.1.md), [0.8.0 release notes](docs/releases/0.8.0.md) and [validation record](docs/VALIDATION.md).
 - Earlier releases: [0.7.1](docs/releases/0.7.1.md), [0.7.0](docs/releases/0.7.0.md), [0.6.0](docs/releases/0.6.0.md), [0.5.0](docs/releases/0.5.0.md), [0.4.1](docs/releases/0.4.1.md); [SLOOP 2.5 integration](docs/SLOOP-2.5-INTEGRATION.md).
 - [Original ORBIT engines](docs/OP1-ENGINES.md), [CLUSTER](docs/OP1-CLUSTER.md), [design](DESIGN.md), [editor protocol](web/EDITOR_PROTOCOL.md) and [Dots](DOTS.md).
 

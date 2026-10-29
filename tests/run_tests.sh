@@ -86,6 +86,8 @@ $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/insert_test" tests
 run "2.6 sound: INSERT, ANALOG TYPE, mutes, TEXTURE, limiter, THROW, clicks, boundary matrix" "$OUT/insert_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/track_filter_test" tests/track_filter_test.c -lm
 run "track FILTER: resonance, band-pass response, bypass transitions and default compatibility" "$OUT/track_filter_test"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/delay_type_test" tests/delay_type_test.c -lm
+run "delay TYPE (0.8.2): MONO, WIDE, PING-PONG, the line cleared on a change" "$OUT/delay_type_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/modulation_test" tests/modulation_test.c -lm
 run "2.6 modulation: ENV SYNC, LFO 2 SYNC / TRIG / POL, bend, learn, tempo matrix" "$OUT/modulation_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/midi_learn_test" tests/midi_learn_test.c -lm

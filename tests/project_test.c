@@ -143,9 +143,9 @@ int main(void)
     uint32_t i, t;
     int bad = 0, ok;
 
-    bad += check("layout: common ids 0..52 kept, P_ITYPE 53 .. P_LPOL 62, P_E0 63, P_COUNT 71, G_COUNT 45",
+    bad += check("layout: common ids 0..52 kept, P_ITYPE 53 .. P_LPOL 62, P_E0 63, P_COUNT 71, G_COUNT 46 (G_DTYPE 45)",
                  P_CHORD + 1 == P_TFLT && P_TFLT + 1 == P_STRUM && P_STRUM + 1 == P_VLEAD && P_VLEAD == 52 &&
-                 P_ITYPE == 53 && P_LPOL == 62 && P_TRES == 63 && P_TFTYPE == 64 && P_E0 == 65 && P_COUNT == 73 && G_COUNT == 45 && G_CH1 == 33 &&
+                 P_ITYPE == 53 && P_LPOL == 62 && P_TRES == 63 && P_TFTYPE == 64 && P_E0 == 65 && P_COUNT == 73 && G_COUNT == 46 && G_DTYPE == 45 && G_CH1 == 33 &&
                  G_BEND == 44 && PROJ_NP_V5 == 61u && P_SLDEPTH + 1 == P_CHORD);
     bad += check("ORP7 is 3840 bytes (track 940, offsets asserted); FUN5 frozen at 3840; 4 slots fit .noinit",
                  sizeof(project_t) == 3840u && sizeof(proj_trk_t) == 940u && sizeof(project_v5_t) == 3840u &&
@@ -515,6 +515,19 @@ int main(void)
     proj_apply(&q2, 1);
     ok &= song.g[G_DRCH] == 9 && song.g[G_CH1] == 2 && song.g[G_BEND] == 3 && (q2.rsv[0] & 0x80u);
     bad += check("TEXTURE round trip (section and load); drum channel, CH1, BEND untouched by a project", ok);
+    /* ORBIT 0.8.2: the delay TYPE in g[G_DRCH] bits 14..15, beside TEXTURE's LEVEL and TONE; a 0.8.1 project: MONO */
+    ok = 1;
+    for (t = 0; t < 3u; t++) {
+        song.g[G_DTYPE] = (int16_t)t, song.g[G_TXLVL] = 127, song.g[G_TXTONE] = 63;
+        proj_capture(&q2);
+        song.g[G_DTYPE] = 0, song.g[G_TXLVL] = 0, song.g[G_TXTONE] = 0;
+        proj_apply(&q2, 0);
+        ok &= song.g[G_DTYPE] == (int16_t)t && song.g[G_TXLVL] == 127 && song.g[G_TXTONE] == 63;
+    }
+    q2.g[G_DRCH] = (int16_t)(q2.g[G_DRCH] & 0x3FFF);   /* (the bits as 0.8.1 wrote them) */
+    proj_apply(&q2, 0);
+    ok &= song.g[G_DTYPE] == 0 && song.g[G_TXLVL] == 127 && song.g[G_TXTONE] == 63;
+    bad += check("delay TYPE round trip in the spare bits; a 0.8.1 project reads MONO, TEXTURE intact", ok);
     /* a damaged image: a lock on a parameter that cannot lock, on a step past the end, with a value past the
      * range: freed, freed, clamped */
     q.t[1].lock[5].step = 4, q.t[1].lock[5].param = P_SLEN, q.t[1].lock[5].val = 8;

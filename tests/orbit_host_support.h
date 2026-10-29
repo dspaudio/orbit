@@ -49,7 +49,7 @@ static int32_t fm1_adc_read(int c) { (void)c; return -1; }
 static struct { uint32_t magic, stage, page, home, ui_frames; } felucca_dbg;
 #define FELUCCA_ICONS 1
 #define SCOPE_N 512u
-static int16_t scope_buf[SCOPE_N], scope_bufr[SCOPE_N];
+static int16_t scope_buf[SCOPE_N];
 static uint32_t scope_w;
 #include "../firmware/src/panel.c"
 #include "../firmware/src/ui.c"
@@ -81,7 +81,6 @@ static void settings_save(void) {}
 #include "../firmware/src/ui_studio.c"
 #include "../firmware/src/icons.c"
 #include "../firmware/src/ui_draw.c"
-#include "../firmware/src/ui_vis.c"
 #include "../firmware/src/ui_layers.c"
 #include "../firmware/src/ui_menu.c"
 #include "../firmware/src/ui_input.c"
@@ -101,7 +100,7 @@ static void frame(void)
     for (q = 0; q < 22u; q++) {
         uint32_t sample;
         mix_block(o,CTL);
-        for(sample=1;sample<CTL;sample+=2u) { scope_bufr[scope_w&(SCOPE_N-1u)]=vis_tap[sample*2+1]; scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[sample*2]; }
+        for(sample=1;sample<CTL;sample+=2u) { scope_buf[scope_w++&(SCOPE_N-1u)]=vis_tap[sample*2]; }
     }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
 }

@@ -1,9 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Effects: per-track DIST insert, then sends into three shared buses (chorus, tempo delay, reverb).
- * Stereo dry mix; the chorus and the reverb come back in stereo, the delay in the middle. */
+ * Stereo dry mix; the chorus and the reverb come back in stereo; the delay in the middle (TYPE MONO), or WIDE (its
+ * right side read a little later) or PING (left and right echoes in turn), ORBIT 0.8.2. */
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 down to 41 BPM, 1/8 dotted down to 31, 1/4 dotted down to 61 (clamped below) */
 #define CHO_LEN 2048u
+#define DLY_HALF (DLY_LEN / 2u)  /* PING: the line split in two, left and right (0.74 s each) */
+#define DLY_WIDE 573u            /* WIDE: the right side 13 ms after the left */
+#define DLY_CLR 2048u            /* a TYPE change: the line cleared this much a block (stale echoes would jump sides) */
 static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
 static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
 /* the reverb: two input diffusers, then four delay lines mixed by a Hadamard matrix (a feedback delay
@@ -16,7 +20,9 @@ static int16_t rev_line[1559 + 1931 + 2389 + 2791 + REV_MOD + 2];   /* (.bss: th
 static int16_t rev_ap[556 + 441] __attribute__((section(".pool")));
 static struct {
     uint32_t dly_w, cho_w, cho_ph, rev_ph;
-    int32_t dly_lp;
+    int32_t dly_lp, dly_lpr;     /* (dly_lpr: PING's right line) */
+    uint32_t dly_clr;            /* samples of the line still to clear after a TYPE change (0: none) */
+    uint8_t dly_type;            /* the TYPE the line holds (G_DTYPE) */
     uint16_t line_i[4], ap_i[2];
     int32_t line_lp[4];
 } fx;
@@ -158,8 +164,9 @@ static inline int32_t knee(int32_t x)
 static uint8_t usb_full;                 /* menu USB AUDIO: 0 MASTER (follows the knob), 1 FULL (panel.c lights_word) */
 static uint8_t usb_full_now;             /* this render fills usb_out (audio.c) */
 static int32_t usb_out[2u * CTL];
-/* the visualiser's input (audio.c fills the scope with it): the mix as if MASTER were all the way up, so the
- * picture does not follow the volume knob, even at 0 (2.4). The same soft knee as the output, no limiter state */
+/* the HOME scope's input (audio.c fills scope_buf with the left samples): the mix as if MASTER were all the way
+ * up, so the picture does not follow the volume knob, even at 0 (2.4). The same soft knee as the output, no
+ * limiter state. The right samples went to the visualiser, now removed: not written */
 static int16_t vis_tap[2u * CTL];
 static struct { int32_t dc[2], dce[2], lc[4], lce[4]; } uo;
 static void master_pre_usb(int32_t *l, int32_t *r)      /* (USB AUDIO = FULL: its own state) */
@@ -201,7 +208,7 @@ static uint32_t delay_samples(void)
 static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in, int32_t *wet_l,
                      int32_t *wet_r, uint32_t n)
 {
-    uint32_t i, k, dl = delay_samples();
+    uint32_t i, k, dl = delay_samples(), dt = (uint32_t)song.g[G_DTYPE] % 3u, dlr, dlp;
     int32_t fb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240;
     if (thr_dly && fb < 89 * 230)                       /* ECHO THROW: FDBK at least 70 %, gliding with it (2.6) */
         fb += ((89 * 230 - fb) * thr_dly) >> 15;
@@ -223,6 +230,18 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         ma = (REV_MOD << 8) + ((m0 * REV_MOD) >> 7), mb = (REV_MOD << 8) + ((m1 * REV_MOD) >> 7);
         dca = (ca1 - ca0) >> CTL_LOG2, dcb = (cb1 - cb0) >> CTL_LOG2;
     }
+    if (dt != fx.dly_type) {                            /* TYPE changed: the line is cleared over a few blocks first */
+        fx.dly_type = (uint8_t)dt;
+        fx.dly_clr = DLY_LEN;
+        fx.dly_lp = fx.dly_lpr = 0;
+    }
+    if (fx.dly_clr) {
+        k = fx.dly_clr < DLY_CLR ? fx.dly_clr : DLY_CLR;
+        memset(&dly_buf[DLY_LEN - fx.dly_clr], 0, k * sizeof dly_buf[0]);
+        fx.dly_clr -= k;
+    }
+    dlr = dl + DLY_WIDE < DLY_LEN ? dl + DLY_WIDE : DLY_LEN - 1u;   /* WIDE: the right read point */
+    dlp = dl < DLY_HALF ? dl : DLY_HALF - 1u;          /* PING: each half's delay */
     for (i = 0; i < n; i++) {
         int32_t yl, yr, x, a, o0, o1, o2, o3;
         /* chorus: two modulated short delays, 5..15 ms, the LFO half a turn apart: left and right move apart */
@@ -236,15 +255,36 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             yr = (d0 + (((d1 - d0) * (r1 & 255)) >> 8)) * 2;
         }
         fx.cho_w++;
-        /* delay with a low-passed feedback (in the middle) */
-        x = dly_buf[(fx.dly_w - dl) & (DLY_LEN - 1u)];
-        fx.dly_lp += mulq15(x - fx.dly_lp, col);
-        dly_buf[fx.dly_w & (DLY_LEN - 1u)] =
-            (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lp, fb), -32768, 32767);
+        /* delay with a low-passed feedback: MONO in the middle, WIDE the right read later, PING left / right in turn */
+        if (fx.dly_clr) {                               /* (a TYPE change: silent until the line is clear) */
+        } else if (dt == 0u) {
+            x = dly_buf[(fx.dly_w - dl) & (DLY_LEN - 1u)];
+            fx.dly_lp += mulq15(x - fx.dly_lp, col);
+            dly_buf[fx.dly_w & (DLY_LEN - 1u)] =
+                (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lp, fb), -32768, 32767);
+            x = mulq15(x * 2, dmix);
+            yl += x;
+            yr += x;
+        } else if (dt == 1u) {
+            int32_t xr = dly_buf[(fx.dly_w - dlr) & (DLY_LEN - 1u)];
+            x = dly_buf[(fx.dly_w - dl) & (DLY_LEN - 1u)];
+            fx.dly_lp += mulq15(x - fx.dly_lp, col);
+            dly_buf[fx.dly_w & (DLY_LEN - 1u)] =
+                (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lp, fb), -32768, 32767);
+            yl += mulq15(x * 2, dmix);
+            yr += mulq15(xr * 2, dmix);
+        } else {                                        /* PING: in -> left line -> right line -> (FDBK) left line */
+            uint32_t rd = (fx.dly_w - dlp) & (DLY_HALF - 1u), wr = fx.dly_w & (DLY_HALF - 1u);
+            int32_t xr = dly_buf[DLY_HALF + rd];
+            x = dly_buf[rd];
+            fx.dly_lp += mulq15(x - fx.dly_lp, col);
+            fx.dly_lpr += mulq15(xr - fx.dly_lpr, col);
+            dly_buf[wr] = (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lpr, fb), -32768, 32767);
+            dly_buf[DLY_HALF + wr] = (int16_t)clamp(mulq15(fx.dly_lp, fb), -32768, 32767);
+            yl += mulq15(x * 2, dmix);
+            yr += mulq15(xr * 2, dmix);
+        }
         fx.dly_w++;
-        x = mulq15(x * 2, dmix);
-        yl += x;
-        yr += x;
         /* reverb: two diffusers, then the four lines */
         a = mulq15(rev_in[i], 13000);
         {
@@ -1169,9 +1209,8 @@ static void mix_block(int32_t *out, uint32_t n)
             ol[i] = ((mix_l[i] >> 2) * m) >> 10;
             orr[i] = ((mix_r[i] >> 2) * m) >> 10;
             master_pre(&ol[i], &orr[i]);
-            if ((i & 1u)) {                             /* the visualiser: every other sample, as audio.c reads it */
+            if ((i & 1u)) {                             /* the scope: every other sample, as audio.c reads it */
                 vis_tap[2u * i] = (int16_t)knee(mix_l[i]);
-                vis_tap[2u * i + 1u] = (int16_t)knee(mix_r[i]);
             }
             if (usb_full_now) {                         /* USB AUDIO = FULL: MASTER all the way up (4096) */
                 ul[i] = (mix_l[i] >> 2) * 4, ur[i] = (mix_r[i] >> 2) * 4;

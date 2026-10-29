@@ -247,6 +247,18 @@ int main(void)
               up_bank_decode(&nb, stage, len, 1) && !memcmp(&nb, &up_bank[i], sizeof nb);
     }
     bad += check("OPB2 x2 -> OPB3 -> flash: all 32 sounds, patterns and macros intact", ok);
+    {   /* in place (an editor restore is converted where it was staged): as through a second buffer */
+        static union { up_bank_t b; up_bank_v2_t v2; up_bank_v1_t v1; } ip;
+        memcpy(&ip.v2, &b2, sizeof b2);
+        ok = up_bank_decode(&nb, &b2, sizeof b2, 1) && up_bank_decode(&ip.b, &ip, sizeof b2, 1) &&
+             !memcmp(&ip.b, &nb, sizeof nb);
+        memcpy(&ip.v1, &b1, sizeof b1);
+        ok &= up_bank_decode(&nb, &b1, sizeof b1, 0) && up_bank_decode(&ip.b, &ip, sizeof b1, 0) &&
+              !memcmp(&ip.b, &nb, sizeof nb);
+        memcpy(&ip.b, &nb, sizeof nb);
+        ok &= up_bank_decode(&ip.b, &ip, sizeof nb, 1) && !memcmp(&ip.b, &nb, sizeof nb);
+        bad += check("in place: OPB2, UPB1 and OPB3 decode as through a second buffer", ok);
+    }
     b2.r[4].np = 73;
     bad += check("OPB2 np73 cannot exceed frozen p72, strict rejects",
                  !up_bank_decode(&nb, &b2, sizeof b2, 1));

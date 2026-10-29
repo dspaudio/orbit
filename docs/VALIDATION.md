@@ -1,5 +1,84 @@
 # ORBIT validation record
 
+## ORBIT 0.8.2 release package, 2026-10-29
+
+This release adds the delay **TYPE** (MONO / WIDE / PING), removes the
+full-screen visualizer and ports SLOOP 2.7 memory changes (isod89/sloop-fm1
+`ba54ba5`, from the sloop-lab RAM branch by Andre Rezemini). Baseline HEAD:
+`514eb60` (0.8.1). The default build used
+`PYTHON=~/.jieli/orbit-venv/bin/python sh build.sh`, not `--release`, and
+embeds `FELUCCA ORBIT 0.8.2`. Identity/board remain `FM-1_900` / `fm1`.
+ORP8, OPB3, the `step_t` layout and editor protocol 13 are unchanged; the
+protocol reports 46 globals.
+
+### Package and measured resources
+
+| Item | 0.8.1 | 0.8.2 |
+| --- | --- | --- |
+| `build/orbit.fwsc` | 610,032 B | 610,032 B |
+| App image (`felucca.bin`) | 566,360 B | 557,192 B |
+| Static RAM `.data + .bss` | 97,544 / 98,304 B (760 B free) | 78,584 / 98,304 B (19,720 B free) |
+| Pool | 333,948 / 344,064 B | 328,444 / 344,064 B |
+
+Package SHA-256:
+
+```text
+45f43de713e9c03ee9b5d130eb7793cbd7f9e2b85206288e4f5cfde10e5be3da
+```
+
+`felucca.bin` SHA-256:
+`f3c729bafbe238d71d762521155e1388f6565e95e794a59ea193698ff39c5783`.
+As before, static RAM headroom is not total runtime free RAM: POOL and the
+stacks are separate, and stack high-water usage is unmeasured.
+
+| Change | Static RAM effect |
+| --- | --- |
+| Visualizer (`ui_vis.c`) removed; right scope buffer and note taps gone | `.bss`, and 5,504 B of pool |
+| `midi_sel_on` packed as nibbles (SLOOP 2.7) | 1,024 B |
+| `scratch.h`: storage payload and HOME scope snapshot share one buffer | 1,024 B |
+| USER preset banks read in the flash XIP window; editor restore converted in place | 9,528 B (`up_bank` + `ed_bk_commit.nb`) |
+| DRAWBAR state moved into the existing per-part engine arena | about 2.2 KB, pool unchanged |
+| Delay TYPE state | +16 B; the delay line is shared, pool unchanged |
+
+At boot, a USER bank still stored as OPB2 or UPB1, or an OPB3 bank with a
+record that would be cleared, is converted and written back once as OPB3, so
+the flash copy holds what the RAM mirror held. A second start writes nothing.
+The delay TYPE is stored in bits 14..15 of the project's `g[G_DRCH]` slot,
+beside TEXTURE's LEVEL and TONE; 0.8.1 masks those bits and earlier projects
+read as MONO. The settings word writes 0 in the former visualizer style bits
+17..20; older firmware reads that as OSCILLOSCOPE. SLOOP's `UI_SMALL` (clang
+`minsize` on UI functions) was tried and dropped: the pi32v2 build was
+byte-identical with and without it.
+
+### Checks
+
+| Check | Result |
+| --- | --- |
+| `python3 tools/orbit_check.py` (venv Python with Pillow) | 35 PASS / 1 FAIL; the failure is the known macOS `irq_init_test` compile limitation |
+| `python3 tests/orbit_preview_test.py` | exit 0 |
+| `sh tests/run_tests.sh` | every host, regression and web test passed, including `delay_type_test`; **218 golden renders, 0 changed**. It exited 1 only because Apple clang's AddressSanitizer aborted at start-up in the two ASan steps |
+| ASan + UBSan with Homebrew LLVM and the macOS SDK | `stress_asan 15000 7`, `arena_asan` (`ARENA_STATS`, ownership violations 0) and `delay_type_test` exit 0 |
+| `python3 tests/target_budget.py build/felucca.dis tests/target_budget.txt` | exit 0. Against 0.8.1: `drawbar_render` 267 -> 271 (within +10 %), `drawbar_block` 102 -> 103, `fm1_alnk0_irq` 138 -> 126; other costs unchanged |
+
+New host checks: `delay_type_test` (MONO centred; WIDE right echo 573
+samples later; PING left, right, left with falling level; PING time clamped to
+half the line; no stale echo after a TYPE change), `project_test` (TYPE round
+trip; a 0.8.1 project reads MONO with TEXTURE intact), `macro_test` (USER bank
+read in place from a simulated NOR; OPB2 converted once and not again) and
+`upreset_test` (OPB2, UPB1 and OPB3 converted in place as through a second
+buffer).
+
+### Installation on the FM-1, 2026-10-29
+
+`python3 tools/fm1_install.py build/release-0.8.2/orbit.fwsc --yes` (exit 0):
+18 package reads, update mode, write 100%, restart, `done: the FM-1 runs
+FM-1_900`; `--info` then reported `FM-1_900 [running]`. The device owner
+confirmed that the FM-1 started and worked normally and that the delay's
+MONO, WIDE and PING types sounded as expected, and approved release. No
+firmware-version query was made. Measured audio quality, ISR timing and
+underruns, flash cache behaviour after a save measured on the device, and
+physical OCT- power-on rescue were not tested.
+
 ## ORBIT 0.8.1 release package, 2026-10-28
 
 This release ports selected SLOOP 2.8 / 2.8.3 behavior, with credit to
