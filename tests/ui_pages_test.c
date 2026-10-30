@@ -33,7 +33,10 @@ static void lcd_fill(uint32_t x,uint32_t y,uint32_t w,uint32_t h,uint16_t c)
 static int32_t encs[7];
 static uint32_t fm1_ticks(void) { return fm1_ms * 1000u * 24u; }
 #define FM1_TICKS_PER_US 24u
-static int32_t fm1_enc_take(uint32_t e) { int32_t s = encs[e]; encs[e] = 0; return s; }
+/* A detent the timer ISR counts just after a read (on the FM-1 the scan runs while a UI pass does): it lands in
+ * the same pass. Ordinary tests leave it zero (ported from SLOOP 2.8.4, isod89/sloop-fm1 91f3018). */
+static int32_t enc_late[7];
+static int32_t fm1_enc_take(uint32_t e) { int32_t s = encs[e]; encs[e] = enc_late[e]; enc_late[e] = 0; return s; }
 static uint8_t fm1_led[16], fm1_led_dim[16], fm1_led_bg[16];
 static volatile uint16_t fm1_led_bg_ns;
 #define FM1_NCOL 16u
@@ -220,6 +223,28 @@ int main(int argc, char **argv)
     press(B_FX); encs[panel.enc[EN_K2]] = 1; frame();
     check(ui.layer == LY_FX && song.g[G_DUST] > 0, "FX knob used while held: layer page shows at once");
     release(B_FX); song.g[G_DUST] = 0; go_home(); frame();
+    {   /* (SLOOP 2.8.4, clipper-fm1 #24) a firm press, let go untouched within a second, opens what a quick tap
+         * opens: a press of 0.6 s used to open nothing (TAP 0.45 s: the layer flashed, the screen stayed);
+         * held 1.3 s: a look at the layer, back where it was */
+        static const uint32_t LB[7] = {B_FX, B_EDIT, B_ARP, B_SEQ, B_SCL, B_GLO, B_SAVE};
+        uint32_t q, ok = 1;
+        for (q = 0; q < 7u; q++) {
+            uint32_t h_home, h_page, t_home, t_page;
+            go_home(); frames(2);
+            h_home = ui.home; h_page = ui.page;
+            tap(LB[q]); frames(3);
+            t_home = ui.home; t_page = ui.page;
+            ok &= t_home != h_home || t_page != h_page;                    /* (the tap opens something) */
+            go_home(); frames(2);
+            press(LB[q]); frames(37); release(LB[q]); frames(3);           /* (0.6 s) */
+            ok &= ui.home == t_home && ui.page == t_page && !ui.menu;
+            go_home(); frames(2);
+            press(LB[q]); frames(80); release(LB[q]); frames(3);           /* (1.3 s) */
+            ok &= ui.home == h_home && ui.page == h_page && ui.layer == LY_PLAY;
+        }
+        go_home(); frames(2);
+        check(ok, "FX, EDIT, ARP, SEQ, SEL, GLO, SAVE pressed 0.6 s untouched: what a tap opens; held 1.3 s: no page");
+    }
     { uint8_t was = song.sel; song.sel = 0; check(keys_guide() == 0u, "synth track, no layer: no landmarks (a piano)"); song.sel = was; }
     tap(B_SEQ); check(cur_fam() == FAM_SEQ, "SEQ tapped: the SEQ pages");
     go_home(); frame();

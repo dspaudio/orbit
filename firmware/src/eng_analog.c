@@ -158,6 +158,15 @@ static const preset_t ANALOG_PRESETS[] = {
     {"SINE PAD", {3, 10, 64, 4, 90, 0, 0, 32}, {80, 90, 118, 90}, 0, 0, FX(0, 60, 20, 65)},
 };
 
+/* UNISON (voice.c unison_spread; ported from SLOOP 2.8.4, isod89/sloop-fm1 91f3018): both oscillators moved by r
+ * (Q32) of a turn of the note, each by its own frequency's share, as if started that much sooner (osc 2 takes its
+ * phase from ph[0] in analog_note_on, before the spread: it was left in phase across the voices) */
+static void analog_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    v->ph[0] += r;
+    v->ph[1] += uni_turns(r, v->pitch16, t->p[P_E1] * 16 / 100);
+}
+
 static const engine_t ENG_ANALOG = {
     "ANALOG", {"OSC", "FLT"},
     {

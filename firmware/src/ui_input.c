@@ -1100,6 +1100,8 @@ static void holds_input(uint32_t pressed, uint32_t now_ms)
     (void)sb, (void)save_down, (void)save_on, (void)save_t0;   /* (SAVE is a layer now: ui_layers.c) */
 }
 
+#include "ctrl.c"                                       /* MIDI CONTROLLER mode (ORBIT) */
+
 static void ui_input(void)
 {
     uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), now = fm1_ticks(), id, b, k;
@@ -1166,6 +1168,8 @@ static void ui_input(void)
     ml_poll();                                          /* MIDI LEARN: a CC came for the picked parameter (2.6) */
     page_fix();                                         /* (a page the track does not have: its neighbour, 2.6) */
     midi_entry();                                       /* (the STEP page's MIDI notes: read every frame, 2.6) */
+    if (!ui.menu)
+        ctrl_combo();                                   /* ENV + LFO held 2 s: CONTROLLER on / off (ctrl.c) */
     if (home == BT_HOLD) {                              /* HOME held: open the menu, or leave it */
         if (ui.menu) {
             menu_close();
@@ -1184,6 +1188,13 @@ static void ui_input(void)
         thr_req = 0;
         if (!ui.home_t0)
             menu_input(pressed);
+        return;
+    }
+    if (ctrl_on) {                                      /* CONTROLLER: the panel sends MIDI (ctrl.c) */
+        kb_grid = 0;
+        punch.hold = 0;
+        thr_req = 0;
+        ctrl_input(pressed);
         return;
     }
     layered = layers_input(notes, &pressed, home);
@@ -1220,9 +1231,11 @@ static void ui_input(void)
     }
     if (rec_wait && !ft_on && !ci_on) {                 /* the REC screen, armed: how it records */
         rec_knobs();                                    /* (tempo and sound still work; the track too: */
+        enc_hold |= 15u << EN_K1;                       /* (SLOOP 2.8.4: a late detent is not the page's) */
     } else if (rec_wait || ft_on) {                     /* the arm follows) */
         for (k = 0; k < 4u; k++)                        /* a take / the count-in: KNOB 1..4 edit nothing */
             panel_enc(EN_K1 + k);
+        enc_hold |= 15u << EN_K1;
     }
 #if FELUCCA_ARRANGER
     if (on_song_page()) {

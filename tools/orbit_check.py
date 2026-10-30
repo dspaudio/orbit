@@ -11,8 +11,9 @@ OUT = ROOT / 'build/host'
 CASES = ['fm6_test', 'userkit_test', 'stress_test', 'ui_pages_test', 'uac_test', 'upreset_test', 'orbit_lfo_test', 'orbit_engines_test', 'irq_init_test', 'recovery_test', 'orbit_test', 'seq2_test', 'hold_rec_test', 'midi_clock_test', 'project_test', 'storage_test', 'drumkit_test', 'studio_drums_test',
          'punch_test', 'song_audio_test', 'song_ui_test', 'arena_test', 'dsyn_test',
          'sample_replacement_test', 'chop_attack_test', 'drum_steal_test', 'cluster_test', 'editor_wide_test', 'cloud_test', 'cluster_math_test',
-         'insert_test', 'modulation_test', 'midi_learn_test', 'macro_test', 'track_filter_test',
-         'delay_type_test']
+         'insert_test', 'modulation_test', 'midi_learn_test', 'ctrl_test', 'macro_test', 'track_filter_test',
+         'delay_type_test', 'knob_walk_test', 'song_arm_test', 'unison_level_test', 'phys_tune_test',
+         'noise_clock_test', 'sample_pitch_test', 'grain_release_test', 'fade_noise_test']
 
 
 def main():
@@ -26,7 +27,7 @@ def main():
                                         f'tests/{name}.c', '-o', str(binary), '-lm'], cwd=ROOT, capture_output=True, text=True)
         if compile_result.returncode:
             return name, compile_result.returncode, compile_result.stdout + compile_result.stderr
-        extra = [str(OUT)] if name == 'orbit_test' else []
+        extra = [str(OUT)] if name in ('orbit_test', 'knob_walk_test') else []
         result = subprocess.run([str(binary), *extra], cwd=ROOT, capture_output=True, text=True, timeout=120)
         return name, result.returncode, result.stdout + result.stderr
     results = []

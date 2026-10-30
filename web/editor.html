@@ -1847,8 +1847,9 @@ function backupShape(id, d) {
           r[3] < 8 || r[3] > pmax || !r[4])) bad();
     }
   } else if (id === 1) {
-    if (d.length < 4 || ![[0x50455233, 88], [0x50455232, 52], [0x50455231, 40]]
-      .some(([magic, size]) => v.getUint32(0, true) === magic && (d.length === size || d.length === size - 4))) bad();
+    if (d.length < 4 || !(v.getUint32(0, true) === 0x50455233 && d.length === 104 ||   /* 0.9: + controller settings */
+        [[0x50455233, 88], [0x50455232, 52], [0x50455231, 40]]
+      .some(([magic, size]) => v.getUint32(0, true) === magic && (d.length === size || d.length === size - 4)))) bad();
   } else if (id === 8) {
     if (!FM6.bankUnobj(d)) bad();
   } else if (id === 9) {

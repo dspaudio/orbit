@@ -1,6 +1,6 @@
 # ORBIT 0.8.0 User Guide
 
-ORBIT turns the M-VAVE FM-1 into three synth parts and a drum machine. This guide describes ORBIT 0.8.0, not the upstream SLOOP engine registry or installer. [Install/build](BUILDING.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [0.8.0 release notes](docs/releases/0.8.0.md)
+ORBIT turns the M-VAVE FM-1 into three synth parts and a drum machine. This guide includes ORBIT 0.9.0 and 0.9.B, not the upstream SLOOP engine registry or installer. [Install/build](BUILDING.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [0.9.0 release notes](docs/releases/0.9.0.md)
 
 SMK-37 source support is merged. The controls below use the FM-1 panel labels; see [SMK37.md](SMK37.md) for the SMK-37 Pro, SMK-37 Elite and MKE-P37 mappings, faders, wheels and pad sound picker. SMK-37 has only USR1/USR2 sample storage and no TRS MIDI IN. **Official v0.8.0 binaries are FM-1 only; SMK-37 binaries are not included.**
 
@@ -222,9 +222,58 @@ USB audio is the master output, 16-bit stereo at 44.1 or 48 kHz. Select the Felu
 
 The [native preview](README.md#try-the-native-preview) runs the real C DSP/UI, but its save/load is nonpersistent, sample upload is unsupported and browser buffering is not FM-1 latency. Its controls support taps, not hardware hold layers.
 
+## MIDI controller mode
+
+New in 0.9.0. The mode turns the FM-1 into a plain MIDI controller for a computer or app, while ORBIT's sequencer keeps running.
+
+**Turn it on or off:** hold **ENV + LFO** together for 2 seconds, or go to **MENU > AUDIO > CONTROLLER** (KNOB 4; right = ON, left = OFF, OCT+ toggles). The mode is always off after a restart. The screen shows **CONTROLLER**, the channel, the four knob CCs with their values and the last message sent.
+
+While it's on:
+
+- **Keys** send Note On/Off on the controller channel (default **CH 1**), chromatic from F3 (note 53), shifted by OCT. They don't play the internal sound, the arpeggiator or recording.
+- **KNOB 1-4** each send one CC, by default **CC 7, 74, 71 and 64**. Values are absolute, 0-127, and start at 0 after a restart, so the first turn jumps from 0.
+- **FX, SEL, ENV and LFO** are momentary switches on **CC 80, 81, 82 and 83**: 127 on press, 0 on release. Holding ENV + LFO to leave the mode therefore sends CC 82 and 83, then 0 when you exit.
+- **EDIT + KNOB n** changes that knob's CC number (0-127). **EDIT + SELECT** changes the channel (1-16). ALGORITHM and PRESETS do nothing, so the track and sound stay put.
+- **PLAY, REC, OCT- and OCT+** work as usual. The sequencer, drums and audio keep playing. Hold HOME for the menu.
+
+The knob CCs and channel are saved with the device settings and come back after a restart. When you leave the mode, every note still held gets its Note Off and every pressed switch gets its 0; the keys then play the synth again.
+
+Output goes to USB MIDI. In the Bluetooth build it is also sent over Bluetooth when a device is connected.
+
+## Bluetooth MIDI build (0.9.B)
+
+**0.9.B** is a separate package, `orbit-ble.fwsc`, with Bluetooth MIDI added. Everything else matches 0.9.0 apart from the differences below. **None of it has been tested on an FM-1:** pairing, latency, and audio while the radio is busy are all unverified.
+
+**MENU > SYSTEM > BLUETOOTH** turns the radio on (right) or off (left); OCT+ toggles. Bluetooth is never on after a restart. The menu and the CONTROLLER screen show its state:
+
+| Status | Meaning |
+| --- | --- |
+| OFF | The radio is off |
+| STARTING | The Bluetooth stack is starting |
+| ADVERTISING | Waiting for a computer or app to connect |
+| CONNECTED | A device is connected |
+| STOPPING | Disconnecting and shutting down |
+| FAILED: reason | Bluetooth couldn't start, for example **FAILED: NO RF TRIM IN FLASH** |
+
+The FM-1 advertises as **ORBIT FM-1**. Connect from the other side (untested, general steps):
+
+- **macOS:** open Audio MIDI Setup, choose Window > Show MIDI Studio, click the Bluetooth button and connect **ORBIT FM-1**.
+- **iPhone / iPad:** open the app's Bluetooth MIDI settings (for example in Koala Sampler) and pick **ORBIT FM-1**. iOS has no system-wide Bluetooth MIDI pairing; each app connects through its own dialog.
+
+MIDI behaviour:
+
+- Everything ORBIT sends over USB MIDI (clock, notes, controller mode) is also sent over Bluetooth. **Outgoing SysEx is not sent over Bluetooth.**
+- MIDI received over Bluetooth behaves like USB MIDI, including the USB external-clock setting. If the connection drops, ORBIT releases notes and sustain held from Bluetooth.
+
+Differences from 0.9.0:
+
+- **Melodic built-in samples** are replaced by light FM voices to make room for the Bluetooth stack. Drum samples and USR1-USR4 are kept. See [Sounds replaced in the Bluetooth build](README.md#sounds-replaced-in-the-bluetooth-build).
+- **The FX delay line is half as long:** at most about 0.74 s, and about 0.37 s per side with PING. Longer TIME settings are held at the maximum.
+- **Radio calibration is protected.** Each FM-1 keeps a factory Bluetooth calibration record in flash, in the same area that the FM6 bank and USR4 can use. 0.9.B refuses FM6 bank or USR4 writes that would overwrite it, and the write reports an error. If the record was already overwritten, for example by filling USR4 in other firmware, Bluetooth can't start and shows **FAILED**. 0.9.B doesn't try to recalibrate the radio.
+
 ## Menu
 
-Hold HOME for settings. SELECT chooses SCREEN / LIGHTS / AUDIO / SYSTEM. SCREEN provides STYLE and ZOOM; LIGHTS provides button/key/note illumination; AUDIO provides LOWCUT, USB AUDIO and USB SERIAL; SYSTEM includes calibration, MIDI LEARN CLEAR and ABOUT. PRESETS moves the cursor, OCT+ acts, OCT- closes. These device settings are separate from song sound snapshots.
+Hold HOME for settings. SELECT chooses SCREEN / LIGHTS / AUDIO / SYSTEM. SCREEN provides STYLE and ZOOM; LIGHTS provides button/key/note illumination; AUDIO provides LOWCUT, USB AUDIO, USB SERIAL and [CONTROLLER](#midi-controller-mode); SYSTEM includes calibration, MIDI LEARN CLEAR and ABOUT, plus [BLUETOOTH](#bluetooth-midi-build-09b) in the 0.9.B build. PRESETS moves the cursor, OCT+ acts, OCT- closes. These device settings are separate from song sound snapshots.
 
 The full-screen visualizer was removed to free static RAM for future features. HOME on Tape stays on Tape. Pages that draw the output oscilloscope still do.
 

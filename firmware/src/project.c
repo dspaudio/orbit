@@ -612,6 +612,7 @@ static void proj_apply(const project_t *p, int all)
                     st->n = 4;
                 if (st->time > ST_REST)
                     st->time = ST_REST;
+                st->vel &= 127u;                    /* (SLOOP 2.8.4: a 7-bit velocity from a file, as the editor) */
                 for (j = 0; j < 4u; j++)
                     st->note[j] &= 127u;
             }
@@ -811,9 +812,12 @@ typedef struct {
 #endif
     uint32_t lights;                               /* SLOOP 2.3: the backlight (panel.c lights_word); appended,
                                                     * so 2.2 still reads its part (st_load cuts at its size) */
+    uint8_t ctl[16];                               /* ORBIT: MIDI CONTROLLER settings (ctrl_encode), appended */
 } persist_t;
 #define PERSIST_SIZE_V22 __builtin_offsetof(persist_t, lights)   /* the settings as 2.2 wrote them (no lights) */
-_Static_assert(sizeof(persist_t) == PERSIST_SIZE_V22 + 4u, "lights: the last word, no padding before it");
+#define PERSIST_SIZE_V23 __builtin_offsetof(persist_t, ctl)      /* up to lights: SLOOP 2.3 .. ORBIT before CONTROLLER */
+_Static_assert(PERSIST_SIZE_V23 == PERSIST_SIZE_V22 + 4u && sizeof(persist_t) == PERSIST_SIZE_V23 + 16u,
+               "lights, then the controller block: no padding");
 #if FELUCCA_ARRANGER
 _Static_assert(__builtin_offsetof(persist_t, arrangement) == 48u && sizeof(arr_config_t) == 36u,
                "Song editor contract: arrangement bytes 48..83");
@@ -826,7 +830,38 @@ _Static_assert(__builtin_offsetof(persist_t, arrangement) == 48u && sizeof(arr_c
 #if FELUCCA_FLASH
 static persist_t persist_saved;
 static void dsu_boot(void);
+static uint32_t persist_part_len(uint32_t len);
 #endif
+
+/* the MIDI CONTROLLER settings (seq.c ctrl_cfg) in persist_t.ctl: "CTL1", the channel (0..15), the CCs of KNOB 1..4,
+ * the CCs of FX SEL ENV LFO, 3 zero bytes. Without the tag (an older object) or out of range: the defaults */
+static void ctrl_encode(uint8_t *b)
+{
+    memset(b, 0, 16);
+    memcpy(b, "CTL1", 4);
+    b[4] = ctrl_cfg.ch;
+    memcpy(b + 5, ctrl_cfg.cc, 4);
+    memcpy(b + 9, ctrl_cfg.sw, 4);
+}
+static void ctrl_decode(const uint8_t *b)          /* b 0: the defaults */
+{
+    static const ctrl_cfg_t def = CTRL_CFG_DEF;
+    ctrl_cfg_t c = def;
+    uint32_t k;
+    if (b && !memcmp(b, "CTL1", 4)) {
+        if (b[4] <= 15u)
+            c.ch = b[4];
+        for (k = 0; k < 4u; k++) {
+            if (b[5 + k] <= 127u)
+                c.cc[k] = b[5 + k];
+            if (b[9 + k] <= 127u)
+                c.sw[k] = b[9 + k];
+        }
+    }
+    fm1_irq_off();                                  /* (the audio context reads the channel) */
+    ctrl_cfg = c;
+    fm1_irq_on();
+}
 
 static void persist_boot(void)                    /* before settings_init / panel_init */
 {
@@ -849,10 +884,18 @@ static void persist_boot(void)                    /* before settings_init / pane
             smp_user_scan(k);
     }
     {
-        int n = st_load(OBJ_SETTINGS, &p, sizeof p);
+        st_hdr_t h;
+        int n = -1;
+        memset(&p, 0, sizeof p);
+        if (st_current(OBJ_SETTINGS, &h) >= 0) {   /* (the persist part only: its length told by the object's) */
+            n = (int)persist_part_len(h.len);
+            memcpy(&p, st_buf, (uint32_t)n);
+        }
         if (n == (int)PERSIST_SIZE_V22 && p.magic == PERSIST_MAGIC)
             p.lights = 0;                          /* from 2.2: backlight off */
-        if (((n == (int)sizeof p || n == (int)PERSIST_SIZE_V22) && p.magic == PERSIST_MAGIC)
+        ctrl_decode(n == (int)sizeof p && p.magic == PERSIST_MAGIC ? p.ctl : 0);
+        ctrl_encode(p.ctl);                        /* (as installed: an older object is not rewritten for it alone) */
+        if (((n == (int)sizeof p || n == (int)PERSIST_SIZE_V23 || n == (int)PERSIST_SIZE_V22) && p.magic == PERSIST_MAGIC)
 #if FELUCCA_ARRANGER
             || (n == (int)(16u + sizeof(panel_t)) && p.magic == 0x50455232u)
 #endif
@@ -1003,19 +1046,36 @@ static int settings_write(const persist_t *p)
 
 /* the SYN kits and the MIDI part from the settings object (its persist_t and SYN kits checked first), else the
  * defaults. Lengths: base (older firmware: no MIDI part), base + 32, + 36 (SLOOP 2.6 test builds), + 40 */
+/* the persist_t part of a settings object of len bytes: this layout (with the controller block) or the one before
+ * (up to lights), told apart by what follows it (SYN kits, then no MIDI part or one of 32, 36, 40 bytes: the two
+ * layouts differ by 16 bytes, which no two of those tails do); a bare persist object (older firmware): all of it */
+static uint32_t persist_part_len(uint32_t len)
+{
+    static const uint32_t P[2] = {sizeof(persist_t), PERSIST_SIZE_V23};
+    uint32_t k;
+    for (k = 0; k < 2u; k++)
+        if (len == P[k] + sizeof(dsu_bank_t) ||
+            (len > P[k] + sizeof(dsu_bank_t) && midi_part_valid_len(len - P[k] - sizeof(dsu_bank_t))))
+            return P[k];
+    return len < sizeof(persist_t) ? len : sizeof(persist_t);
+}
+
 static void dsu_boot(void)
 {
     st_hdr_t h;
     midi_cfg_t c;
-    uint32_t len = sizeof(persist_t) + sizeof(dsu_bank_t), k;
+    uint32_t len = 0, pl = 0, k;
     dsu_defaults();
     midi_part_decode(&c, st_buf, 0);
     drch_seed = 0;
-    if (st_current(OBJ_SETTINGS, &h) >= 0 &&
-        (h.len == len || (h.len > len && midi_part_valid_len(h.len - len))) &&
+    if (st_current(OBJ_SETTINGS, &h) >= 0) {
+        pl = persist_part_len(h.len);
+        len = pl + sizeof(dsu_bank_t);
+    }
+    if (len && (h.len == len || (h.len > len && midi_part_valid_len(h.len - len))) &&
         ((const persist_t *)st_buf)->magic == PERSIST_MAGIC &&
-        dsu_valid((const dsu_bank_t *)(st_buf + sizeof(persist_t)))) {
-        memcpy(&dsu, st_buf + sizeof(persist_t), sizeof dsu);
+        dsu_valid((const dsu_bank_t *)(st_buf + pl))) {
+        memcpy(&dsu, st_buf + pl, sizeof dsu);
         for (k = 0; k < DSU_N; k++)
             dsu_fix_kit(&dsu.k[k]);
         if (h.len > len)
@@ -1037,6 +1097,7 @@ static void persist_fill(persist_t *p)              /* the settings as they are 
     p->zoom = settings.zoom;
     p->panel = panel;
     p->lights = lights_word();
+    ctrl_encode(p->ctl);
 #if FELUCCA_ARRANGER
     p->arrangement = arrangement;
 #endif
@@ -1086,10 +1147,14 @@ static int panel_valid(const panel_t *q)           /* a permutation of the butto
 static uint32_t settings_restore(const void *raw, uint32_t n)
 {
     persist_t p;
-    if (n != sizeof p && n != PERSIST_SIZE_V22)
+    if (n != sizeof p && n != PERSIST_SIZE_V23 && n != PERSIST_SIZE_V22)
         return 2;
     memset(&p, 0, sizeof p);
     memcpy(&p, raw, n);
+    if (n != sizeof p)
+        ctrl_encode(p.ctl);                         /* an older backup: the controller settings stay as they are */
+    else if (memcmp(p.ctl, "CTL1", 4))
+        return 2;
     if (p.magic != PERSIST_MAGIC || p.palette >= NPALETTES || p.lowcut > 1u || p.zoom > 1u || !panel_valid(&p.panel))
         return 2;
 #if FELUCCA_ARRANGER
@@ -1109,6 +1174,7 @@ static uint32_t settings_restore(const void *raw, uint32_t n)
     arrangement = p.arrangement;
 #endif
     lights_from_word(p.lights);
+    ctrl_decode(p.ctl);
     song.g[G_SYNC] = (int16_t)lights_sync;
     song.g[G_MIDI] = (int16_t)lights_mout;
     song.g[G_ROUTE] = (int16_t)lights_min;

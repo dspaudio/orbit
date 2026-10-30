@@ -160,8 +160,37 @@ static volatile uint32_t so_w, so_r;
 static uint32_t midi_in_q[MQ], midi_out_q[MQ];
 static volatile uint32_t mi_w, mi_r, mo_w, mo_r;
 static volatile uint8_t midi_in_lost;               /* a lost note message: seq.c releases MIDI-held notes after draining */
+#if ORBIT_BLE
+#include "ble/ble_api.h"
+#define BLE_OUT_Q 64u
+#define BLE_CLOCK_ROOM 8u
+/* One producer: the audio ISR. Main-loop consumption, enable and flushing
+ * hold fm1_irq_off/on; never re-enable interrupts inside the producer.
+ * Full: drop the newest whole packet and count it. Clocks stop at eight
+ * queued packets, so an idle main loop cannot build a stale clock backlog.
+ * No THRU: only events sent by ORBIT to USB are mirrored, once. */
+static uint32_t ble_out_q[BLE_OUT_Q];
+static volatile uint32_t ble_out_w, ble_out_r, ble_out_drops;
+static volatile uint8_t ble_out_on;
+static void orbit_ble_out_isr(uint32_t pkt)
+{
+    uint32_t used = ble_out_w - ble_out_r;
+    if (!ble_out_on)
+        return;
+    if (used >= BLE_OUT_Q || ((pkt & 0xFFFFu) == 0xF80Fu && used >= BLE_CLOCK_ROOM)) {
+        ble_out_drops++;
+        return;
+    }
+    ble_out_q[ble_out_w % BLE_OUT_Q] = pkt;
+    RING_PUBLISH();
+    ble_out_w++;
+}
+#endif
 static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
 {
+#if ORBIT_BLE
+    orbit_ble_out_isr(pkt);                         /* independent of USB configuration / USB queue space */
+#endif
     if (usb.config && mo_w - mo_r < MQ) {
         midi_out_q[mo_w % MQ] = pkt;
         RING_PUBLISH();
@@ -766,6 +795,133 @@ static void midi_in_event(uint32_t pkt)
     if (cin >= 8u)
         usb.rx_bad++;
 }
+
+#if ORBIT_BLE
+static uint32_t ble_notes[16][4];
+static uint16_t ble_channels, ble_release;
+static uint8_t ble_was_up;
+static uint32_t ble_rx_seen;
+
+/* Shared USB input semantics (cable 0), including USB-selected external
+ * clock. BLE is not a new clock selector or a MIDI THRU source.
+ * Keep eight slots for USB/TRS. A dropped BLE note triggers the same
+ * held-note recovery as a dropped USB note-off. */
+static int orbit_ble_in(uint32_t pkt)
+{
+    uint32_t before;
+    int took;
+    fm1_irq_off();
+    before = mi_w;
+    if (mi_w - mi_r < MQ - 8u)
+        midi_in_event(pkt & ~0xF0u);
+    else if ((pkt & 15u) == 8u || (pkt & 15u) == 9u)
+        midi_in_lost = 1;
+    took = mi_w != before;                          /* decide before USB/TRS can publish another packet */
+    fm1_irq_on();
+    return took;
+}
+
+/* ORBIT ignores CC123, so disconnect sends pedal-up plus explicit note-offs
+ * for the BLE-held keys instead. Retry pending releases before new input.
+ * As with USB/TRS, identical channel/note pairs share the existing ownership. */
+static int orbit_ble_release(void)
+{
+    uint32_t ch, word, bit;
+    for (ch = 0; ch < 16u; ch++) {
+        if (!(ble_release & (1u << ch)))
+            continue;
+        if (!orbit_ble_in(0xBu | (0xB0u | ch) << 8 | 64u << 16))
+            return 0;
+        for (word = 0; word < 4u; word++)
+            for (bit = 0; bit < 32u; bit++)
+                if (ble_notes[ch][word] & (1u << bit)) {
+                    if (!orbit_ble_in(8u | (0x80u | ch) << 8 | (word * 32u + bit) << 16))
+                        return 0;
+                    ble_notes[ch][word] &= ~(1u << bit);
+                }
+        ble_release &= (uint16_t)~(1u << ch);
+    }
+    return 1;
+}
+
+static void orbit_ble_bridge_service(void)          /* main loop only, even while logically OFF */
+{
+    uint32_t pkt, drops, budget = BLE_OUT_Q;
+    int up;
+    ble_service();
+    up = ble_get_status() == BLE_STATUS_CONNECTED;
+    drops = ble_midi_rx_drops();
+    if ((ble_was_up && !up) || drops != ble_rx_seen) {
+        ble_release |= ble_channels;
+        ble_channels = 0;
+    }
+    ble_rx_seen = drops;
+    ble_was_up = (uint8_t)up;
+    fm1_irq_off();
+    ble_out_on = (uint8_t)up;
+    if (!up)
+        ble_out_r = ble_out_w;
+    fm1_irq_on();
+    if (!orbit_ble_release())
+        return;
+    while (ble_midi_take(&pkt)) {
+        uint32_t ch = (pkt >> 8) & 15u, cin = pkt & 15u, note = (pkt >> 16) & 127u;
+        if (!up)
+            continue;
+        if (!orbit_ble_in(pkt)) {
+            if (cin == 8u || cin == 9u || (cin == 0xBu && note == 64u)) {
+                ble_release |= ble_channels;         /* a full core ring can lose a pedal-up as well as a note-off */
+                ble_channels = 0;
+            }
+            continue;
+        }
+        if (cin == 9u && (pkt >> 24)) {
+            ble_notes[ch][note >> 5] |= 1u << (note & 31u);
+            ble_channels |= (uint16_t)(1u << ch);
+        } else if (cin == 8u || cin == 9u) {
+            ble_notes[ch][note >> 5] &= ~(1u << (note & 31u));
+        } else if (cin == 0xBu && note == 64u) {
+            ble_channels |= (uint16_t)(1u << ch);
+        }
+    }
+    while (up && budget--) {
+        int got;
+        fm1_irq_off();
+        got = ble_out_r != ble_out_w;
+        if (got) {
+            pkt = ble_out_q[ble_out_r % BLE_OUT_Q];
+            ble_out_r++;
+        }
+        fm1_irq_on();
+        if (!got)
+            break;
+        ble_midi_out_pkt(pkt);
+    }
+}
+
+static const char *orbit_ble_status(void)
+{
+    static char text[40];
+    uint32_t code;
+    switch (ble_get_status()) {
+    case BLE_STATUS_CONNECTED: return "CONNECTED";
+    case BLE_STATUS_ADVERTISING: return "ADVERTISING";
+    case BLE_STATUS_STARTING: return "STARTING";
+    case BLE_STATUS_STOPPING: return "STOPPING";
+    case BLE_STATUS_FAILED: {
+        const char *why = ble_last_error(&code);
+        uint32_t i;
+        for (i = 0; i < 8u; i++)
+            text[i] = "FAILED: "[i];
+        for (i = 0; i < sizeof text - 9u && why[i]; i++)
+            text[8u + i] = why[i];
+        text[8u + i] = 0;
+        return text;
+    }
+    default: return "OFF";
+    }
+}
+#endif
 
 /* one EP1 OUT packet (<= 16 events) into the MIDI ring, or 0: fewer than 16 + 8 slots free, so the
  * packet stays (the host is NAKed) and is taken on a later poll: a burst from a DAW never drops a

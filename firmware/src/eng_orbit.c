@@ -164,6 +164,31 @@ static const preset_t ORBIT_FM4_PRESETS[] = {
     {"ORBIT ROUND", {35, 1, 2, 1, 85, 2, 65, 0}, {0, 75, 80, 25}, 0, 1, FX(0, 0, 0, 0)},
     {"ORBIT AURORA", {65, 1, 2, 4, 100, 1, 25, 12}, {45, 90, 100, 80}, 0, 0, FX(0, 20, 18, 40)},
 };
+/* UNISON (voice.c unison_spread, after SLOOP 2.8.4, isod89/sloop-fm1 91f3018): every oscillator an engine renders
+ * moved by r (Q32) of a turn of the note, each by its own frequency's share, as if started that much sooner.
+ * orbit_osc_note_on gives every voice the same phases, and the old ph[0]-only spread missed SWARM (s[0..5]) and
+ * PULSE's / FM4's other oscillators. Per extra voice at note-on, no division. */
+static void swarm_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    uint32_t k, count = (uint32_t)clamp(t->p[P_E0], 1, 6);
+    for (k = 0; k < count; k++) {                    /* swarm_render: inc + (inc >> 16) x SPREAD x offset */
+        int32_t offset = (int32_t)(2 * k) - (int32_t)count + 1;
+        v->s[k] = (int32_t)((uint32_t)v->s[k] + r + (uint32_t)((int32_t)(r >> 16) * t->p[P_E1] * offset));
+    }
+}
+static void orbit_pulse_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    v->ph[0] += r;                                   /* ph[2] is the PWM LFO: not an oscillator of the note */
+    v->ph[1] += r + (r >> 16) * (uint32_t)t->p[P_E1];
+}
+static void orbit_fm4_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    v->ph[0] += r;                                   /* integer ratios: the shares wrap exactly */
+    v->ph[1] += r * (uint32_t)t->p[P_E1];
+    v->ph[2] += r * (uint32_t)t->p[P_E2];
+    v->s[0] = (int32_t)((uint32_t)v->s[0] + r * (uint32_t)t->p[P_E3]);
+}
+
 #define ORBIT_PARAM(label, lo, hi, def) {label, F_INT, lo, hi, def, 0, 0}
 #define ORBIT_UNUSED ORBIT_PARAM("--", 0, 0, 0)
 static const engine_t ENG_SWARM = {

@@ -1,5 +1,100 @@
 # ORBIT validation record
 
+## ORBIT 0.9.0 and 0.9.B candidates, 2026-10-30
+
+These are local candidates, not published or hardware-qualified releases.
+The default package identifies its firmware as `ORBIT 0.9.0`; the separate
+Bluetooth MIDI package uses `ORBIT 0.9.B`. Both retain `FM-1_900`, ORP8,
+OPB3, `step_t` and editor protocol 13. The controller settings extend PER3
+from 88 to 104 bytes; legacy settings readers and the web backup validator
+have focused compatibility tests.
+
+### Checks completed so far
+
+| Check | Result |
+| --- | --- |
+| Default target build, venv Python and `sh build.sh` | Exit 0; app 564,888 B, static RAM 78,760 / 98,304 B, POOL 328,444 / 344,064 B |
+| Default `tests/target_budget.py` | Exit 0 with unchanged budgets and +10% tolerance; SAMPLE 125 / 126, GRAIN 1764 / 1734, NOISE 286 / 264 |
+| `sh tools/check_default_isolation.sh` | Exit 0; two fresh snapshots produce byte-identical default `felucca.bin`, including when every BLE-only file is deleted |
+| Golden regeneration and subsequent `regress` | User-approved update of all 218 hashes; subsequent run: 0 changed, 0 gone, 0 health/voice/routing/CPU failures and 0 crashes |
+| `node web/test_web.mjs` | Exit 0, including 104-byte PER3 backup acceptance and invalid-size rejection; reverting the validator makes the new assertion fail |
+| `python3 tools/orbit_check.py` before the final loop-cost optimization | 44 PASS; the unchanged Linux-only `irq_init_test` cannot compile on macOS |
+| `irq_init_test` with Linux amd64 `gcc:13` | Exit 0; cold/warm divide-trap masking preserves unrelated bits, ETM and vectors |
+| Integrated `sh tests/run_tests.sh` with Homebrew LLVM sanitizers and explicit macOS SDK | Exit 0; includes the new SLOOP fix tests, editor fuzz, BLE codec/bridge/stand-in checks, golden regression, default target budgets and web checks |
+| Final `ORBIT_BLE=1 JIELI_DOCKER=1 python3 tools/build.py` with explicit `AC79_SDK` | Exit 0; `build/orbit-ble.fwsc` 610,032 B, app 516,500 B, static RAM 92,932 / 98,304 B, POOL 293,904 / 344,064 B |
+| Final BLE RAM-code gate | 7,084 B; 2,362 instructions and 211 calls, all confined to RAM code with no XIP reference |
+| `python3 tests/orbit_preview_test.py` | Exit 0 |
+| Full `python3 tools/orbit_check.py` in a disposable Linux amd64 `gcc:13` container | Exit 0; all 45 cases PASS, including `irq_init_test` |
+
+The BLE package passes storage limits, not the default SAMPLE/GRAIN cost
+baselines: the latest optimization report records BLE costs of 304 and
+2074 respectively, versus default budgets of 126 and 1734. Those baselines
+remain unchanged. Host CPU measurements are not radio-load timing proof.
+
+### Authorized 0.9.B installation
+
+On 2026-10-30, the connected FM-1 answered the installer's identity request
+as `FM-1_900` on port `Felucca`. Pre-install INFO and PING were unreliable,
+but BK_LIST/BK_GET succeeded with bounded same-connection retries. All 15
+backup objects passed CRC checks, including the 3,840-byte ORP8 working
+project, 88-byte settings, 1,464-byte SYN kits and 40-byte MIDI settings.
+The backup is retained at `build/backups/pre-0.9.B.json`; its firmware
+metadata explicitly records that INFO was unavailable.
+
+The user authorized installation after tests. The command
+`python3 tools/fm1_install.py --port Felucca --yes build/orbit-ble.fwsc`
+completed with exit 0: writing 100%, restart, then
+`done: the FM-1 runs FM-1_900`.
+Installed package SHA-256:
+`4aad8a7c8d244568cf7ea606f9297c01aedda05c8ffeadf4001fcdd6e854c0ae`.
+Default package SHA-256:
+`e2c28bcdbe56ddfd1cfa626e6bdfc3062b051c2f5cffa7a5413599f6454f03eb`.
+The model identity alone is not a version or BLE functionality check.
+After installation, the read-only INFO query returned
+`FELUCCA ORBIT 0.9.B` (17 engines, protocol 13), confirming the running
+firmware version. The first request timed out; the second request on the
+same MIDI connection succeeded.
+
+Logs and lane reports are retained in `build/verification/0.9/`.
+The temporary run/lane directories and the downloaded `gcc:13` image were
+removed after preserving evidence; no verification container remains.
+The retained controller and Bluetooth error-screen host renders show no
+overlapping labels. These images do not prove a physical BLE connection.
+Static RAM headroom is not total runtime free RAM; POOL, main/IRQ stacks
+and BLE task stacks are separate. No physical stack high-water, radio
+pairing, MIDI delivery, latency or audio-under-radio-load measurement has
+been made.
+
+### Intended audio changes and golden attribution
+
+The SLOOP 2.8.4 ports originate at `isod89/sloop-fm1` commit `91f3018`.
+Individual lane reports record isolated comparisons against ORBIT `5824b5b`.
+Rounded part/master mixing changes every one of the 218 existing golden
+rows. The following rows additionally change under their respective fix
+alone:
+
+| Fix | Additional affected rows |
+| --- | --- |
+| UNISON oscillator-state spread | `preset/ANALOG/12_SUPERSAW`, `mode/DIGITAL/UNISON` |
+| PHYS string-loop phase compensation | `preset/PHYS/02_STR_PLUCK`, `07_SITAR`, `08_PHYS_HARP`, `09_NYLON_GTR`, `10_STEEL_GTR`, `11_MUTED_GTR`, `12_PLUCK_BASS`, `13_KOTO`, `14_BANJO`, `16_TANPURA` (all under `preset/PHYS/`) |
+| NOISE high-rate LFSR and colour bounds | `preset/NOISE/02_NZ_ARCADE`, `preset/NOISE/10_RADIO` |
+| GRAIN held-note scheduling | `preset/GRAIN/00_LOFI_CLOUD`, `preset/GRAIN/04_SHIMMER` |
+
+SAMPLE/GRAIN pitch-limit fixes alone, input sanitation, controller mode
+and BLE integration produce no additional default golden changes in the
+isolated lane comparisons. The final loop-cost optimization preserves all
+218 pre-optimization hashes. CPU baseline and target-budget files were not
+updated.
+
+The first integrated target check caught SAMPLE 593 / 126, GRAIN
+2387 / 1734 and NOISE 308 / 264 overruns despite passing host tests.
+The correction separates SAMPLE block preparation from its checked sample
+loop, prevents per-block grain spawning from being inlined into the render
+loop, replaces its wide span multiplication with equivalent bounded
+32-bit arithmetic, and separates NOISE's integer clock count from its
+fractional phase before the sample loop. The static checker does not
+establish total execution time or account fully for out-of-line callees.
+
 ## ORBIT 0.8.2 release package, 2026-10-29
 
 This release adds the delay **TYPE** (MONO / WIDE / PING), removes the

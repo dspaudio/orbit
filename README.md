@@ -4,7 +4,9 @@
 
 ORBIT is a four-track groovebox firmware for the **M-VAVE FM-1**: three synth parts and a drum machine, played through a color-coded Synth / Drum / Event Tape / Mixer workflow. Record a loop, turn it into a song, and keep your favorite sound controls together with user macros. Based on SLOOP/Felucca, with original ORBIT engines and graphics inspired by the original OP-1's four encoder roles.
 
-[Install](#install) · [Get started](GUIDE.md#get-started) · [User guide](GUIDE.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [0.8.2 release notes](docs/releases/0.8.2.md) · [Try the native preview](#try-the-native-preview)
+[Play in your browser](https://dspaudio.github.io/orbit-web-emu/) · [Install](#install) · [Get started](GUIDE.md#get-started) · [User guide](GUIDE.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [0.9.0 release notes](docs/releases/0.9.0.md) · [0.9.B release notes](docs/releases/0.9.B.md)
+
+**0.9.0 / 0.9.B:** a [MIDI controller mode](GUIDE.md#midi-controller-mode) that turns the panel into a USB MIDI keyboard and four-knob controller, selected SLOOP 2.8.4 bug fixes, and a separate Bluetooth MIDI build, **0.9.B** (`orbit-ble.fwsc`). Both packages were installed and their versions read back. The device owner confirmed BLE pairing and synchronization; worst-case radio/audio timing remains unmeasured. Compare both sound builds in the [web emulator](https://dspaudio.github.io/orbit-web-emu/).
 
 **0.8.2:** a stereo delay **TYPE** (MONO / WIDE / PING), and about 19 KB of static RAM back from SLOOP 2.7 memory ports and the removed visualizer. The **FM-1** release keeps ORP8/OPB3 storage; the device owner confirmed normal operation and the delay types after installation.
 
@@ -43,12 +45,32 @@ Tape edits **sequencer events**, including notes, drum hits, timing, fills and p
 | Effects | Per-track **INSERT** with eight effect types and dry/wet; resonant LP/HP or BP track filter, slicer and sends; **27 punch-in effects**, REV/ECHO THROW and dotted delay; master DUST/DUCK/filter and a look-ahead limiter |
 | Texture | A separate background bed: vinyl, tape, rain, wind, radio, room tone or USR sample, with tone, tempo movement and optional ducking |
 | Your material | Four user sample slots, sample CHOP and drum-kit editing, SYN1-SYN4 drum synthesis, 32 USER sounds, four project/section slots and a 27-patch FM6 bank |
-| Connections | USB MIDI, TRS MIDI IN, MIDI clock, sustain, pitch bend, Program Change and **16 persistent MIDI-learn slots**; stereo USB audio at 44.1 or 48 kHz |
+| Connections | USB MIDI, TRS MIDI IN, MIDI clock, sustain, pitch bend, Program Change and **16 persistent MIDI-learn slots**; a [MIDI controller mode](GUIDE.md#midi-controller-mode) that sends notes and CCs from the panel; stereo USB audio at 44.1 or 48 kHz |
 | Editor | Sound and macro editing, piano roll, MIDI files, song arrangement, DX7 SysEx, samples, libraries and full backup/restore over Web MIDI |
 
 CLUSTER uses a translated original OP-1 #246 oscillator core with 16 raw presets; pitch, envelope, velocity and effects are ORBIT's. Its four-voice cap is conditional on the shared budget and available CPU time, not a hardware polyphony guarantee. Read [CLUSTER's scope and limits](docs/OP1-CLUSTER.md).
 
 On **FX > FILTER**, each synth track and the drum track have **FILT**, **RES** and **TYPE**. FILT keeps its -64..63 range and zero bypass. TYPE selects the original **LP/HP** behavior or **BP**, which sweeps the band's centre from low to high across the range. RES defaults to 40 out of 127, shown as about **31%**, matching the previous fixed resonance. This is separate from ANALOG's own filter and the master filter. See [track-filter controls](GUIDE.md#track-filter).
+
+### Bluetooth MIDI build
+
+Bluetooth MIDI exists only in the separate **0.9.B** build, `orbit-ble.fwsc`. The default `orbit.fwsc` never turns the radio on. In 0.9.B you start Bluetooth by hand from **MENU > SYSTEM > BLUETOOTH**, and the FM-1 shows up as a Bluetooth MIDI device named `ORBIT FM-1`. It mirrors ORBIT's USB MIDI output and treats incoming Bluetooth MIDI like USB MIDI. Pairing, latency and audio under radio load are **untested on hardware**. The build also trades some features for room: the melodic samples below, a shorter delay line and refused writes over the radio calibration. Read the [Bluetooth MIDI build section of the guide](GUIDE.md#bluetooth-midi-build-09b) before installing it.
+
+### Sounds replaced in the Bluetooth build
+
+The separate Bluetooth MIDI build (`orbit-ble.fwsc`) needs flash for the Bluetooth stack, so it leaves out the melodic built-in samples (171,870 bytes). Each removed sample set keeps its name and is played by a light FM voice instead; existing presets and projects that use these sets load and play the replacement. The drum samples (PERC: GM KIT and the sampled drum kits) and your own USR1-USR4 samples are kept unchanged. The default build `orbit.fwsc` keeps every sample.
+
+| Set | Replacement in the Bluetooth build | Factory sounds that use it |
+| --- | --- | --- |
+| PIANO | 3-operator FM electric piano with a tine partial (ratio 14) | SAMPLE: GRAND PNO, DUSTY PNO, LOFI KEYS; GRAIN: LOFI CLOUD, SHIMMER, PNO FREEZE |
+| BASS | 2-operator FM plucked bass | SAMPLE: UP BASS, DEEP BASS |
+| VIBES | 2-operator FM bell, ratio 1:4 | SAMPLE: VIBES; GRAIN: VIBE HAZE |
+| HORNS | 2-operator FM brass with an index swell | SAMPLE: HORN STAB; GRAIN: DRONE, HORN CLOUD |
+| STRGS | 2-operator FM, slightly detuned, slow attack | SAMPLE: STRING STB; GRAIN: STR CLOUD |
+| FLUTE | 2-operator FM with breath noise | SAMPLE: LOFI FLUTE; GRAIN: FLUTE DUST |
+| SCRCH | Noise and triangle pitch sweep | SAMPLE: SCRATCH |
+
+These replacements are approximations, not the recorded instruments.
 
 ## Listen and explore
 
@@ -84,6 +106,16 @@ The source version is **ORBIT 0.8.2**, and the default FM-1 install identity rem
 
 **M-Vave SMK-37:** board support is merged, with model-specific source builds for SMK-37 Pro, SMK-37 Elite and MKE-P37. The port adds velocity keys/pads, fader banks, wheels and a pad sound picker. The feature list above describes the default FM-1 build: SMK-37 has only **USR1/USR2** sample storage and **no TRS MIDI IN**. Use a package for the matching model and read the [SMK-37 controls and safety instructions](SMK37.md). **The v0.8.2 release does not include SMK-37 binaries.**
 
+## Play in your browser
+
+**[Open the ORBIT web emulator](https://dspaudio.github.io/orbit-web-emu/)**
+and press **POWER ON**. No FM-1 or local installation is required: the real
+firmware sound engine and display run as WebAssembly in your browser.
+Select **0.9.0** for original melodic samples or **0.9.B** for FM replacements.
+Use the on-screen keys and knobs or your computer keyboard to play.
+Check the version shown on the page; browser audio does not establish
+FM-1 hardware performance or Bluetooth connectivity.
+
 ## Try the native preview
 
 Python 3, a C compiler and Pillow are required:
@@ -93,14 +125,14 @@ python -m pip install -r requirements.txt
 python tools/orbit_preview.py --port 8080
 ```
 
-Open http://127.0.0.1:8080 and press **Start audio**. The preview includes its own demo pattern; firmware boot does not load that preview pattern. Audio is buffered approximately 250-550 ms, project saves are **nonpersistent host doubles**, and sample upload is unsupported. Button taps work; held-button menus and layer combinations require the hardware. The separately deployed [WebAssembly emulator](https://dspaudio.github.io/orbit-web-emu/) is not automatically updated by this release.
+Open http://127.0.0.1:8080 and press **Start audio**. The preview includes its own demo pattern; firmware boot does not load that preview pattern. Audio is buffered approximately 250-550 ms, project saves are **nonpersistent host doubles**, and sample upload is unsupported. Button taps work; held-button menus and layer combinations require the hardware. For the hosted browser version, use the [WebAssembly emulator](https://dspaudio.github.io/orbit-web-emu/).
 
 ## Documentation
 
 - [GUIDE.md](GUIDE.md): panel workflow, recording, Event Tape, sound design, macros and saving.
 - [MIDI control](docs/MIDI-CONTROL.md): channels, CC learn, MiniLab routing and controller limits.
 - [BUILDING.md](BUILDING.md): build, local installer site and checks.
-- [0.8.2 release notes](docs/releases/0.8.2.md), [0.8.1 release notes](docs/releases/0.8.1.md), [0.8.0 release notes](docs/releases/0.8.0.md) and [validation record](docs/VALIDATION.md).
+- [0.9.0 candidate notes](docs/releases/0.9.0.md), [0.8.2 release notes](docs/releases/0.8.2.md), [0.8.1 release notes](docs/releases/0.8.1.md), [0.8.0 release notes](docs/releases/0.8.0.md) and [validation record](docs/VALIDATION.md).
 - Earlier releases: [0.7.1](docs/releases/0.7.1.md), [0.7.0](docs/releases/0.7.0.md), [0.6.0](docs/releases/0.6.0.md), [0.5.0](docs/releases/0.5.0.md), [0.4.1](docs/releases/0.4.1.md); [SLOOP 2.5 integration](docs/SLOOP-2.5-INTEGRATION.md).
 - [Original ORBIT engines](docs/OP1-ENGINES.md), [CLUSTER](docs/OP1-CLUSTER.md), [design](DESIGN.md), [editor protocol](web/EDITOR_PROTOCOL.md) and [Dots](DOTS.md).
 

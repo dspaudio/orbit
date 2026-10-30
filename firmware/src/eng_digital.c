@@ -142,6 +142,17 @@ static const preset_t DIGITAL_PRESETS[] = {
     {"FM GRAND", {4, 1, 2, 12, 60, 40, 10, 0}, {0, 90, 20, 60}, 0, 0, FX(0, 20, 14, 30)},
 };
 
+/* UNISON (voice.c unison_spread; ported from SLOOP 2.8.4, isod89/sloop-fm1 91f3018): the four operators moved
+ * together by r (Q32) of a turn of the note, each by its ratio's share (digital_note_on zeroes them all) */
+static void digital_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    const int16_t *p = t->p;
+    v->ph[0] += r;
+    v->ph[1] += (uint32_t)(((uint64_t)r * RATIO_Q8[p[P_E1] % 15]) >> 8);
+    v->ph[2] += (uint32_t)(((uint64_t)r * RATIO_Q8[p[P_E2] % 15]) >> 8);
+    v->s[7] = (int32_t)((uint32_t)v->s[7] + (uint32_t)(((uint64_t)r * RATIO_Q8[p[P_E3] % 15]) >> 8));
+}
+
 static const engine_t ENG_DIGITAL = {
     "DIGITAL", {"OPS", "MOD"},
     {

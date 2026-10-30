@@ -6,6 +6,10 @@
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+#if ORBIT_BLE
+#include "fm1_ble_hal.h"
+#include "ble/ble_api.h"
+#endif
 #if BOARD_SMK37
 #include "smk_input.h"           /* keys, buttons, encoders, LEDs, pads, faders, wheels, battery */
 #else
@@ -95,6 +99,33 @@
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
 #endif
 #if FELUCCA_FLASH
+#if ORBIT_BLE
+#include "fm1_flash_map.h"
+static uint32_t orbit_ble_rf_sectors;
+static uint8_t orbit_ble_rf_scanned;
+/* Inlined into the RAM flash driver: no XIP call or table while SFC is off.
+ * Before discovery fail closed on the entire RF scan window; afterwards
+ * preserve EVERY sector containing a valid stock trim, including a record
+ * crossing a sector boundary. FM6/USR4 writes touching it are refused. */
+static inline __attribute__((always_inline)) int orbit_ble_write_ok(uint32_t off, uint32_t n)
+{
+    uint32_t first, last, mask;
+    if (!n || off >= 0xFC000u || off + n <= 0xE5000u)
+        return 1;
+    if (!orbit_ble_rf_scanned)
+        return 0;
+    first = off <= 0xE5000u ? 0u : (off - 0xE5000u) >> 12;
+    last = off + n >= 0xFC000u ? 22u : (off + n - 1u - 0xE5000u) >> 12;
+    mask = ((1u << (last + 1u)) - 1u) & ~((1u << first) - 1u);
+    return !(orbit_ble_rf_sectors & mask);
+}
+#undef FL_STORE_OK
+#define FL_STORE_OK(off, n) (FL_IN(off, n, FL_DATA_LO, FL_DATA_HI) || FL_IN(off, n, FL_GLOB_LO, FL_GLOB_HI) || \
+                            FL_IN(off, n, FL_FM6_LO, FL_FM6_HI) || FL_IN(off, n, FL_USR4_LO, FL_USR4_HI) || \
+                            FL_IN(off, n, 0x93000u, 0x95000u))
+#undef FL_GUARD
+#define FL_GUARD(off, n) (FL_RANGE_OK(off, n) && orbit_ble_write_ok(off, n))
+#endif
 #include "fm1_flash.h"
 static uint8_t flash_ok;                 /* JEDEC id matched at boot (persist_boot) */
 static int st_read(uint32_t off, void *dst, uint32_t n)   /* 256-byte IRQ-off windows: audio keeps up */
@@ -147,6 +178,121 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 #endif
 #include "upreset.c"          /* user presets (read in the XIP window; a RAM mirror without the flash) */
 #include "project.c"
+#if ORBIT_BLE
+#if !FELUCCA_FLASH || BOARD_SMK37
+#error "ORBIT_BLE requires the FM-1 flash layout"
+#endif
+/* Platform glue adapted from Hortator 4e40f27, DEADACTIVE, core_ble_api.c
+ * and bt_devs.c. BLM1 is a separate A/B object, not project/preset/settings
+ * growth. RF callbacks cache only; flash writes happen after service returns. */
+#include "ble/ble_vm.c"
+static struct {
+    uint32_t magic;
+    uint8_t mac[6], mac_valid, rf_valid, rf[68];
+} orbit_ble_store;
+static uint8_t orbit_ble_dirty;
+#define ORBIT_BLE_STORE_MAGIC 0x314D4C42u             /* BLM1 */
+static uint32_t orbit_ble_ms(void) { return fm1_ms; }
+static void orbit_ble_wdt(void) { fm1_wdt_feed(); }
+static void orbit_ble_reboot(void) { fm1_reboot(); for (;;) ; }
+static void orbit_ble_audio_stop(void) { fm1_audio_stop(); }
+static void orbit_ble_irq_attach(uint32_t n, void (*h)(void), uint32_t prio)
+{
+    fm1_guard_unlock_top();
+    fm1_irq_attach(n, h, prio);
+    fm1_guard_lock_top();
+}
+static void orbit_ble_irq_mask(uint32_t n) { fm1_irq_mask(n); }
+static void orbit_ble_irq_unmask(uint32_t n) { fm1_irq_unmask(n); }
+static uint32_t orbit_ble_irq_is_masked(uint32_t n) { return fm1_irq_is_masked(n); }
+static void orbit_ble_stack_window(void)
+{
+    extern uint32_t _pool_start[];
+    fm1_guard_stack_window((uintptr_t)_pool_start, (uintptr_t)_sstack_top);
+}
+static int orbit_ble_flash_read(uint32_t off, void *buf, uint32_t n)
+{
+    if (!flash_ok || !buf || !n || off < 0xE5000u || off >= 0xFC000u || n > 0xFC000u - off)
+        return -1;
+    return st_read(off, buf, n);
+}
+static int orbit_ble_rf_get(uint8_t rec[68])
+{
+    if (!orbit_ble_store.rf_valid || !ble_vm_rf_ok(orbit_ble_store.rf))
+        return 0;
+    memcpy(rec, orbit_ble_store.rf, 68);
+    return 1;
+}
+static void orbit_ble_rf_keep(const uint8_t rec[68])
+{
+    if (ble_vm_rf_ok(rec) && (!orbit_ble_store.rf_valid || memcmp(orbit_ble_store.rf, rec, 68))) {
+        memcpy(orbit_ble_store.rf, rec, 68);
+        orbit_ble_store.rf_valid = 1;
+        orbit_ble_dirty = 1;
+    }
+}
+static void orbit_ble_mac(uint8_t addr[6])
+{
+    if (orbit_ble_store.mac_valid != 0xA5u) {
+        uint32_t i, x = fm1_ticks() ^ fm1_ms * 2654435761u ^ st_crc32(orbit_ble_store.rf, 68);
+        for (i = 0; i < 6u; i++) {
+            x = x * 1103515245u + 12345u;
+            orbit_ble_store.mac[i] = (uint8_t)(x >> 16);
+        }
+        orbit_ble_store.mac[0] |= 0xC0u;
+        orbit_ble_store.mac[5] |= 0xC0u;
+        orbit_ble_store.mac_valid = 0xA5u;
+        orbit_ble_dirty = 1;
+    }
+    memcpy(addr, orbit_ble_store.mac, 6);
+}
+static void orbit_ble_bind(void)
+{
+    static const ble_platform_t platform = {
+        orbit_ble_ms, orbit_ble_wdt, orbit_ble_reboot, orbit_ble_audio_stop,
+        orbit_ble_irq_attach, orbit_ble_irq_mask, orbit_ble_irq_unmask, orbit_ble_irq_is_masked,
+        orbit_ble_stack_window, orbit_ble_flash_read, orbit_ble_mac, orbit_ble_rf_get, orbit_ble_rf_keep
+    };
+    uint8_t buf[512], rec[68];
+    uint32_t off, i;
+    int scanned = 1;
+    if (flash_ok && (st_load(OBJ_BLE, &orbit_ble_store, sizeof orbit_ble_store) != sizeof orbit_ble_store ||
+                     orbit_ble_store.magic != ORBIT_BLE_STORE_MAGIC))
+        memset(&orbit_ble_store, 0, sizeof orbit_ble_store);
+    orbit_ble_store.magic = ORBIT_BLE_STORE_MAGIC;
+    for (off = 0xE5000u; off < 0xFC000u; off += sizeof buf - 71u) {
+        uint32_t n = 0xFC000u - off < sizeof buf ? 0xFC000u - off : sizeof buf;
+        fm1_wdt_feed();
+        if (orbit_ble_flash_read(off, buf, n)) {
+            scanned = 0;
+            break;
+        }
+        for (i = 0; i + 72u <= n; i++)
+            if (ble_vm_rf_trim(buf + i, 72, rec)) {
+                uint32_t a = off + i - 0xE5000u;
+                orbit_ble_rf_sectors |= (1u << (a >> 12)) | (1u << ((a + 71u) >> 12));
+                orbit_ble_rf_keep(rec);
+            }
+        if (n < sizeof buf)
+            break;
+    }
+    orbit_ble_rf_scanned = (uint8_t)scanned;
+    {
+        uint8_t addr[6];
+        orbit_ble_mac(addr);                            /* keep identity before audio/transport can defer saves */
+    }
+    if (orbit_ble_dirty && flash_ok && st_save(OBJ_BLE, &orbit_ble_store, sizeof orbit_ble_store) == 0)
+        orbit_ble_dirty = 0;
+    (void)ble_configure(&platform);                    /* once; never starts the radio */
+}
+static void orbit_ble_core_service(void)
+{
+    orbit_ble_bridge_service();
+    if (orbit_ble_dirty && flash_ok && !song.playing && !transport_req &&
+        st_save(OBJ_BLE, &orbit_ble_store, sizeof orbit_ble_store) == 0)
+        orbit_ble_dirty = 0;
+}
+#endif
 #if FELUCCA_OTA
 static uint8_t recovery_active;
 #if BOARD_SMK37

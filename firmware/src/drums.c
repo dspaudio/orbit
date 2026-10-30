@@ -304,7 +304,8 @@ static void drum_on(uint32_t note, uint32_t vel)
     {
         const smp_zone_t *z = drum_zone_of(v);
         v->s[3] = sample_next(z, v, 0);
-        v->s[5] = (int32_t)((pow2_q16((int32_t)note * 16 - z->root16) >> 8) * (z->rate >> 8));
+        /* bounded (SLOOP 2.8.4): a user kit zone's root16 is not validated, pow2_q16 needs d16 >= -3072 */
+        v->s[5] = (int32_t)((pow2_q16(clamp((int32_t)note * 16 - z->root16, -1536, 2047)) >> 8) * (z->rate >> 8));
     }
     {
         uint32_t vi = (uint32_t)(v - drums.v);
@@ -313,7 +314,7 @@ static void drum_on(uint32_t note, uint32_t vel)
         drums.synth[vi] = 0;
         drums.filter[vi] = 0;
         drums.env[vi] = 32767;
-        if (shift) v->s[5] = (int32_t)((pow2_q16((int32_t)note * 16 + shift * 16 - SMP_ZONES[zi].root16) >> 8) * (SMP_ZONES[zi].rate >> 8));
+        if (shift) v->s[5] = (int32_t)((pow2_q16(clamp((int32_t)note * 16 + shift * 16 - SMP_ZONES[zi].root16, -1536, 2047)) >> 8) * (SMP_ZONES[zi].rate >> 8));
     }
 }
 

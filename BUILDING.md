@@ -1,6 +1,6 @@
 # Building ORBIT
 
-The current release is **ORBIT 0.8.2**, with the stereo delay TYPE and SLOOP 2.7 memory savings for the default **FM-1** build. The device owner confirmed normal operation and the delay types after installation. Device builds require the pi32v2 toolchain and AC79 SDK. The [validation record](docs/VALIDATION.md#orbit-082-release-package-2026-10-29) owns package hashes, resource measurements and detailed evidence, with earlier release results kept historical. Generated packages are not committed to the repository.
+The default release is **ORBIT 0.9.0**; **0.9.B** is the separate Bluetooth MIDI build. Both target the **FM-1** and have been installed with version readback. Device builds require the pi32v2 toolchain and AC79 SDK. The [validation record](docs/VALIDATION.md#orbit-090-and-09b-candidates-2026-10-30) owns package hashes, resource measurements and detailed evidence, with earlier release results kept historical. Generated packages are not committed to the repository.
 
 The build produces these artifacts in `build/`:
 
@@ -50,12 +50,12 @@ sh build.sh
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
-Build the 0.8.2 package with `PYTHON=~/.jieli/orbit-venv/bin/python sh build.sh`.
-The default source version is `ORBIT 0.8.2`, and the install identity remains
+Build 0.9.0 with `PYTHON=~/.jieli/orbit-venv/bin/python sh build.sh`.
+The default source version is `ORBIT 0.9.0`, and the install identity remains
 `FM-1_900`. **Don't use `--release`:** that upstream option accepts only
 single-digit `X.Y` versions, changes the identity and appends BETA. It does
-not accept `0.8.2`. Confirm the actual package and source version before
-labelling a generated site; the site generator's `--version 0.8.2` supplies
+not accept `0.9.0` or `0.9.B`. Confirm the actual package and source version before
+labelling a generated site; the site generator's `--version 0.9.0` supplies
 matching metadata, not a firmware version rewrite.
 
 Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
@@ -70,6 +70,23 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 | `FELUCCA_UART` | 1 (SMK-37: 0) | TRS MIDI IN (the 3.5 mm jack); must stay 0 on the SMK-37 (PH8 is a key row there) |
 | `FELUCCA_ICONS` | 1 if the icon atlas exists | Built-in icons |
 | `FELUCCA_SLICE` | 0 | Optional SLICE engine |
+
+### Bluetooth MIDI build (0.9.B)
+
+The default build is unchanged: `sh build.sh` writes `build/orbit.fwsc` (`ORBIT 0.9.0`). The separate Bluetooth MIDI build (`ORBIT 0.9.B`) needs an extra SDK snapshot with the Bluetooth libraries:
+
+1. Download the JieLi AC79 SDK at commit `64afb30b805af5f5d3c2e6471e970c3fd0ba40ad` from
+   `https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK/repository/archive/64afb30b805af5f5d3c2e6471e970c3fd0ba40ad.zip`
+   and unpack it to `~/fw-AC79_AIoT_SDK-V1.2.0`, or point `AC79_BT_SDK` at it. The directory name is only the expected path; the snapshot itself is tagged `AC79NN_SDK_V1.2.13_2026-04-20`.
+2. Build with `ORBIT_BLE=1`:
+
+```sh
+ORBIT_BLE=1 JIELI_DOCKER=1 python3 tools/build.py
+```
+
+`JIELI_DOCKER=1` runs the toolchain in Docker, which macOS needs; it is the default there. The build checks every SDK file against the SHA-256 pins in `tools/ble_libs.py` before compiling and stops on a mismatch. The output is `build/orbit-ble.fwsc` with the same `FM-1_900` identity. The Bluetooth build's intermediate files go to `build/ble/`.
+
+`sh tools/check_default_isolation.sh` builds the default `felucca.bin` twice in a temporary copy, once with all Bluetooth-only files deleted, and checks that both are byte-identical.
 
 ### Merged SMK-37 target
 

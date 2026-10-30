@@ -13,6 +13,14 @@ static inline int32_t soft_knee(int32_t y, int32_t k)
     a = k + (softclip((a - k) * 2) >> 1);
     return y < 0 ? -a : a;
 }
+/* UNISON start-phase spread (voice.c unison_spread; ported from SLOOP 2.8.4, isod89/sloop-fm1 91f3018): r (Q32, a
+ * turn of the note at pitch p16, 1/16 semitone) expressed in turns of an oscillator d16 (1/16 semitone) above it,
+ * i.e. the same time shift at that oscillator's frequency. Called once per extra voice at note-on, never per sample */
+static uint32_t uni_turns(uint32_t r, int32_t p16, int32_t d16)
+{
+    uint32_t b = pitch_inc((uint32_t)clamp(p16, 0, 2047));
+    return b ? (uint32_t)(((uint64_t)r * pitch_inc((uint32_t)clamp(p16 + d16, 0, 2047))) / b) : r;
+}
 #include "eng_analog.c"
 #include "eng_digital.c"
 #include "eng_phase.c"

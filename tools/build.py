@@ -44,6 +44,7 @@ APP_SLOT = fm1pkg_make.APP_SLOT
 LOADER_LOAD = 0x01C0A800
 LOADER_NAME = b"usb_hid_ota.bin"    # the file name the SPL looks for
 DOCKER_IMAGE = os.environ.get("JIELI_DOCKER_IMAGE", "debian:bookworm-slim")
+SDK_MOUNT = None                    # ORBIT_BLE only: pinned SDK mounted read-only
 CFLAGS = ["-Os", "-ffunction-sections", "-fdata-sections", "-fno-builtin", "-Wall", "-Wno-unused-function"]
 LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+)\s*\t(.*)$")
 
@@ -82,8 +83,9 @@ def tc(tool, *args):
     if tool == "cc":                # the toolchain's cc wrapper needs python3; call clang directly
         tool, rel = "pi32v2/bin/clang", ["-target", "pi32v2", *rel]
     if use_docker():
+        sdk = ["-v", f"{SDK_MOUNT}:/sdk:ro"] if SDK_MOUNT else []
         cmd = ["docker", "run", "--rm", "--platform", "linux/amd64", "-v", f"{SRC}:/work",
-               "-v", f"{toolchain()}:/opt/jieli:ro", "-w", "/work", DOCKER_IMAGE, f"/opt/jieli/{tool}", *rel]
+               *sdk, "-v", f"{toolchain()}:/opt/jieli:ro", "-w", "/work", DOCKER_IMAGE, f"/opt/jieli/{tool}", *rel]
     else:
         cmd = [str(toolchain() / tool), *rel]
     r = subprocess.run(cmd, cwd=SRC, capture_output=True, text=True)
@@ -184,8 +186,38 @@ def build_loader():
 
 # ---- app
 
+def build_ble(flags):
+    """Hortator 4e40f27 / DEADACTIVE, felucca-ble ble-kit: SDK config visible to LTO."""
+    import ble_libs
+    libdir, cfgdir = OUT / "blelibs", OUT / "blecfg"
+    libdir.mkdir(exist_ok=True)
+    cfgdir.mkdir(exist_ok=True)
+    libs = ble_libs.libs()
+    for p in libs:
+        shutil.copy(p, libdir / p.name)
+    objs = ble_libs.members(libdir)
+    cmds = [("cc", "-c", FW / "src" / "ble" / "fm1_ctx.S", "-o", OUT / "fm1_ctx.o")]
+    objs.append(OUT / "fm1_ctx.o")
+    for source in ble_libs.SDK_CONFIG_SOURCES:
+        obj = cfgdir / (Path(source).stem + ".o")
+        cmds.append(("cc", *ble_libs.SDK_CFLAGS, "-c", f"/sdk/{source}", "-o", obj))
+        objs.append(obj)
+    obj = cfgdir / "ble_lto_stubs.o"
+    cmds.append(("cc", "-mcpu=r3", "-Os", "-flto", "-Wall", "-c", SRC / ble_libs.LTO_STUBS, "-o", obj))
+    objs.append(obj)
+    cmds.append(("cc", *flags, "-mllvm", "-pi32v2-large-program=true", "-c",
+                 FW / "src" / "ble" / "ble.c", "-o", OUT / "ble.o"))
+    tc_all(*cmds)
+    objs.append(OUT / "ble.o")
+    return [*objs, "--start-group", *[libdir / p.name for p in libs], "--end-group"]
+
+
 def build_app():
     flags = [*CFLAGS, *BOARD_DEFS[BOARD], "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
+    ble = os.environ.get("ORBIT_BLE") == "1"
+    if ble:
+        flags[-1] = "-I" + str(GEN.relative_to(SRC))
+        flags.append("-DORBIT_BLE=1")
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_CDC", "FELUCCA_UAC", "FELUCCA_UART",
                  "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_CDC_ON", "FELUCCA_DATA_UNTAGGED_OK"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
@@ -204,15 +236,48 @@ def build_app():
            ("cc", "-c", FW / "hal" / "fm1_isr.S", "-o", OUT / "fm1_isr.o"),
            ("cc", *flags, "-c", FW / "src" / "felucca.c", "-o", OUT / "felucca.o"))
     elf = OUT / "felucca.elf"
-    ld = FW / "app.ld"
+    ld = FW / ("app_ble.ld" if ble else "app.ld")
+    extra, ldflags = [], ["--gc-sections", "-e", "_start"]
+    if ble:
+        import ble_libs
+        extra = build_ble(flags)
+        # Until the core is wired, retain the real public API rather than measuring
+        # an empty stack removed by section GC.
+        roots = ("ble_configure", "ble_user_start", "ble_user_stop", "ble_service", "ble_get_status",
+                 "ble_last_error", "ble_midi_out_pkt", "ble_midi_take", "ble_midi_rx_drops", "ble_midi_tx_drops")
+        ldflags += ["--undefined=" + n for n in roots]
+        ldflags += ["--plugin", "/opt/jieli/pi32v2/bin/LLVMgold.so", "--plugin-opt=mcpu=r3",
+                    "--plugin-opt=-pi32v2-large-program=true",
+                    "--plugin-opt=-pi32v2-always-use-itblock=false",
+                    "--plugin-opt=-dont-used-symbol-list=" + ",".join(ble_libs.LOG_FUNCS),
+                    "--orphan-handling=error", "-Map", str((OUT / "felucca.map").relative_to(SRC)),
+                    "--wrap=memcpy"]
+        if os.environ.get("BLE_MEASURE") == "1":
+            txt = ld.read_text()
+            txt, n = re.subn(r"(XIP\s+\(rx\)\s*: ORIGIN = 0x02000120, LENGTH = )0x8DFBC",
+                             r"\g<1>0xFFEE0", txt)
+            txt, k = re.subn(r"(POOL\s+\(rw\)\s*: ORIGIN = 0x01C20000, LENGTH = )0x54000",
+                             r"\g<1>0x5C000", txt)
+            if n != 1 or k != 1:
+                raise SystemExit("build: BLE_MEASURE: XIP / POOL lines not found")
+            ld = OUT / "app_ble_measure.ld"
+            ld.write_text(txt)
     if APP_SLOT != 0x8DFBC:          # another board's app slot (SMK-37 Pro): the same script, its XIP length
         txt = ld.read_text()
         if txt.count("LENGTH = 0x8DFBC") != 1:
             raise SystemExit("app.ld: the XIP LENGTH line was not found")
         ld = OUT / "app.ld"
         ld.write_text(txt.replace("LENGTH = 0x8DFBC", f"LENGTH = {APP_SLOT:#X}".replace("0X", "0x")))
-    tc("pi32v2/bin/ld", "--gc-sections", "-e", "_start", "-T", ld, OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
-       OUT / "felucca.o", "-o", elf)
+    tc("pi32v2/bin/ld", *ldflags, "-T", ld, OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
+       OUT / "felucca.o", *extra, "-o", elf)
+    if ble:
+        # No exception for vendor update helpers: every *ram_code* input must
+        # actually reside in RAM, not be swallowed by the XIP *_code wildcard.
+        mapping = (OUT / "felucca.map").read_text()
+        ram_code = re.findall(r"^\s*(\.\S*ram_code\S*)\s+(0x[0-9a-f]+)\s+(0x[0-9a-f]+)", mapping, re.M)
+        bad = [n for n, a, size in ram_code if int(size, 16) and 0x02000000 <= int(a, 16) < 0x02100000]
+        if bad:
+            raise SystemExit(f"build: RAM-code sections in XIP: {sorted(set(bad))}")
     for sect in ("text.bin", "data.bin", "ramtext.bin"):
         (OUT / sect).unlink(missing_ok=True)
     *_, syms, dis, rt = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),
@@ -242,7 +307,24 @@ def build_app():
     return bytes(img), syms, dis, rt
 
 
-def check(img, syms, dis, rt):
+def rt_reach(rt):
+    """Hortator's radio-calibration gate: no indirect branch or XIP reference."""
+    bad, calls = [], 0
+    for ln in rt.splitlines():
+        if not LINE.match(ln):
+            continue
+        if re.search(r"\b(call|goto)\s+r\d+\b", ln):
+            bad.append(ln)
+        for a in re.findall(r"<[^>]*:\s*([0-9a-f]+)\s*>", ln):
+            val = int(a, 16)
+            if 0x02000000 <= val < 0x02100000 or (
+                    re.search(r"\b(call|goto)\b", ln) and not 0x01C00000 <= val < 0x01C06000):
+                bad.append(ln)
+        calls += bool(re.search(r"\bcall\b", ln))
+    return bad, calls
+
+
+def check(img, syms, dis, rt, ble=False, measure=False):
     errors, notes = [], []
     m = re.search(r"^([0-9a-f]+) .*\s_start$", syms, re.M)
     if not m or int(m.group(1), 16) != APP_XIP:
@@ -250,7 +332,14 @@ def check(img, syms, dis, rt):
     if img[:4] != bytes.fromhex("04818000"):
         errors.append(f"image starts with {img[:4].hex()}, not the entry stub")
     rt_calls = [ln for ln in rt.splitlines() if re.search(r"\bcall\b", ln)]
-    if rt_calls:                    # RAM code runs with the flash off: no calls into XIP
+    if ble:
+        bad, calls = rt_reach(rt)
+        if bad:
+            errors.append(f".ram_text reaches outside RAM: {bad[:3]}")
+        else:
+            notes.append(f".ram_text: {len([ln for ln in rt.splitlines() if LINE.match(ln)])} insns, "
+                         f"{calls} calls, all inside .ram_text, no XIP address")
+    elif rt_calls:                  # RAM code runs with the flash off: no calls into XIP
         errors.append(f".ram_text contains calls: {rt_calls[:3]}")
     else:
         notes.append(f".ram_text: {len([ln for ln in rt.splitlines() if LINE.match(ln)])} insns, no calls")
@@ -263,7 +352,7 @@ def check(img, syms, dis, rt):
             if 0xFFC00000 <= val < 0xFFD00000:
                 errors.append(f"reference to ROM address {val:#010x}")
     if len(img) > APP_SLOT:
-        errors.append(f"image {len(img)} B exceeds the app slot")
+        (notes if measure else errors).append(f"image {len(img)} B exceeds the app slot")
 
     def sym(name):
         mm = re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M)
@@ -274,7 +363,9 @@ def check(img, syms, dis, rt):
     if bss > 96 * 1024:
         errors.append("RAM region overflow")
     if 0x54000 - pool < 8192:                     # keep >= 8 KiB of the pool spare
-        errors.append(f"pool headroom {0x54000 - pool} B < 8192 B")
+        (notes if measure else errors).append(f"pool headroom {0x54000 - pool} B < 8192 B")
+    if ble:
+        notes.append(f".ram_text {sym('_rt_end') - sym('_rt_start')} B")
     return errors, notes
 
 
@@ -323,7 +414,7 @@ def mmio_check():
 
 
 def main():
-    global PRODUCT, VERSION, BOARD, APP_SLOT
+    global PRODUCT, VERSION, BOARD, APP_SLOT, SDK_MOUNT, OUT, GEN, LDR
     ap = argparse.ArgumentParser()
     ap.add_argument("--release", metavar="X.Y", help="release build: identity FM-1_9XY, version string X.Y")
     ap.add_argument("--board", choices=sorted(BOARD_PREFIX), default=None,
@@ -338,6 +429,19 @@ def main():
     model = (a.model or os.environ.get("MODEL") or "pro").lower()
     if model not in MODELS or (model != "pro" and BOARD != "smk37"):
         raise SystemExit(f"MODEL={model}: pro, elite or mke, with BOARD=smk37")
+    ble = os.environ.get("ORBIT_BLE") == "1"
+    measure = ble and os.environ.get("BLE_MEASURE") == "1"
+    if ble:
+        import ble_libs
+        ble_libs.libs()             # Before generators, loader or any toolchain command.
+        if BOARD != "fm1":
+            raise SystemExit("build: ORBIT_BLE supports the FM-1 only")
+        if not use_docker():
+            raise SystemExit("build: ORBIT_BLE requires Docker (pinned SDK mounted at /sdk)")
+        SDK_MOUNT = str(ble_libs.SDK.resolve())
+        os.environ["ORBIT_BLE"] = "1"   # Inherited by every generator subprocess.
+        OUT = SRC / "build" / "ble"
+        GEN, LDR = OUT / "gen", OUT / "loader"
     fm1pkg_make.set_board(BOARD)
     APP_SLOT = fm1pkg_make.APP_SLOT
     stem = "orbit" if BOARD == "fm1" else "orbit-" + BOARD
@@ -348,6 +452,8 @@ def main():
         BOARD_PREFIX[BOARD] = BOARD_PREFIX[BOARD].replace(MODELS["pro"], MODELS[model])
         stem += "-" + model
     name = f"{stem}.fwsc"
+    if ble:
+        name = "orbit-ble.fwsc"
     if a.release:                   # one digit each: the identity has room for two
         m = re.fullmatch(r"(\d)\.(\d)(-[A-Za-z0-9]+)?", a.release)
         if not m:
@@ -364,7 +470,7 @@ def main():
         gen.result()
         ota = ldr.result()
     img, syms, dis, rt = build_app()
-    errors, notes = check(img, syms, dis, rt)
+    errors, notes = check(img, syms, dis, rt, ble, measure)
     hal_err = mmio_check()
     errors += hal_err
     if not hal_err:
@@ -375,14 +481,17 @@ def main():
         print("  FAIL ", e)
     if errors:
         raise SystemExit("build: checks failed")
+    if measure:
+        print("BLE_MEASURE: measurement only; widened XIP/POOL, never packaged or installed")
+        return 0
     pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY), ota, PRODUCT)
-    (OUT / name).write_bytes(pkg)
+    ((SRC / "build" if ble else OUT) / name).write_bytes(pkg)
     att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"
     if att.exists():
         shutil.copy(att, OUT / "ATTRIBUTION.txt")
     print(f"app      {OUT / 'felucca.bin'}  {len(img)} B")
     print(f"loader   {LDR / 'ota.bin'}  {len(ota)} B")
-    print(f"package  {OUT / name}  {len(pkg)} B, identity {PRODUCT}, board {BOARD}")
+    print(f"package  {(SRC / 'build' if ble else OUT) / name}  {len(pkg)} B, identity {PRODUCT}, board {BOARD}")
     return 0
 
 

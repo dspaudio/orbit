@@ -28,7 +28,8 @@ static uint8_t sec_armed;                               /* store over a used sec
 static uint32_t sec_armed_ms;
 static uint8_t chain_tap[CHAIN_MAX], chain_taps;        /* the section keys tapped in this SAVE hold (the first
                                                          * is asked for at once; two or more: a chain on release) */
-#define TAP_MS 450u                                     /* a press shorter than this, untouched: a tap */
+#define TAP_MS 1000u                                    /* a press shorter than this, untouched: a tap (SLOOP 2.8.4:
+                                                         * a firm 0.6 s press opens the pages too) */
 #define SHOW_MS 350u                                    /* (2.8.3) a quick tap does not flash the layer page */
 
 /* the ISR's view of the panel: the layers' buttons, OCT- / OCT+, REC / PLAY of a free take */

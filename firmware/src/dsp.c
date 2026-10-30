@@ -12,6 +12,12 @@ static inline int32_t mulq16(int32_t a, uint32_t k)
     return (int32_t)(((a >> 16) * (int32_t)k) + (int32_t)(((uint32_t)(a & 0xFFFF) * k) >> 16));
 }
 static inline int32_t clamp(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
+/* x * g / 4096 rounded to the nearest, in 32 bits wherever ((x >> k) * g) >> (12 - k) fits (the same bound): the k low
+ * bits of x are added in separately instead of being dropped. The mix gains (fx.c: a part's LEVEL, mute / duck, the
+ * MASTER, DIST's drive) took x >> k first and lost them: a floor of 2^k x the gain, signal-correlated distortion that
+ * stays as loud while a note fades out. k is a constant: ~6 ops. (Ported from SLOOP 2.8.4, isod89/sloop-fm1 91f3018.) */
+#define MULQ12R(x, g, k) \
+    ((((x) >> (k)) * (g) + ((((x) & ((1 << (k)) - 1)) * (g) + (1 << ((k) - 1))) >> (k)) + (1 << (11 - (k)))) >> (12 - (k)))
 
 /* sine, linearly interpolated between the 1024 table points (plain lookup: THD -55 dB) */
 static inline int32_t sine_i(uint32_t ph)

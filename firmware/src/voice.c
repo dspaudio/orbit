@@ -33,6 +33,7 @@ static int eng_sampled(const engine_t *e) { return e == &ENG_SAMPLE; }
 #define VP_ON 1u
 #define VP_OFF 2u
 #define VP_GLIDE 4u
+#define VP_UNI 8u   /* (SLOOP 2.8.4) an extra UNISON voice: spread its start (unison_spread) when it restarts */
 static uint8_t vpend[NTRK][NVOICE], vpnote[NTRK][NVOICE], vpvel[NTRK][NVOICE];
 static int32_t lfo_wave(track_t *t, uint32_t ph)
 {
@@ -369,6 +370,43 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
     }
 }
 
+/* a UNISON voice's start moved by r (Q32: a turn of its note), as if it had started that much of a period sooner:
+ * in phase the voices stack, spread they sum as noise. Ported from SLOOP 2.8.4 (isod89/sloop-fm1 91f3018): each
+ * engine moves every oscillator it renders (and reseeds its noise); ph[0] alone left the others in phase (ANALOG's
+ * osc 2, TRIO's 2 and 3, DIGITAL's, FM4's and FM6's operators, SWARM's six, the subs, SAMPLE's start...) */
+static void unison_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    const engine_t *e = ENGINES[t->engine];
+    if (e == &ENG_ANALOG)
+        analog_spread(t, v, r);
+    else if (e == &ENG_DIGITAL)
+        digital_spread(t, v, r);
+    else if (e == &ENG_PHASE)
+        phase_spread(t, v, r);
+    else if (e == &ENG_LOFI)
+        lofi_spread(t, v, r);
+    else if (e == &ENG_TRIO)
+        trio_spread(t, v, r);
+    else if (e == &ENG_NOISE)
+        noise_spread(t, v, r);
+    else if (e == &ENG_FM6)
+        fm6_spread(t, v, r);
+    else if (e == &ENG_SAMPLE)
+        sample_spread(t, v, r);
+    else if (e == &ENG_SWARM)
+        swarm_spread(t, v, r);
+    else if (e == &ENG_ORBIT_PULSE)
+        orbit_pulse_spread(t, v, r);
+    else if (e == &ENG_FM4)
+        orbit_fm4_spread(t, v, r);
+#if FELUCCA_SLICE
+    else if (e == &ENG_SLICE)
+        ;                                            /* (slices: as played) */
+#endif
+    else                                             /* VOICE's glottal phase; engines with their own per-voice */
+        v->ph[0] += r;                               /* spread (WHEEL, PHYS, GRAIN, CLUSTER, CLOUD): as before */
+}
+
 /* MONO / LEGATO / UNISON: one note on one voice (eight for UNISON, or the
  * engine's voice cap, spread by DETUNE over the same width) */
 static void mono_play(track_t *t, uint32_t note, uint32_t vel, int retrig, int glide)
@@ -386,11 +424,12 @@ static void mono_play(track_t *t, uint32_t note, uint32_t vel, int retrig, int g
                 continue;                                   /* no room for this extra UNISON voice */
             /* level: about the same sum for 8 or 4 voices at random phases */
             voice_start(t, v, note, nv >= NVOICE ? vel * 36u / 100u : nv > 1u ? vel / 2u : vel, glide);
-            if (nv > 1u && i && !eng_sampled(ENGINES[t->engine]) && !was_sounding) {   /* random start phases: */
+            if (nv > 1u && i && !was_sounding) {           /* random start phases (SAMPLE: its start; not SLICE): */
                 static uint32_t seed = 0x1234567u;          /* in phase they stack, evenly spread they cancel */
                 seed = seed * 1664525u + 1013904223u;
-                v->ph[0] += seed;
-            }
+                unison_spread(t, v, seed);
+            } else if (nv > 1u && i && (vpend[(uint32_t)(t - trk) % NTRK][i] & VP_ON))
+                vpend[(uint32_t)(t - trk) % NTRK][i] |= VP_UNI;   /* (a sample's, after its fade: spread as it starts) */
         } else {                                            /* legato: new pitch, same envelope */
             v->note = (uint8_t)note;
             v->pitch16 = (int32_t)note * 16;
@@ -782,6 +821,11 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
             if (voice_room(t, 0)) {                     /* (not counted while fading: within the budget now) */
                 voice_start(t, v, vpnote[(uint32_t)(t - trk) % NTRK][i], vpvel[(uint32_t)(t - trk) % NTRK][i],
                             (pf & VP_GLIDE) != 0);
+                if (pf & VP_UNI) {                      /* (SLOOP 2.8.4) UNISON: not in phase with the others */
+                    static uint32_t seed = 0x13579BDu;
+                    seed = seed * 1664525u + 1013904223u;
+                    unison_spread(t, v, seed);
+                }
                 if (pf & VP_OFF) {                      /* let go within the fade: released as it starts */
                     v->gate = 0;
                     v->stage = 3;

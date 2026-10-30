@@ -204,6 +204,48 @@ int main(void)
         check(peak[3] < 64, "the click follows GLO > DRUMS > LVL");
         song.g[G_CLOCK] = 0;
     }
+    {   /* ported from SLOOP 2.8.4, isod89/sloop-fm1 91f3018 (drums.c drum_on, editor_repro.c repro_root): an uploaded
+         * zone's root16 is not validated, so drum_on bounds the playback exponent to -1536..2047 (pow2_q16 needs
+         * d16 >= -3072 and shifts by its octave); the built-in kits' exponents are inside that range already */
+        static const uint8_t nk[1] = {36};
+        static const uint32_t lk[1] = {4000};
+        static const int16_t roots[2] = {32767, -32768};
+        static const uint8_t bn[3] = {0, 36, 127};
+        smp_user_hdr_t *h = (smp_user_hdr_t *)host_slots;
+        uint32_t r, i, k, nb = 0, bok = 1;
+        TDRUM->p[P_E0] = (int16_t)DRUM_USR;
+        for (r = 0; r < 2u; r++) {
+            slot_build(0, nk, lk, 1);
+            h->zone[0].root16 = roots[r];
+            smp_user_scan(0);
+            quiet();
+            drum_on(36, 110);
+            for (i = 0; i < NDRUM; i++)
+                if (drums.v[i].active && drums.v[i].s[4] == DZ_USR + 0)
+                    break;
+            check(usr_nz[0] == 1u && i < NDRUM &&
+                  drums.v[i].s[5] == (int32_t)((pow2_q16(r ? 2047 : -1536) >> 8) * (0x8000u >> 8)),
+                  r ? "USR1 root16 -32768: the step bounded at d16 = +2047" : "USR1 root16 32767: the step bounded at d16 = -1536");
+            run_peak(4);
+        }
+        for (k = 0; k < DRUM_SAMPLED; k++)             /* the sample kits, with their semitone shifts */
+            for (r = 0; r < 3u; r++) {
+                TDRUM->p[P_E0] = (int16_t)k;
+                quiet();
+                drum_on(bn[r], 110);
+                for (i = 0; i < NDRUM; i++)
+                    if (drums.v[i].active && !drums.synth[i] && drums.v[i].s[4] < DZ_USR) {
+                        const smp_zone_t *z = &SMP_ZONES[drums.v[i].s[4]];
+                        int32_t sh = k == 1u ? (bn[r] <= 36u ? -5 : -2) : k == 3u ? 2 : k == 4u ? -1 : 0;
+                        int32_t d16 = (int32_t)bn[r] * 16 + sh * 16 - z->root16;
+                        bok &= d16 >= -1536 && d16 <= 2047 &&
+                               drums.v[i].s[5] == (int32_t)((pow2_q16(d16) >> 8) * (z->rate >> 8));
+                        nb++;
+                    }
+            }
+        check(nb > 0u && bok, "the sample kits (notes 0 / 36 / 127, their shifts): exponents in range, steps as before");
+        quiet();
+    }
     printf("userkit: %s\n", fails ? "FAILED" : "KIT USR1..USR4, USR3+4 PASS");
     return fails != 0;
 }

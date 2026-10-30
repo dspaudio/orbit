@@ -63,6 +63,20 @@ static uint32_t noise_inc(int32_t p)
     inc = pitch_inc((uint32_t)clamp(p, 0, 2047));
     return sh && inc >= 0x80000000u >> (sh - 1u) ? 0xFFFFFFFFu : inc << sh;
 }
+/* (ported from SLOOP 2.8.4, isod89/sloop-fm1 91f3018) the same, unbounded (Q32: 2^32 = one clock a sample). LFSR:
+ * a clock past the sample rate steps the register more than once a sample, so its pitch keeps rising with the keys.
+ * It used to stop at one step a sample: every note above it played the same pitch (NZ ARCADE: CLK +84 semitones,
+ * the whole upper half of the keyboard; clipper-fm1 #10) */
+static uint64_t noise_inc64(int32_t p)
+{
+    uint32_t sh = 0;
+    while (p > 2047) {
+        p -= 192;
+        sh++;
+    }
+    return (uint64_t)pitch_inc((uint32_t)clamp(p, 0, 2047)) << (sh < 20u ? sh : 20u);
+}
+#define NZ_STEPS_MAX 64u                              /* register steps a sample at most (64 x 44.1 kHz) */
 
 static uint32_t isqrt32(uint32_t x)
 {
@@ -102,7 +116,7 @@ static void noise_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     int32_t ic1 = v->s[0], ic2 = v->s[1], rng = v->s[2], b0 = v->s[4], b1 = v->s[5], b2 = v->s[6], br = v->s[7];
     uint32_t ph = v->ph[0], reg = v->ph[1];         /* state in locals: out[] may alias v->s[] */
     int32_t drift = (int32_t)v->ph[2], d16 = 0, gain = 32767, gq, colr, cut, k, a1, a2, a3, g, bpg, mix, cf, thr = 0;
-    uint32_t inc = 0, taps = NOISE_TAPS[sel];
+    uint32_t inc = 0, clocks = 0, carry = 0, taps = NOISE_TAPS[sel];
     /* drift: a new random target every 0.7..3 s, followed with a 0.7 s lag */
     if (drft) {
         int32_t tg = v->s[3] >> 16, cnt = v->s[3] & 0xFFFF;
@@ -149,7 +163,13 @@ static void noise_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     }
     if (mode == NZ_LFSR) {
         uint32_t mask = taps;                         /* the register's own bits (MODE / LEN changes) */
-        inc = noise_inc(m->pitch16 + p[P_E7] * 16 + d16);
+        uint64_t inc64 = noise_inc64(m->pitch16 + p[P_E7] * 16 + d16);
+        inc = (uint32_t)inc64;
+        clocks = (uint32_t)(inc64 >> 32);
+        /* The fractional carry adds a step only below the 64-step cap. */
+        carry = clocks < NZ_STEPS_MAX;
+        if (clocks >= NZ_STEPS_MAX)
+            clocks = NZ_STEPS_MAX;
         mask |= mask >> 1;
         mask |= mask >> 2;
         mask |= mask >> 4;
@@ -175,9 +195,10 @@ static void noise_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
             break;
         }
         case NZ_LFSR: {
-            uint32_t o = ph;
+            uint32_t old = ph, ns;
             ph += inc;
-            if (ph < o)
+            ns = clocks + ((ph < old) & carry);
+            while (ns--)                              /* as many steps as clocks in this sample */
                 reg = (reg >> 1) ^ (-(reg & 1u) & taps);
             w = (reg & 1u) ? 12000 : -12000;
             break;
@@ -192,14 +213,14 @@ static void noise_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
         x = w;
         if (colr) {                                   /* pink: three leaky poles (Kellet), brown: a leaky integrator */
             int32_t pk;
-            b0 = ((b0 * 32690) >> 15) + ((w * 3245) >> 15);
-            b1 = ((b1 * 31555) >> 15) + ((w * 9716) >> 15);
+            b0 = clamp(((b0 * 32690) >> 15) + ((w * 3245) >> 15), -65535, 65535);   /* bounded: a held LFSR */
+            b1 = clamp(((b1 * 31555) >> 15) + ((w * 9716) >> 15), -65535, 65535);   /* level grew them past 2^31 / 32690 */
             b2 = ((b2 * 18678) >> 15) + ((w * 17247) >> 14);
             pk = (b0 + b1 + b2 + ((w * 6055) >> 15)) >> 2;
             if (colr <= (64 << 8)) {
                 x = w + mulq15(pk - w, cf);
             } else {
-                br = ((br * 32580) >> 15) + ((w * 3480) >> 15);
+                br = clamp(((br * 32580) >> 15) + ((w * 3480) >> 15), -65535, 65535);
                 x = pk + mulq15(br - pk, cf);
             }
         }
@@ -255,6 +276,18 @@ static const preset_t NOISE_PRESETS[] = {
     {"BITCRUSH", {NZ_ANLG, 40, 90, 40, 64, 0, 0, 100}, {0, 70, 110, 40}, 0, 0, FX(0, 0, 20, 30)},
     {"RADIO", {NZ_LFSR, 20, 70, 90, 64, 0, 60, 48}, {10, 70, 120, 50}, 0, 0, FX(0, 10, 30, 40)},
 };
+
+/* UNISON (voice.c unison_spread; ported from SLOOP 2.8.4, isod89/sloop-fm1 91f3018): the phase moved by r (Q32)
+ * and the noise generator reseeded from its own state (noise_note_on seeds from the note and DETUNE: at DETUNE 0
+ * every voice played the same noise) */
+static void noise_spread(track_t *t, voice_t *v, uint32_t r)
+{
+    (void)t;
+    v->ph[0] += r;
+    v->s[2] = (int32_t)((uint32_t)v->s[2] ^ r);
+    if (!v->s[2])
+        v->s[2] = 1;
+}
 
 static const engine_t ENG_NOISE = {
     .name = "NOISE",

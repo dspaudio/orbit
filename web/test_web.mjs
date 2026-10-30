@@ -929,6 +929,14 @@ async function editorBackup() {
   let caught = "";
   try { E.backupObjects(bad); } catch (e) { caught = e.code; }
   ok(caught === "bkBad", "backup: a damaged file is refused before anything is written");
+  const withSettings = (len) => {                 /* object 1 grown to len bytes (PER3 kept), checksum redone */
+    const f = JSON.parse(JSON.stringify(A)), o = f.objects.find((x) => x.id === 1), d = new Uint8Array(len);
+    d.set(E.b64dec(o.data).subarray(0, Math.min(len, o.len)));
+    o.data = E.b64enc(d); o.len = len; o.crc = E.crc32(d) >>> 0;
+    try { E.backupObjects(f); return ""; } catch (e) { return e.code; }
+  };
+  ok(withSettings(104) === "" && withSettings(100) === "bkBad",
+    "backup: settings with the controller part (PER3, 104 bytes) accepted, other sizes refused (project.c persist_t)");
   const newer = JSON.parse(JSON.stringify(A));
   const futureProject = Uint8Array.of(0x36, 0x4E, 0x55, 0x46, 8, 0, 0, 0);
   const futureSlot = newer.objects.find((o) => o.id === 2);

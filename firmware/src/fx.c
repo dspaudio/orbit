@@ -3,9 +3,13 @@
 /* Effects: per-track DIST insert, then sends into three shared buses (chorus, tempo delay, reverb).
  * Stereo dry mix; the chorus and the reverb come back in stereo; the delay in the middle (TYPE MONO), or WIDE (its
  * right side read a little later) or PING (left and right echoes in turn), ORBIT 0.8.2. */
+#if ORBIT_BLE
+#define DLY_LEN 32768u           /* 0.74 s at 44.1 kHz; longer tempo delays clamp to the line. */
+#else
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 down to 41 BPM, 1/8 dotted down to 31, 1/4 dotted down to 61 (clamped below) */
+#endif
 #define CHO_LEN 2048u
-#define DLY_HALF (DLY_LEN / 2u)  /* PING: the line split in two, left and right (0.74 s each) */
+#define DLY_HALF (DLY_LEN / 2u)  /* PING: split left/right, 0.37 s each with BLE, otherwise 0.74 s. */
 #define DLY_WIDE 573u            /* WIDE: the right side 13 ms after the left */
 #define DLY_CLR 2048u            /* a TYPE change: the line cleared this much a block (stale echoes would jump sides) */
 static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
@@ -52,7 +56,8 @@ static void track_dist(track_t *t, int32_t *b, uint32_t n)
         int32_t x = b[i], y;
         t->dist_hp += (x - t->dist_hp + 64) >> 7;           /* ~55 Hz low cut: keep the bass out of the clipper */
         x = clamp(x - t->dist_hp, -230000, 230000);         /* (x >> 2) * g fits 32 bits; the clip is flat out there */
-        y = softclip((((x >> 2) * g) >> 10) + bias) - b0;   /* >> 2 first: no overflow for loud poly */
+        y = softclip(MULQ12R(x, g, 2) + bias) - b0;         /* (as (x >> 2) * g >> 10 in 32 bits: no overflow for loud
+                                                             * poly; rounded, no step of 4 x the drive) */
         t->dist_lp1 += mulq15(y - t->dist_lp1, k);         /* two poles: tames the fizz */
         t->dist_lp2 += mulq15(t->dist_lp1 - t->dist_lp2, k);
         b[i] = mulq15(t->dist_lp2, mk);
@@ -784,10 +789,13 @@ static void mix_part_run(track_t *t, uint32_t n)
         int32_t lvl0 = t->lvl ? t->lvl : lvl, dl = (lvl - lvl0) >> CTL_LOG2;   /* a new sound's trim: ramped */
         t->lvl = lvl;
         for (i = 0; i < n; i++) {
-            int32_t x = ((b[i] >> 2) * (lvl0 + dl * (int32_t)i)) >> 10, a;   /* pre-shift: 8 loud voices */
+            int32_t lv = lvl0 + dl * (int32_t)i, bi = b[i], x = MULQ12R(bi, lv, 2), a;   /* rounded, all of b: 8 loud
+                                                         * voices in 32 bits as ((b >> 2) * lv) >> 10 was */
             int32_t xs, g = ga + (((gb - ga) * (int32_t)i) >> CTL_LOG2);
-            if (g < 32767)
-                x = (x >> 4) * (g >> 3) >> 8;           /* (Q15 in two halves: no 32-bit overflow) */
+            if (g < 32767) {                            /* (always, at rest: mulq15(32767, 32767) is 32766) */
+                g >>= 3;                                /* (Q12: no 32-bit overflow) */
+                x = MULQ12R(x, g, 4);
+            }
             a = x < 0 ? -x : x;
             xs = clamp(x, -xmax, xmax);                 /* sends: mulq15 would overflow */
             if (a > pk)
@@ -798,8 +806,9 @@ static void mix_part_run(track_t *t, uint32_t n)
                 send_d[i] += mulq15(xs, d);
             if (r)
                 send_r[i] += mulq15(xs, r);
-            mix_l[i] += ((x >> 4) * gl) >> 8;           /* (x may pass 2^19: >> 4 first) */
-            mix_r[i] += ((x >> 4) * gr) >> 8;
+            mix_l[i] += (x * (gl >> 4) + 128) >> 8;     /* (x may pass 2^19: PAN's Q12 to Q8, exact since PAN steps
+                                                         * by 64; x >> 4 floored the part to 16 LSB) */
+            mix_r[i] += (x * (gr >> 4) + 128) >> 8;
         }
         t->peak = pk;
     }
@@ -1206,14 +1215,14 @@ static void mix_block(int32_t *out, uint32_t n)
         static uint8_t usb_was;
         for (i = 0; i < n; i++) {
             int32_t m = m0 + (((m1 - m0) * (int32_t)i) >> CTL_LOG2);
-            ol[i] = ((mix_l[i] >> 2) * m) >> 10;
-            orr[i] = ((mix_r[i] >> 2) * m) >> 10;
+            ol[i] = MULQ12R(mix_l[i], m, 2);           /* (rounded; (x >> 2) * m >> 10 floored to 4 LSB) */
+            orr[i] = MULQ12R(mix_r[i], m, 2);
             master_pre(&ol[i], &orr[i]);
             if ((i & 1u)) {                             /* the scope: every other sample, as audio.c reads it */
                 vis_tap[2u * i] = (int16_t)knee(mix_l[i]);
             }
             if (usb_full_now) {                         /* USB AUDIO = FULL: MASTER all the way up (4096) */
-                ul[i] = (mix_l[i] >> 2) * 4, ur[i] = (mix_r[i] >> 2) * 4;
+                ul[i] = mix_l[i], ur[i] = mix_r[i];     /* (x 4096 / 4096, every bit; it was floored to 4 LSB) */
                 master_pre_usb(&ul[i], &ur[i]);
             }
         }

@@ -189,6 +189,9 @@ static void fm1_main(void)
     int32_t knob = 512 * 16;
     uint32_t healthy_since;
     persist_boot();
+#if ORBIT_BLE
+    orbit_ble_bind();                                   /* read/protect RF trim before any UI/USB writes */
+#endif
 #if FELUCCA_OTA
     if (flash_ok)
         ota_boot_cleanup();                             /* staging area left by an update */
@@ -292,6 +295,9 @@ static void fm1_main(void)
                 fm1_enter_uboot();
             }
         }
+#if ORBIT_BLE
+        orbit_ble_core_service();
+#endif
 #if FELUCCA_OTA
         ed_service();                                   /* web editor SysEx */
         ota_service();                                  /* M-UPGRADE handshake */
@@ -345,6 +351,9 @@ static void fm1_main(void)
         felucca_dbg.stage = 9;
         while (fm1_ms - m < 15u) {                               /* ~60 UI frames/s at most */
             ui_input();
+#if ORBIT_BLE
+            orbit_ble_core_service();
+#endif
 #if BOARD_SMK37
             smk_wheels();                       /* (bends follow the wheel, not the screen) */
 #endif

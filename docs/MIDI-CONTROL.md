@@ -2,7 +2,9 @@
 
 Play three independent synth parts and drums, route an external sequencer,
 or use a controller's knobs for sound design. USB MIDI and the TRS MIDI IN
-jack are supported. Bluetooth MIDI and direct USB keyboard hosting are not.
+jack are supported. Bluetooth MIDI exists only in the separate 0.9.B build
+(`orbit-ble.fwsc`, untested on hardware; see the [guide](../GUIDE.md#bluetooth-midi-build-09b)).
+Direct USB keyboard hosting is not supported.
 [User guide](../GUIDE.md) · [Install/build](../BUILDING.md)
 
 ## Connect a controller

@@ -92,11 +92,45 @@ $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/modulation_test" t
 run "2.6 modulation: ENV SYNC, LFO 2 SYNC / TRIG / POL, bend, learn, tempo matrix" "$OUT/modulation_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/midi_learn_test" tests/midi_learn_test.c -lm
 run "MIDI settings: learn, channels, IN = CH n, persistence, backup object 10" "$OUT/midi_learn_test"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/ctrl_test" tests/ctrl_test.c -lm
+run "MIDI CONTROLLER mode: combo, keys, knobs, switches, sequencer, exit, settings" "$OUT/ctrl_test"
 $CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/macro_test" tests/macro_test.c -lm
 run "sound macros: MACROS assignment, PERFORM values, presets, projects and backup persistence" "$OUT/macro_test"
 
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/ui_pages_test" tests/ui_pages_test.c -lm
 run "live UI: pages, layers (punch, steps, erase, roll, key, mix), holds, drums, REC, fuzz" "$OUT/ui_pages_test" "$OUT"
+# SLOOP 2.8.4 fixes (ORBIT 0.9.0)
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/knob_walk_test" tests/knob_walk_test.c -lm
+run "REC READY and pages: each knob edits one value" "$OUT/knob_walk_test" "$OUT"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/song_arm_test" tests/song_arm_test.c -lm
+run "song screen: confirmations ask again after a long elapsed time" "$OUT/song_arm_test"
+$CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/unison_level_test" tests/unison_level_test.c -lm
+run "UNISON: all engines, DETUNE 0 and SAMPLE pending restart" "$OUT/unison_level_test"
+$CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/phys_tune_test" tests/phys_tune_test.c -lm
+run "PHYS string tuning: pitched presets within tolerance" "$OUT/phys_tune_test"
+$CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/noise_clock_test" tests/noise_clock_test.c -lm
+run "NOISE LFSR clock follows high keys; colour poles bounded" "$OUT/noise_clock_test"
+$CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/sample_pitch_test" tests/sample_pitch_test.c -lm
+run "SAMPLE / GRAIN high-note pitch follows the keys" "$OUT/sample_pitch_test"
+$CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/grain_release_test" tests/grain_release_test.c -lm
+run "GRAIN held note is not starved by released notes" "$OUT/grain_release_test"
+$CC -O2 -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/fade_noise_test" tests/fade_noise_test.c -lm
+run "rounded mix: clean fades on the DAC and USB FULL" "$OUT/fade_noise_test"
+run "editor protocol, external inputs, reproducers and boot sounds under ASan + UBSan" \
+    env EDFZ_OUT="$OUT/edfz" sh tests/editor_fuzz.sh "${EDFZ_N:-2000}" 1
+# Bluetooth build (ORBIT_BLE, orbit-ble.fwsc): its sample header without the melodic sets, the BLE unit, the bridge
+mkdir -p build/gen_ble
+ORBIT_BLE=1 python3 tools/gen_samples.py build/gen_ble/felucca_samples.h > /dev/null
+$CC -O2 -w -DORBIT_BLE=1 -Ibuild/gen_ble -Ibuild/gen -Ifirmware/src -Ifirmware/hal \
+    -o "$OUT/ble_samples_test" tests/ble_samples_test.c -lm
+run "BLE build: FM stand-ins for the melodic sets, PERC and USR samples kept, GRAIN" "$OUT/ble_samples_test"
+$CC -O2 -w -DORBIT_BLE=1 -Ibuild/gen_ble -Ibuild/gen -Ifirmware/src -Ifirmware/hal \
+    -o "$OUT/ble_bridge_test" tests/ble_bridge_test.c -lm
+run "BLE MIDI bridge: controller, ISR queue, overflow, input and disconnect" "$OUT/ble_bridge_test"
+for name in midi scan os vm gatt central; do
+    $CC -O2 -w -Ifirmware/src -Ifirmware/hal "tests/ble/ble_${name}_test.c" -o "$OUT/ble_${name}_test"
+    run "BLE unit: $name" "$OUT/ble_${name}_test"
+done
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/pick_test" tests/pick_test.c -lm
 run "SMK-37 pad sound picker: pages by kind, pads load, < >, drum kits" "$OUT/pick_test" "$OUT"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/fbank_test" tests/fbank_test.c -lm

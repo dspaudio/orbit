@@ -542,6 +542,25 @@ int main(void)
          trk[1].lock[7].val == 127 && lock_find(&trk[1], 2, P_ED_FLT, 0) >= 0 &&
          step_fill(&trk[1], 4) == FC_FILL && step_fill(&trk[1], 5) == FC_NOFILL && trk[1].fill[1] == 0x09;
     bad += check("apply: a lock on LEN / step 64 / param 200 is freed, LEVEL 999 -> 127, condition 3 -> normal", ok);
+    /* ported from SLOOP 2.8.4, isod89/sloop-fm1 91f3018 (project.c proj_apply, editor_repro.c repro_vel): a synth
+     * step's velocity is 7-bit after apply, masked as upstream (255 -> 127, 128 -> 0 = the default 96), on a load
+     * and a section; the drum track's 10-byte lanes (the same union bytes) are not touched */
+    {
+        static const uint8_t vin[4] = {0, 127, 128, 255}, vout[4] = {0, 127, 0, 127};
+        static const uint8_t dff[sizeof(dstep_t)] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+        uint32_t s, a;
+        for (s = 0; s < 4u; s++)
+            q.t[1].step[10 + s].vel = vin[s];
+        memset(&q.t[TRK_DRUM].dstep[10], 0xFF, sizeof(dstep_t));
+        for (a = 0; a < 2u; a++) {
+            proj_apply(&q, (int)(1u - a));
+            ok = !memcmp(&TDRUM->dstep[10], dff, sizeof dff);
+            for (s = 0; s < 4u; s++)
+                ok &= trk[1].step[10 + s].vel == vout[s];
+            bad += check(a ? "section apply: step velocity 0/127/128/255 -> 0/127/0/127; drum lanes 0xFF kept"
+                           : "load apply: step velocity 0/127/128/255 -> 0/127/0/127; drum lanes 0xFF kept", ok);
+        }
+    }
 
     /* The new engine's raw values retain their width in existing FUN5 int16 fields. */
     host_tracks_init();

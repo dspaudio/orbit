@@ -1788,10 +1788,66 @@ static void pick_aud_block(void)
 }
 #endif
 
+/* ---- MIDI CONTROLLER mode (ORBIT; its UI and screen: ctrl.c, its settings: project.c persist_t.ctl). While it is on
+ * the 27 keys are a plain USB MIDI keyboard: chromatic from F3 (53) with OCT, the key's velocity, on the controller
+ * channel; nothing sounds here and nothing is recorded. Every message of the mode leaves through ctrl_send, in the
+ * audio context only (midi_out_event has one producer: this interrupt). The UI queues its CCs with ctrl_push
+ * (interrupts off around the write), drained here by ctrl_block every audio block */
+typedef struct { uint8_t ch, cc[4], sw[4]; } ctrl_cfg_t;   /* channel 0..15; KNOB 1..4 CCs; FX SEL ENV LFO CCs */
+#define CTRL_CFG_DEF {0, {7, 74, 71, 64}, {80, 81, 82, 83}}
+static ctrl_cfg_t ctrl_cfg = CTRL_CFG_DEF;
+static volatile uint8_t ctrl_on;                /* set by the UI (ctrl.c ctrl_set) */
+static uint8_t ctrl_was;                        /* the mode as this context last saw it */
+static uint8_t ctrl_note[27], ctrl_kch[27];     /* per key: note + 1 sent on (0 none), its channel */
+#define CTRL_Q 16u
+static uint32_t ctrl_q[CTRL_Q];
+static volatile uint32_t ctrl_qw, ctrl_qr;
+static volatile uint32_t ctrl_last, ctrl_count; /* the last packet sent, how many (the screen) */
+static void ctrl_send(uint32_t pkt)             /* audio context only */
+{
+    midi_out_event(pkt);
+    ctrl_last = pkt;
+    ctrl_count++;
+}
+static void ctrl_push(uint32_t pkt)             /* the UI: a packet for ctrl_send (dropped when the queue is full) */
+{
+    fm1_irq_off();
+    if (ctrl_qw - ctrl_qr < CTRL_Q) {
+        ctrl_q[ctrl_qw % CTRL_Q] = pkt;
+        ctrl_qw++;
+    }
+    fm1_irq_on();
+}
+static void ctrl_key(uint32_t k, uint32_t down)
+{
+    if (down) {
+        uint32_t n = (uint32_t)clamp(53 + (int32_t)k + 12 * song.octave, 0, 127), v = key_vel(k) & 127u;
+        ctrl_note[k] = (uint8_t)(n + 1u);
+        ctrl_kch[k] = (uint8_t)(ctrl_cfg.ch & 15u);
+        ctrl_send(0x09u | (0x90u | ctrl_kch[k]) << 8 | n << 16 | (v ? v : 1u) << 24);
+    } else if (ctrl_note[k]) {
+        ctrl_send(0x08u | (0x80u | ctrl_kch[k]) << 8 | (uint32_t)(ctrl_note[k] - 1u) << 16);
+        ctrl_note[k] = 0;
+    }
+}
+static void ctrl_block(void)
+{
+    uint32_t k;
+    if (ctrl_was && !ctrl_on)                   /* the mode ended: its held notes end too */
+        for (k = 0; k < 27u; k++)
+            ctrl_key(k, 0);
+    ctrl_was = ctrl_on;
+    while (ctrl_qr != ctrl_qw) {
+        ctrl_send(ctrl_q[ctrl_qr % CTRL_Q]);
+        ctrl_qr++;
+    }
+}
+
 static void keyboard_block(void)
 {
     uint32_t cur = fm1_in.notes, ch = cur ^ kb_prev, k, r;
     audition_block();
+    ctrl_block();
     if (er_mute && layer_now() != LY_ERASE)
         er_mute = 0;                                  /* EDIT let go: its keys erase again (2.6) */
 #if BOARD_SMK37
@@ -1807,10 +1863,16 @@ static void keyboard_block(void)
     for (k = 0; k < 27u; k++) {
         if (!((ch >> k) & 1u))
             continue;
-        if ((cur >> k) & 1u)
-            key_down(k);
-        else
-            key_up(k);
+        if ((cur >> k) & 1u) {
+            if (ctrl_was)
+                ctrl_key(k, 1);                       /* CONTROLLER: MIDI only */
+            else
+                key_down(k);
+        } else if (ctrl_note[k]) {
+            ctrl_key(k, 0);
+        } else {
+            key_up(k);                                /* (a key down before the mode came on: as ever) */
+        }
         kb_prev ^= 1u << k;                           /* (key_down sees the keys down before it) */
     }
 }

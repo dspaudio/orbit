@@ -1028,6 +1028,8 @@ static void fb_set(uint32_t b);
 static void fb_close(void);
 static void fb_expire(void);
 #endif
+static uint8_t ctrl_shown;                              /* the CONTROLLER screen is up (ctrl.c) */
+static void ctrl_draw(void);
 static void ui_draw(void)
 {
     ui.frame++;
@@ -1070,6 +1072,17 @@ static void ui_draw(void)
         ui.force = 1;
     }
 #endif
+    if (ctrl_on && !ui.menu && !ui.hold_kind) {        /* MIDI CONTROLLER mode (ctrl.c) */
+        ctrl_draw();
+        ui_timers();
+        ui.force = 0;
+        return;
+    }
+    if (ctrl_shown) {                                   /* back from it */
+        ctrl_shown = 0;
+        lcd_fill(0, 0, 240, 240, C_BLACK);
+        ui.force = 1;
+    }
     if (!ui.menu && (ui.layer != LY_PLAY || ui.hold_kind)) {   /* a layer held / a hold to confirm */
         if (ui.hold_kind)
             hold_screen_draw();

@@ -3,7 +3,11 @@
 /* Felucca user interface. Four columns map to KNOB 1..4. Rendering is lazy:
  * every element remembers what it last drew and is redrawn only on change. */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "ORBIT 0.8.2"  /* the beat machine firmware for the FM-1 (based on Felucca) */
+#if ORBIT_BLE
+#define FELUCCA_VERSION "ORBIT 0.9.B"  /* the Bluetooth MIDI build (orbit-ble.fwsc) */
+#else
+#define FELUCCA_VERSION "ORBIT 0.9.0"  /* the beat machine firmware for the FM-1 (based on Felucca) */
+#endif
 #endif
 static void project_save(uint32_t slot);
 static void arrangement_save(void);

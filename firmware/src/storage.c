@@ -21,7 +21,11 @@
  * (upreset.c); the working project (autosave, project.c): copy A 0x9F000, copy B 0xFE000 (the two sectors
  * left: A/B needs no two neighbours); the FM6 patch bank (fm6_bank.c, SLOOP 2.4): 0xE5000 / 0xE6000, the first
  * two sectors of the free 0xE5000..0xFBFFF after the update staging (FL_FM6, fm1_flash.h) */
-enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_AUTOSAVE = OBJ_UPRESET0 + 2, OBJ_FM6BANK, OBJ_COUNT };
+enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_AUTOSAVE = OBJ_UPRESET0 + 2, OBJ_FM6BANK,
+#if ORBIT_BLE
+       OBJ_BLE,                              /* separate BLM1 object; existing object IDs never move */
+#endif
+       OBJ_COUNT };
 
 typedef struct {
     uint32_t magic;
@@ -109,6 +113,13 @@ static void st_owner_check(void)
 static void st_owner_check(void) {}
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
+#if ORBIT_BLE
+    /* Plain VM below the existing project store, above the app slot. Only
+     * this BLE object uses these sectors; its short payload leaves +0xF00
+     * erased (the SPL/loader update-record scan). Never use stock RF space. */
+    if (obj == OBJ_BLE)
+        return 0x93000u + copy * ST_SECTOR;
+#endif
     if (obj == OBJ_SETTINGS)
         return 0xFC000u + copy * ST_SECTOR;
     if (obj == OBJ_AUTOSAVE)
