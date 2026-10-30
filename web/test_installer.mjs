@@ -77,7 +77,7 @@ function makePackage({ product = "FM-1_900", marker = true, size = 0x2000, damag
 class El {
   constructor(id) {
     this.id = id; this.text = ""; this.history = []; this.disabled = false; this.hidden = false; this.value = "";
-    this.files = []; this.attrs = {}; this.listeners = {}; this.dataset = {};
+    this.files = []; this.attrs = {}; this.listeners = {}; this.dataset = {}; this.children = [];
   }
   get textContent() { return this.text; }
   set textContent(value) { this.text = String(value); this.history.push(this.text); }
@@ -85,6 +85,7 @@ class El {
   setAttribute(name, value) { this.attrs[name] = String(value); }
   removeAttribute(name) { delete this.attrs[name]; }
   getAttribute(name) { return name in this.attrs ? this.attrs[name] : null; }
+  replaceChildren(...children) { this.children = children; }
   dispatch(type) { return Promise.all((this.listeners[type] || []).map((fn) => fn({ type, target: this }))); }
   click() { return this.disabled ? Promise.resolve() : this.dispatch("click"); }
 }
@@ -98,6 +99,7 @@ class FakeDocument {
     this.ids = {};
     for (const { id, attrs } of PAGE_TAGS) {
       const el = new El(id);
+      el.ownerDocument = this;
       el.hidden = /\shidden\s/.test(attrs);
       el.disabled = /\sdisabled\s/.test(attrs);
       this.ids[id] = el;
@@ -107,6 +109,7 @@ class FakeDocument {
     this.baseURI = "https://orbit.test/site/index.html";
   }
   getElementById(id) { return this.ids[id] || null; }
+  createElement(tag) { return new El(tag); }
 }
 
 /* --------------------------------------------------------------------- fakes for the page's deps --- */
@@ -127,7 +130,7 @@ class FakeUpdater {
     for (const [kind, arg] of s.steps || []) { step(kind, arg); if (s.onStep) s.onStep(kind, arg); }
     if (s.error) throw Object.assign(new Error(s.error.message), { code: s.error.code, detail: s.error.detail || "" });
   }
-  async install(image, product, step, anyModel) { this.calls.push(["install", product, image.length]); this.anyModel = anyModel; this.run(step); return product; }
+  async install(image, product, step, anyModel) { this.calls.push(["install", product, image.length]); this.image = image.slice(); this.anyModel = anyModel; this.run(step); return product; }
   async resume(image, step, opts) { this.calls.push(["resume", opts]); this.run(step); return this.script.resumed !== false; }
 }
 
@@ -148,8 +151,8 @@ const body = (bytes) => ({ ok: true, status: 200, arrayBuffer: async () => bytes
 const json = (obj) => ({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(obj)) });
 const missing = { ok: false, status: 404, json: async () => { throw new Error("404"); }, arrayBuffer: async () => { throw new Error("404"); } };
 const fetchFor = (routes) => {
-  const log = [];
-  return { log, routes, fetch: async (url) => { log.push(url); return routes[url] || missing; } };
+  const log = [], options = [];
+  return { log, options, routes, fetch: async (url, opts) => { log.push(url); options.push(opts); return routes[url] || missing; } };
 };
 
 const VALID = makePackage();
@@ -369,6 +372,125 @@ async function releasePackage() {
   ok(!p.ui.install.disabled && p.ui.error.hidden && p.ctl.state.device.text === "FM-1_015", "retrying the repaired release reopens Install with the known device");
 }
 
+// Explicit gates hold operations open without sleeps or polling.
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+};
+const RELEASE_090 = { ...MANIFEST, version: "0.9.0", package: "firmware/orbit-0.9.0.fwsc" };
+const BLE_BYTES = makePackage({ size: 0x2100 });
+const RELEASE_BLE = { ...MANIFEST, version: "0.9.B", package: "firmware/orbit-0.9.B.fwsc", size: BLE_BYTES.length, sha256: hex(BLE_BYTES) };
+const VARIANTS = { ...RELEASE_BLE, variants: [RELEASE_090, RELEASE_BLE] };
+const variantRoutes = {
+  [`${SITE}manifest.json`]: json(VARIANTS),
+  [`${SITE}${RELEASE_090.package}`]: body(VALID),
+  [`${SITE}${RELEASE_BLE.package}`]: body(BLE_BYTES),
+};
+async function selectVersion(p, version) {
+  p.ui.version.value = version;
+  await p.ui.version.dispatch("change");
+}
+
+async function releaseVariants() {
+  const base = new URL(`${SITE}manifest.json`);
+  ok(parseManifest(MANIFEST, base).variants.length === 1, "single release: one default version");
+  ok(parseManifest(VARIANTS, base).variants.length === 2, "variants: numeric and Bluetooth versions accepted");
+  for (const variants of [[], [RELEASE_090], [RELEASE_BLE, RELEASE_BLE], [{ version: "0.9.B" }], "invalid"]) {
+    let bad;
+    try { parseManifest({ ...VARIANTS, variants }, base); } catch (e) { bad = e; }
+    ok(bad?.code === "release", `invalid variant contract rejected: ${JSON.stringify(variants)}`);
+  }
+  const single = await page({ routes: released });
+  ok(single.ui.version.disabled && single.ui.version.value === MANIFEST.version && single.ui.version.children.length === 1,
+    "single release: selector shows the default and stays disabled");
+  const p = await page({ routes: variantRoutes });
+  ok(p.ui.version.value === "0.9.B" && !p.ui.version.disabled && eq(p.ui.version.children.map((o) => o.value), ["0.9.0", "0.9.B"]),
+    "variants: selector lists versions, defaults to the root rather than array order");
+  ok(eq(p.net.log, [`${SITE}manifest.json`, `${SITE}${RELEASE_BLE.package}`]),
+    "variants: initial download checks only the root release");
+  for (const [release, bytes] of [[RELEASE_090, VALID], [RELEASE_BLE, BLE_BYTES]]) {
+    const before = p.net.log.length;
+    await selectVersion(p, release.version);
+    ok(eq(p.net.log.slice(before), [`${SITE}${release.package}`]) && p.ctl.state.manifest.version === release.version,
+      `switch to ${release.version}: only the selected release downloaded`);
+    ok(p.ui.pkgSha.textContent === hex(bytes) && p.ui.pkgSize.textContent === `${new Intl.NumberFormat("en-US").format(bytes.length)} bytes`
+      && p.ui.pkgSource.textContent.endsWith(release.version) && p.ui.releaseNote.textContent.includes(release.version),
+      `switch to ${release.version}: version, source, size and hash updated`);
+    await p.ui.connect.click();
+    const up = FakeUpdater.instances.at(-1);
+    up.script.steps = [["done", "FM-1_900"]];
+    await p.ui.install.click();
+    ok(eq(up.image, validatePackage(bytes).image) && up.calls.some((c) => c[0] === "install" && c[1] === "FM-1_900"),
+      `switch to ${release.version}: selected bytes installed despite identical FM-1_900 identity`);
+  }
+  p.net.routes[`${SITE}${RELEASE_090.package}`] = missing;
+  await selectVersion(p, "0.9.0");
+  ok(!p.ctl.state.done && p.ui.progress.hidden && p.ui.progress.getAttribute("value") === null
+    && p.ctl.state.pkg === null && p.ctl.state.pkgs.length === 0 && p.ui.pkgSha.textContent === "\u2014",
+    "failed switch: previous package, success and progress cleared");
+  const up = FakeUpdater.instances.at(-1), before = up.calls.length;
+  await p.ctl.install();
+  ok(p.ui.install.disabled && p.ui.connect.disabled && !p.ui.release.hidden && up.calls.length === before,
+    "failed switch: forced install cannot send stale bytes");
+  p.net.routes[`${SITE}${RELEASE_090.package}`] = body(VALID);
+  await p.ui.release.click();
+  ok(p.ctl.state.manifest.version === "0.9.0" && p.ctl.state.pkg.sha256 === hex(VALID),
+    "retry: selected version retained instead of returning to the root");
+  ok(p.net.options.every((opts) => opts.cache === "no-store"), "all manifest and variant downloads bypass cache");
+}
+
+async function busyVariants() {
+  const p = await page({ routes: variantRoutes });
+  const download = deferred(), entered = deferred();
+  p.net.routes[`${SITE}${RELEASE_090.package}`] = {
+    ok: true, arrayBuffer: () => { entered.resolve(); return download.promise; },
+  };
+  p.ui.version.value = "0.9.0";
+  const downloading = p.ui.version.dispatch("change");
+  await entered.promise;
+  const before = p.net.log.length;
+  await selectVersion(p, "0.9.B");
+  ok(p.ui.version.disabled && p.ui.version.value === "0.9.0" && p.net.log.length === before && p.ctl.state.pkg === null,
+    "download busy: forced selection is restored, no concurrent fetch or stale package");
+  download.resolve(VALID.slice().buffer);
+  await downloading;
+  ok(p.ctl.state.manifest.version === "0.9.0" && !p.ui.version.disabled, "download complete: selected version retained, selector unlocked");
+
+  const permission = deferred();
+  const q = await page({ routes: variantRoutes, midi: { request: () => permission.promise } });
+  const connecting = q.ui.connect.click();
+  await selectVersion(q, "0.9.0");
+  ok(q.ui.version.disabled && q.ui.version.value === "0.9.B" && q.net.log.length === 2,
+    "connect busy: version cannot change while MIDI permission is pending");
+  permission.resolve({ script: { identity: "FM-1_015" } });
+  await connecting;
+  const writing = deferred(), started = deferred();
+  const up = FakeUpdater.instances.at(-1);
+  up.install = async (image) => { up.image = image.slice(); started.resolve(); await writing.promise; };
+  const installing = q.ui.install.click();
+  await started.promise;
+  await selectVersion(q, "0.9.0");
+  ok(q.ui.version.disabled && q.ui.version.value === "0.9.B" && q.net.log.length === 2 && eq(up.image, validatePackage(BLE_BYTES).image),
+    "write busy: version and selected bytes cannot change");
+  writing.resolve();
+  await installing;
+  ok(!q.ui.version.disabled, "write complete: selector unlocked");
+}
+
+async function defaultFetchOptions() {
+  const original = globalThis.fetch, net = fetchFor(variantRoutes);
+  try {
+    globalThis.fetch = net.fetch;
+    const ctl = mount(new FakeDocument());
+    await ctl.ready;
+    ok(net.options.length === 2 && net.options.every((opts) => opts?.cache === "no-store"),
+      "mount default fetch wrapper forwards cache options");
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
 /* ------------------------------------------- the real Updater against the simulated FM-1 (test_web.mjs) --- */
 const HS = [0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7];
 const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
@@ -558,6 +680,9 @@ await installErrors();
 await connectErrors();
 await resumeInLoader();
 await releasePackage();
+await releaseVariants();
+await busyVariants();
+await defaultFetchOptions();
 await realUpdater();
 await smkKeyboards();
 

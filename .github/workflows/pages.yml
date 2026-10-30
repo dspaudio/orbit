@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Publish the ORBIT web installer to GitHub Pages from a published release. The release's own
-# orbit.fwsc and SHA256SUMS are downloaded and verified, tools/make_site.py generates the site
-# with that package under firmware/orbit-<version>.fwsc, the focused tests run, and the
+# orbit.fwsc and matching BLE release's orbit-ble.fwsc are downloaded with their SHA256SUMS
+# and verified separately. tools/make_site.py generates the site with both release variants,
+# the focused tests run, and the
 # artifact is deployed with the GitHub Pages actions. The repository's Pages source must be
 # set to "GitHub Actions" once; no binary is ever committed to the source tree.
 name: pages
@@ -24,25 +25,31 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Download the release package and verify its checksum
+      - name: Download both release packages and verify their checksums
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           TAG=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          BLE_TAG="${TAG%.*}.B"
           printf 'TAG=%s\n' "$TAG" >> "$GITHUB_ENV"
-          mkdir release
+          printf 'BLE_TAG=%s\n' "$BLE_TAG" >> "$GITHUB_ENV"
+          mkdir -p release/ble
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release \
             --pattern orbit.fwsc --pattern SHA256SUMS
-          cd release
-          sha256sum --check --strict --ignore-missing SHA256SUMS
-          sha256sum orbit.fwsc
+          gh release download "$BLE_TAG" --repo "$GITHUB_REPOSITORY" --dir release/ble \
+            --pattern orbit-ble.fwsc --pattern SHA256SUMS
+          (cd release && sha256sum --check --strict --ignore-missing SHA256SUMS && sha256sum orbit.fwsc)
+          (cd release/ble && sha256sum --check --strict --ignore-missing SHA256SUMS && sha256sum orbit-ble.fwsc)
 
       - name: Generate the site
         run: |
           set -euo pipefail
           python3 tools/make_site.py --package release/orbit.fwsc --version "${TAG#v}" --out build/site \
-            --release-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+            --release-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}" \
+            --ble-package release/ble/orbit-ble.fwsc --ble-version "${BLE_TAG#v}" \
+            --ble-release-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${BLE_TAG}"
           cat build/site/manifest.json
 
       - name: Check the installer and the generated site

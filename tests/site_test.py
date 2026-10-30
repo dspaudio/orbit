@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 """tools/make_site.py against a synthetic package (the one tests/install_test.py builds) and,
-when build/orbit.fwsc exists, against the real package. Run from the repo root:
+when build/orbit.fwsc and build/orbit-ble.fwsc exist, against both real packages.
+CI also uses release/orbit.fwsc and release/ble/orbit-ble.fwsc. Run from the repo root:
   python3 tests/site_test.py
 Writes only below a temporary directory; build/site is left to the generator's own runs."""
 import hashlib
@@ -121,6 +122,7 @@ def failures(good):
         (TMP / "other.fwsc", package(product="FM1-900"), "0.0.1", "not an FM-1 package", "package without a valid identity"),
         (good, None, "v0.0.1", "version", "version with a leading v"),
         (good, None, "0.1", "version", "two-part version"),
+        (good, None, "0.9.B", "version", "BLE version used as the default"),
     ]
     for path, content, version, message, label in cases:
         if content is not None:
@@ -159,10 +161,79 @@ def smk_packages(good):
     rc, _, err = run("--package", str(good), "--package", str(paths[1]), "--package", str(twice), "--version", "0.0.1",
                      "--out", str(TMP / "site-twice"))
     ok(rc == 2 and "same identity" in err and not (TMP / "site-twice").exists(), "two packages with one identity: exit 2, nothing written")
+    dual_packages(paths, good, "site-smk-ble")
+
+
+def dual_packages(paths, ble, label):
+    """Generate both releases and compare complete manifests with the input bytes."""
+    out = TMP / label
+    releases = "https://github.com/dspaudio/orbit/releases/tag/v"
+    expected = []
+    for inputs, version in ((paths, "0.9.0"), ([ble], "0.9.B")):
+        entries = [{"product": I.product_of(path.read_bytes()),
+                    "package": f"firmware/{path.stem if i else 'orbit'}-{version}.fwsc",
+                    "size": path.stat().st_size, "sha256": sha(path)} for i, path in enumerate(inputs)]
+        entry = {"name": "ORBIT", "version": version, **entries[0], "release_url": releases + version}
+        if len(entries) > 1:
+            entry["packages"] = entries
+        expected.append(entry)
+    args = [arg for path in paths for arg in ("--package", str(path))]
+    rc, _, err = run(*args, "--version", "0.9.0", "--release-url", releases + "0.9.0",
+                     "--ble-package", str(ble), "--ble-version", "0.9.B",
+                     "--ble-release-url", releases + "0.9.B", "--out", str(out))
+    manifest = {**expected[0], "variants": expected}
+    ok(rc == 0 and not err and (out / "manifest.json").read_bytes()
+       == (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode(),
+       f"{label}: complete variants and unchanged default manifest bytes")
+    published = [(expected[0]["package"], paths[0]), (expected[1]["package"], ble)]
+    published += [(entry["package"], path) for entry, path in zip(expected[0].get("packages", [])[1:], paths[1:])]
+    ok(rc == 0 and all((out / name).read_bytes() == path.read_bytes() for name, path in published),
+       f"{label}: default, hardware and BLE packages copied byte for byte")
+    if rc == 0:
+        sums = {line[66:]: line[:64] for line in (out / "SHA256SUMS").read_text().splitlines()}
+        ok(sums == {name: digest for name, digest in tree(out).items() if name != "SHA256SUMS"},
+           f"{label}: SHA256SUMS covers both releases and every site file")
+
+
+def ble_failures(good):
+    out = TMP / "bad-ble"
+    base = ("--package", str(good), "--version", "0.9.0", "--out", str(out))
+    options = (("--ble-package", str(good)), ("--ble-version", "0.9.B"),
+               ("--ble-release-url", "https://example.test/v0.9.B"))
+    for mask in range(1, 7):
+        partial = [arg for i, pair in enumerate(options) if mask & (1 << i) for arg in pair]
+        rc, _, err = run(*base, *partial)
+        ok(rc == 2 and "required together" in err and not out.exists(),
+           f"BLE option subset {mask}: exit 2, nothing written")
+    cases = [
+        (good, "0.9.0", "https://example.test", "BLE version"),
+        (good, "v0.9.B", "https://example.test", "BLE version"),
+        (good, "0.9.b", "https://example.test", "BLE version"),
+        (good, "0.9.B/../bad", "https://example.test", "BLE version"),
+        (good, "0.9.B", "http://example.test", "https"),
+        (good, "0.9.B", "", "https"),
+        (TMP / "missing.fwsc", "0.9.B", "https://example.test", "cannot read"),
+        (TMP / "damaged.fwsc", "0.9.B", "https://example.test", "damaged package"),
+    ]
+    for path, version, url, message in cases:
+        rc, _, err = run(*base, "--ble-package", str(path), "--ble-version", version, "--ble-release-url", url)
+        ok(rc == 2 and message in err and not out.exists(),
+           f"invalid BLE {path.name}/{version}/{url}: exit 2, nothing written")
+    occupied = TMP / "site"
+    before = tree(occupied)
+    rc, _, err = run("--package", str(good), "--version", "0.9.0", "--out", str(occupied),
+                     "--ble-package", str(TMP / "damaged.fwsc"), "--ble-version", "0.9.B",
+                     "--ble-release-url", "https://example.test")
+    ok(rc == 2 and "damaged package" in err and tree(occupied) == before,
+       "invalid BLE package leaves an existing generated site unchanged")
 
 
 def real_package():
     built = ROOT / "build/orbit.fwsc"
+    ble = ROOT / "build/orbit-ble.fwsc"
+    if not built.exists():
+        built = ROOT / "release/orbit.fwsc"
+        ble = ROOT / "release/ble/orbit-ble.fwsc"
     if not built.exists():
         print(f"{'build/orbit.fwsc absent: the real-package site was not generated':<72} SKIP")
         return
@@ -173,12 +244,23 @@ def real_package():
     ok(rc == 0 and manifest.get("sha256") == sha(built) and manifest.get("size") == built.stat().st_size
        and manifest.get("product") == "FM-1_900" and (out / "firmware/orbit-0.6.0.fwsc").read_bytes() == built.read_bytes(),
        f"build/orbit.fwsc site: {manifest.get('product')} {manifest.get('size')} bytes sha256 {manifest.get('sha256', '')[:16]}...")
+    if ble.exists():
+        dual_packages([built], ble, "real-dual-release")
+        duplicate = TMP / "real-duplicate"
+        rc, _, err = run("--package", str(built), "--package", str(ble), "--version", "0.9.0",
+                         "--out", str(duplicate), "--ble-package", str(ble), "--ble-version", "0.9.B",
+                         "--ble-release-url", "https://example.test")
+        ok(rc == 2 and "same identity" in err and not duplicate.exists(),
+           "real FM-1 variants cannot bypass the hardware duplicate identity guard")
+    else:
+        print("real BLE package absent: dual real-package site not generated SKIP")
 
 
 try:
     good = generated_site()
     failures(good)
     smk_packages(good)
+    ble_failures(good)
     real_package()
 finally:
     if not failed:

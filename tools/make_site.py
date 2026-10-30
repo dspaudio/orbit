@@ -9,7 +9,8 @@ installer reads (identity, size, SHA-256 of that file) and SHA256SUMS over every
 --package may be given again for the M-Vave SMK-37 packages of the same release (orbit-smk37.fwsc,
 orbit-smk37-elite.fwsc, orbit-smk37-mke.fwsc): each is published as firmware/<name>-<version>.fwsc and
 listed in manifest.json "packages"; the installer writes the one for the connected keyboard. With one
-package the site is as before."""
+package the site is as before. --ble-package, --ble-version and --ble-release-url together add
+complete default and BLE release entries to "variants", separate from hardware "packages"."""
 import argparse
 import hashlib
 import json
@@ -27,6 +28,7 @@ INDEX = "installer.html"
 COPIED = ["installer.js", "fm1ota.js", "fm1pkg.js", "editor.html", "fukiai.ttf", "FUKIAI-LICENSE.txt",
           "screens/envelope.svg", "screens/preset.svg", "screens/tape.svg"]
 VERSION = re.compile(r"\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?")
+BLE_VERSION = re.compile(r"\d+\.\d+\.B")
 
 
 class SiteError(Exception):
@@ -45,9 +47,8 @@ def checked_package(package):
     return product, package.read_bytes()
 
 
-def generate(package, version, out, release_url=None):
-    if not VERSION.fullmatch(version):
-        raise SiteError(f"version {version!r} is not MAJOR.MINOR.PATCH (no leading v)")
+def release_manifest(package, version, release_url):
+    """Check one release's hardware packages and prepare its manifest and file bytes."""
     if release_url and not release_url.startswith("https://"):
         raise SiteError(f"release URL {release_url!r} is not https")
     packages = list(package) if isinstance(package, (list, tuple)) else [package]
@@ -57,6 +58,38 @@ def generate(package, version, out, release_url=None):
     if len({path.stem for path in packages}) != len(packages):
         raise SiteError("two packages with the same file name")
     _path, product, raw = checked[0]
+    package_path = f"firmware/orbit-{version}.fwsc"
+    files = {package_path: raw}
+    manifest = {"name": "ORBIT", "version": version, "product": product, "package": package_path,
+                "size": len(raw), "sha256": sha256(raw)}
+    if len(checked) > 1:                          # the SMK-37 packages: after the first, by their file names
+        entries = [{"product": product, "package": package_path, "size": len(raw), "sha256": sha256(raw)}]
+        for path, prod, data in checked[1:]:
+            rel = f"firmware/{path.stem}-{version}.fwsc"
+            files[rel] = data
+            entries.append({"product": prod, "package": rel, "size": len(data), "sha256": sha256(data)})
+        manifest["packages"] = entries
+    if release_url:
+        manifest["release_url"] = release_url
+    return manifest, files
+
+
+def generate(package, version, out, release_url=None, *, ble_package=None, ble_version=None, ble_release_url=None):
+    if not VERSION.fullmatch(version):
+        raise SiteError(f"version {version!r} is not MAJOR.MINOR.PATCH (no leading v)")
+    ble_options = (ble_package, ble_version, ble_release_url)
+    if any(value is not None for value in ble_options):
+        if not all(value is not None for value in ble_options):
+            raise SiteError("--ble-package, --ble-version and --ble-release-url are required together")
+        if not BLE_VERSION.fullmatch(ble_version):
+            raise SiteError(f"BLE version {ble_version!r} is not MAJOR.MINOR.B (no leading v)")
+        if not ble_release_url or not ble_release_url.startswith("https://"):
+            raise SiteError(f"BLE release URL {ble_release_url!r} is not https")
+    manifest, package_files = release_manifest(package, version, release_url)
+    if ble_package is not None:
+        ble_manifest, ble_files = release_manifest(ble_package, ble_version, ble_release_url)
+        manifest["variants"] = [manifest.copy(), ble_manifest]
+        package_files.update(ble_files)
     if out.exists() and not (out / "manifest.json").exists():
         raise SiteError(f"{out} exists and is not a generated site: refusing to replace it")
     if out.exists():
@@ -66,19 +99,8 @@ def generate(package, version, out, release_url=None):
     for name in COPIED:
         (out / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(WEB / name, out / name)
-    package_path = f"firmware/orbit-{version}.fwsc"
-    (out / package_path).write_bytes(raw)
-    manifest = {"name": "ORBIT", "version": version, "product": product, "package": package_path,
-                "size": len(raw), "sha256": sha256(raw)}
-    if len(checked) > 1:                          # the SMK-37 packages: after the first, by their file names
-        entries = [{"product": product, "package": package_path, "size": len(raw), "sha256": sha256(raw)}]
-        for path, prod, data in checked[1:]:
-            rel = f"firmware/{path.stem}-{version}.fwsc"
-            (out / rel).write_bytes(data)
-            entries.append({"product": prod, "package": rel, "size": len(data), "sha256": sha256(data)})
-        manifest["packages"] = entries
-    if release_url:
-        manifest["release_url"] = release_url
+    for name, data in package_files.items():
+        (out / name).write_bytes(data)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     files = sorted(path for path in out.rglob("*") if path.is_file())
     (out / "SHA256SUMS").write_text("".join(f"{sha256(path.read_bytes())}  {path.relative_to(out).as_posix()}\n"
@@ -93,9 +115,14 @@ def main(argv=None):
     parser.add_argument("--version", required=True, help="release version, MAJOR.MINOR.PATCH")
     parser.add_argument("--out", type=Path, default=ROOT / "build/site", help="output directory (default: build/site)")
     parser.add_argument("--release-url", help="https URL of the release page, recorded in manifest.json")
+    parser.add_argument("--ble-package", type=Path, help="BLE .fwsc for a separate release variant")
+    parser.add_argument("--ble-version", help="BLE release version, MAJOR.MINOR.B")
+    parser.add_argument("--ble-release-url", help="https URL of the BLE release page")
     args = parser.parse_args(argv)
     try:
-        manifest = generate(args.package, args.version, args.out, args.release_url)
+        manifest = generate(args.package, args.version, args.out, args.release_url,
+                            ble_package=args.ble_package, ble_version=args.ble_version,
+                            ble_release_url=args.ble_release_url)
     except SiteError as error:
         print(f"make_site: {error}", file=sys.stderr)
         return 2

@@ -15,7 +15,7 @@ import { validatePackage, sha256hex } from "./fm1pkg.js";
 const MAXDATA = 512;                                  // the largest read the loader asks for (fm1ota.js)
 const IS_OTA = (id) => /^ota-/i.test(id.model);
 const modelOf = (id) => id.model.replace(/^ota-/i, "");
-const VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/;
+const VERSION = /^\d+\.\d+\.(?:\d+|B)(-[0-9A-Za-z.]+)?$/;
 const IDENTITY = /^[^_]+_\d+$/;
 const number = new Intl.NumberFormat("en-US");
 const fail = (code, msg, detail = "") => Object.assign(new Error(msg), { code, detail });
@@ -115,7 +115,7 @@ function parseEntry(e, base) {
   return { product, size, sha256, url: url.href };
 }
 
-export function parseManifest(json, base) {
+function parseRelease(json, base) {
   if (!json || typeof json !== "object") throw fail("release", "the manifest is not an object");
   const { version, product, size, sha256, name } = json;
   if (typeof version !== "string" || !VERSION.test(version)) throw fail("release", "the manifest has no valid version");
@@ -132,13 +132,23 @@ export function parseManifest(json, base) {
   return { name: typeof name === "string" ? name : "ORBIT", version, product, size, sha256, url: url.href, releaseUrl, packages };
 }
 
+export function parseManifest(json, base) {
+  const root = parseRelease(json, base);
+  const variants = json.variants === undefined ? [root]
+    : Array.isArray(json.variants) ? json.variants.map((v) => parseRelease(v, base)) : [];
+  if (!variants.some((v) => v.version === root.version) || new Set(variants.map((v) => v.version)).size !== variants.length)
+    throw fail("release", "the manifest must list each version once, including the default");
+  // The root entry remains authoritative for the default release.
+  return { ...root, variants: variants.map((v) => v.version === root.version ? root : v) };
+}
+
 export function createInstaller(deps) {
   const { ui, requestMIDIAccess, manifestUrl = "manifest.json", baseUrl } = deps;
   const fetchFn = deps.fetch;
   const UpdaterClass = deps.Updater || Updater;
   const validate = deps.validatePackage || validatePackage;
   const digest = deps.sha256hex || sha256hex;
-  const state = { pkg: null, pkgs: [], device: null, updater: null, manifest: null, busy: false, done: false };
+  const state = { pkg: null, pkgs: [], device: null, updater: null, manifest: null, releases: [], version: "", busy: false, done: false };
   const labels = { connect: ui.connect.textContent, install: ui.install.textContent };
   const WORKING = { connect: "Connecting\u2026", install: "Installing\u2026" };
 
@@ -186,6 +196,7 @@ export function createInstaller(deps) {
   function refresh() {
     const check = preflight(state.pkg, state.device);
     ui.release.disabled = state.busy;
+    ui.version.disabled = state.busy || state.releases.length < 2;
     ui.release.hidden = state.busy || Boolean(state.pkg);
     ui.connect.disabled = state.busy || !state.pkg;
     ui.install.disabled = state.busy || !check.ok;
@@ -200,21 +211,41 @@ export function createInstaller(deps) {
     else ui.status.textContent = "Install is blocked: see the message below.";
   }
 
-  async function useRelease() {
-    if (state.busy) return;
+  async function useRelease(version) {
+    if (state.busy) {
+      ui.version.value = state.version;
+      return;
+    }
     setBusy("download");
     clearError();
     state.pkg = null;
     state.pkgs = [];
     state.manifest = null;
     state.done = false;
-    ui.status.textContent = "Downloading and checking the latest firmware...";
+    ui.progress.hidden = true;
+    ui.progress.removeAttribute("value");
+    ui.releaseNote.textContent = "";
+    ui.status.textContent = "Downloading and checking the selected firmware...";
     showPackage();
     try {
-      const base = new URL(manifestUrl, baseUrl);
-      const manifest = await fetchFn(base.href, { cache: "no-store" });
-      if (!manifest.ok) throw fail("release", `manifest.json: HTTP ${manifest.status}`);
-      const m = parseManifest(await manifest.json(), base);
+      if (version === undefined) {
+        const base = new URL(manifestUrl, baseUrl);
+        const manifest = await fetchFn(base.href, { cache: "no-store" });
+        if (!manifest.ok) throw fail("release", `manifest.json: HTTP ${manifest.status}`);
+        const root = parseManifest(await manifest.json(), base);
+        state.releases = root.variants;
+        version = state.releases.some((v) => v.version === state.version) ? state.version : root.version;
+        ui.version.replaceChildren(...state.releases.map((v) => {
+          const option = ui.version.ownerDocument.createElement("option");
+          option.value = v.version;
+          option.textContent = `${v.name} ${v.version}`;
+          return option;
+        }));
+      }
+      const m = state.releases.find((v) => v.version === version);
+      if (!m) throw fail("release", "the selected firmware version is not in the manifest");
+      state.version = m.version;
+      ui.version.value = m.version;
       state.manifest = m;
       ui.releaseNote.textContent = m.packages.length > 1
         ? `${m.name} ${m.version} for ${m.packages.map((p) => p.product).join(", ")}.`
@@ -327,7 +358,7 @@ export function createInstaller(deps) {
   return { state, ready, useRelease, connect, install };
 }
 
-const IDS = ["release", "releaseNote", "pkgSource", "pkgProduct", "pkgSize", "pkgSha", "connect", "device",
+const IDS = ["version", "release", "releaseNote", "pkgSource", "pkgProduct", "pkgSize", "pkgSha", "connect", "device",
   "install", "progress", "status", "error", "errorTitle", "errorDetail", "errorRecovery"];
 
 function requestMIDI(options) {
@@ -350,10 +381,11 @@ export function mount(doc, overrides = {}) {
     manifestUrl: (doc.body && doc.body.dataset && doc.body.dataset.manifest) || "manifest.json",
     baseUrl: doc.baseURI,
     requestMIDIAccess: requestMIDI,
-    fetch: (url) => fetch(url),
+    fetch: (url, options) => fetch(url, options),
     ...overrides,
   });
   ui.release.addEventListener("click", () => ctl.useRelease());
+  ui.version.addEventListener("change", () => ctl.useRelease(ui.version.value));
   ui.connect.addEventListener("click", () => ctl.connect());
   ui.install.addEventListener("click", () => ctl.install());
   const win = doc.defaultView;
