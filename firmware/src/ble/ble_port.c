@@ -193,8 +193,8 @@ void *bt_vm_interface(void) { return 0; }                /* no VM: bonding off (
 uint32_t sdfile_get_disk_capacity(void) { return 0x100000u; }
 
 /* ---- the radio's Wi-Fi-side calibration (SDK apps/common/net/wifi_conf.c, user_cfg.c; board demo_ble defaults).
- * The SDK versions read stored trims and write what they used back to VM; these never write: no stored trim, so
- * the radio calibrates fresh at each start. ---- */
+ * Stock VM is read-only. ble_rf.c supplies stock trim, an ORBIT-kept copy,
+ * or recovery defaults; the core alone persists the chosen record in OBJ_BLE. ---- */
 #include "ble_rf_tables.c"
 /* the radio calibration (wl_rf_common wf_rf_trim, ~500 ms) brackets itself with these. The SDK's (apps/common/net/
  * wifi_conf.c, CONFIG_RF_TRIM_CODE_AT_RAM) stop flash access (norflash_enter_spi_code); here: interrupts off, as
@@ -215,51 +215,13 @@ BLE_RAM void exit_wifi_rf_trim_region(uint32_t **start_of_region, uint8_t *rf_tr
     fm1_ble_irq_on();
 }
 const uint8_t WIFI_PA_ENABLE = 0, wifi_temperature_drift_trim_on = 0;
-/* the radio calibration the stock firmware stored (ble_vm.c) is used instead of running the trim, which hangs or
- * crashes here (fm1-lsdj docs/ble/DEVICE_STEPS.md, round 4): with a valid record, wf_rf_common_init skips wf_rf_trim */
+/* Keep the SDK quick-start path. Live trim still polls wlrf_get_(1) bit 5
+ * without a timeout (wf_rf_cal.c:214); fm1-lsdj 548ce73 DEVICE_STEPS.md reports
+ * watchdog resets there even with RAM code and counted delays. A valid CRC
+ * record skips that path in wifi_trim_is_already / quick_start_wifi_trim. */
 const uint8_t RFIinitUseTrimValue = 1;
-static uint8_t ble_rf_trim[BLE_VM_RF_TRIM_LEN];
-static uint32_t ble_rf_trim_at;                          /* flash offset of the record used, 1 the kept copy, 0 none */
-#define BLE_VM_FROM 0xE5000u                             /* the plain area the stock config store lives in */
-#define BLE_VM_TO 0xFC000u
-/* scan the config store; 1 = a record for the radio (the store's, else the copy the firmware kept: core_rf_keep_get).
- * The store's is handed to the firmware to keep whenever its copy is missing or another (ble_vm_rf_pick) */
-static __attribute__((unused)) int ble_rf_trim_load(void)
-{
-    static uint8_t buf[512];
-    uint8_t kept[BLE_VM_RF_TRIM_LEN], found[BLE_VM_RF_TRIM_LEN];
-    uint32_t off, from;
-    int keep;
-    ble_rf_trim_at = 0;
-    for (off = BLE_VM_FROM; off < BLE_VM_TO; off += sizeof buf - (4u + BLE_VM_RF_TRIM_LEN)) {
-        uint32_t n = BLE_VM_TO - off < sizeof buf ? BLE_VM_TO - off : sizeof buf;
-        uint8_t rec[BLE_VM_RF_TRIM_LEN];
-        core_wdt_feed();
-        if (core_flash_read(off, buf, n))
-            return 0;
-        if (ble_vm_rf_trim(buf, n, rec)) {
-            memcpy(found, rec, sizeof rec);
-            ble_rf_trim_at = off;
-        }
-        if (n < sizeof buf)
-            break;
-    }
-    from = ble_vm_rf_pick(ble_rf_trim_at ? found : 0, core_rf_keep_get(kept) ? kept : 0, ble_rf_trim, &keep);
-    if (keep)
-        core_rf_keep_put(ble_rf_trim);
-    if (from == 2u)
-        ble_rf_trim_at = 1;
-    return from != 0;
-}
+#include "ble_rf.c"
 uint8_t RTDebugLevel = 0;
-int wifi_get_rf_trim_data(void *info, int size)
-{
-    if (!ble_rf_trim_at || size != (int)BLE_VM_RF_TRIM_LEN)
-        return -1;
-    memcpy(info, ble_rf_trim, BLE_VM_RF_TRIM_LEN);
-    return 0;
-}
-int wifi_set_rf_trim_data(void *info, int size) { (void)info; (void)size; return -1; }
 void wifi_get_xosc(uint8_t *xosc) { xosc[0] = 0x0B; xosc[1] = 0x0B; }   /* board.c demo default: crystal caps */
 int wifi_get_pa_trim_data(uint8_t *pa)
 {

@@ -1,5 +1,52 @@
 # ORBIT validation record
 
+## ORBIT 0.10.0 and 0.10.B release, 2026-10-31
+
+The default package identifies its firmware as `ORBIT 0.10.0`; the Bluetooth
+MIDI package uses `ORBIT 0.10.B`. Both keep `FM-1_900`, ORP8, OPB3, `step_t`,
+the 104-byte settings object and editor protocol 13. SYNC = OUT uses value 3
+of the existing two-bit SYNC field; older firmware reads it as INT.
+
+### Changes and focused tests
+
+| Change | Host evidence |
+| --- | --- |
+| SYNC = OUT sends MIDI clock, START and STOP (`seq.c` `clock_out_block`) | `midi_clock_test`: START before the first clock, 192 clocks in 4 s at 120 BPM, 96 at 60 BPM right after the change, STOP then silence, nothing with INT, no following of an incoming clock with OUT |
+| Controller mode toggles on an OCT- + OCT+ tap; ENV + LFO hold removed (`ctrl.c`) | `ctrl_test`: tap on/off, no toggle on a 1 s hold, on presses 0.3 s apart, or with a key, ENV or LFO held; the tap sends no MIDI |
+| Drum GRID: white keys and KNOB 1/2 silent, black keys audition, black keys record while REC plays (`ui_studio.c`, `seq.c`) | `ui_pages_test`: silent white key and knobs, black-key audition, all 11 black-key voices recorded during REC playback, no step change when stopped |
+| 0.10.B radio calibration order: stock, kept copy, recovery values (`ble_rf.c`, `ble_vm.c`) | `ble_rf_test` (also under ASan/UBSan): erased VM, damaged kept copy, stock priority, boundary records, persistence, write failure, partial scan |
+
+### Checks
+
+| Check | Result |
+| --- | --- |
+| Default build, `tools/build.py` with venv Python | Exit 0; app 564,984 B, static RAM 78,760 / 98,304 B, POOL 328,444 / 344,064 B |
+| Default `tests/target_budget.py` | Exit 0, budgets unchanged |
+| `ORBIT_BLE=1 JIELI_DOCKER=1 tools/build.py` | Exit 0; app 516,860 B, static RAM 92,932 / 98,304 B, POOL 293,904 / 344,064 B; RAM code 7,084 B, 2,362 instructions, all inside RAM code |
+| `sh tests/run_tests.sh` with Homebrew LLVM 23 sanitizers and an explicit macOS SDK | Exit 0, `ALL HOST TESTS PASSED`; 218 golden renders, 0 changed, 0 gone, 0 health, voice or CPU failures |
+| `tools/orbit_check.py` on macOS | 44 PASS; `irq_init_test` is the known macOS-only compile failure |
+| `tests/orbit_preview_test.py`, `node web/test_web.mjs` | Exit 0 |
+
+The BLE package still exceeds the default SAMPLE/GRAIN static-cost
+baselines, as in 0.9.B; those baselines are unchanged.
+
+Package SHA-256:
+
+- `orbit.fwsc` (610,032 B): `11ca7174c48c9decdef809af940e1b41d54b7c927abeedafa7b7864ce8dc374b`
+- `orbit-ble.fwsc` (610,032 B): `467432ca3f5550256c64bfc8b76c3ec562a96c11dd829c035d9cfbcafb9fca23`
+
+### FM-1 testing
+
+During development, builds carrying these changes (still labelled
+`ORBIT 0.9.B`) were installed on the owner's FM-1 with
+`tools/fm1_install.py`; each install reached 100%, restarted and returned
+`FM-1_900`. The device owner confirmed normal operation, Bluetooth, the
+OCT tap, the quiet GRID and clock out. The released 0.10.B differs from the
+last of those builds only in its version string. The recovery calibration
+path has not run on a unit whose stock calibration is erased; the owner's
+unit has its stock record. Clock jitter, drift, Bluetooth latency and audio
+under radio load were not measured. Logs are in `build/verification/0.10/`.
+
 ## ORBIT 0.9.0 and 0.9.B candidates, 2026-10-30
 
 These are local candidates, not published or hardware-qualified releases.

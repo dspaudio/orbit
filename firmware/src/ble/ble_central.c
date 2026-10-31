@@ -648,8 +648,8 @@ static void ble_start(void)
 {
     if (st != BLE_OFF)
         return;
-    if (!ble_rf_trim_load()) {                     /* no stored radio calibration: do not start (the trim hangs) */
-        set_err("NO RF TRIM IN FLASH", 0);
+    if (!ble_rf_trim_load()) {                     /* failed scan, not an erased VM: no partial record */
+        set_err("RF READ FAIL", 0);
         st = BLE_FAILED;
         return;
     }
@@ -1018,6 +1018,7 @@ BLE_CON void ble_status(void)                      /* console `ble` */
     core_con_puts(b);
     o = put_s(b, "  rf trim ");
     o = ble_rf_trim_at == 1u ? put_s(o, "kept copy")
+      : ble_rf_trim_at == 2u ? put_s(o, "fallback")
       : ble_rf_trim_at ? put_x(put_x(put_x(put_s(o, "at 0x"), ble_rf_trim_at >> 16), ble_rf_trim_at >> 8), ble_rf_trim_at)
       : put_s(o, "not loaded");
     o = put_s(o, "\r\n");

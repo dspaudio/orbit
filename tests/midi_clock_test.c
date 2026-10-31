@@ -37,6 +37,35 @@ static int steady(uint32_t src)
     return ok;
 }
 
+/* SYNC = OUT: run audio blocks for secs seconds; count START, clock and STOP packets sent to USB MIDI */
+static uint32_t n_start, n_clock, n_stop, first_pkt;
+static void out_drain(void)
+{
+    while (mo_r != mo_w) {
+        uint32_t p = midi_out_q[mo_r % MQ] & 0xFFFFu;
+        if (!first_pkt)
+            first_pkt = p;
+        n_start += p == 0xFA0Fu;
+        n_clock += p == 0xF80Fu;
+        n_stop += p == 0xFC0Fu;
+        mo_r++;
+    }
+}
+static void run_secs(uint32_t secs)
+{
+    uint32_t k;
+    int32_t o[2 * CTL];
+    for (k = 0; k < secs * FS / CTL; k++) {
+        mix_block(o, CTL);
+        out_drain();
+    }
+}
+static void out_reset(void)
+{
+    out_drain();
+    n_start = n_clock = n_stop = first_pkt = 0;
+}
+
 int main(void)
 {
     int fails = 0, ok;
@@ -61,6 +90,36 @@ int main(void)
         beat(510 + i * 2u, 1);
     ok &= song.g[G_BPM] < 120;
     CHECK(ok, "clock timeout discards old beats and a small tempo ramp still follows");
+
+    host_tracks_init();
+    memset(&mclk, 0, sizeof mclk);
+    usb.config = 1;
+    song.g[G_SYNC] = 3;                               /* OUT */
+    song.g[G_BPM] = 120;
+    out_reset();
+    transport_req = 1;
+    run_secs(4);
+    CHECK(first_pkt == 0xFA0Fu && n_start == 1u && n_stop == 0u, "SYNC OUT: PLAY sends START before the first clock");
+    CHECK(n_clock >= 191u && n_clock <= 193u, "SYNC OUT: 24 clocks a beat at 120 BPM (192 in 4 s)");
+    out_reset();
+    song.g[G_BPM] = 60;
+    run_secs(4);
+    CHECK(n_clock >= 95u && n_clock <= 97u, "SYNC OUT: a tempo change is followed at once (96 in 4 s at 60 BPM)");
+    out_reset();
+    transport_req = 2;
+    run_secs(1);
+    CHECK(n_stop == 1u && n_clock == 0u && !song.playing, "SYNC OUT: stop sends STOP, then no clock");
+    out_reset();
+    song.g[G_SYNC] = 0;                               /* INT */
+    transport_req = 1;
+    run_secs(2);
+    transport_req = 2;
+    run_secs(1);
+    CHECK(n_start + n_clock + n_stop == 0u, "SYNC INT: no clock, START or STOP is sent");
+    song.g[G_SYNC] = 3;
+    mclk.alive = 1;
+    mclk.last_ms = fm1_ms;
+    CHECK(!mclk_on(), "SYNC OUT never follows an incoming clock");
     printf("midi_clock: %d failed\n", fails);
     return fails;
 }

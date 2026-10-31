@@ -7,7 +7,6 @@
  * confirm: clear, save), REC (armed / free take). Every band is drawn into the canvas only when its
  * signature changed. */
 static uint8_t drum_page, drum_lane, drum_cursor;   /* drum_page: 0 GRID, 1 KIT */
-static const uint8_t GRID_LANE[11] = {0, 2, 4, 5, 3, 7, 9, 10, 11, 12, 15};
 static void trk_short_name(uint32_t c, char *b);
 static int32_t batt_shown(void);
 static void draw_battery(int usb_label);
@@ -495,7 +494,8 @@ static void drum_clear_empty(uint32_t step)
         step_fill_set(TDRUM, step, FC_NORM);
     }
 }
-/* GRID: black keys select voices silently; white keys toggle the current bank's steps.
+/* GRID: black keys select and audition voices (recording: seq.c key_down plays and records them); white keys toggle the current bank's steps silently (a hit is
+ * heard only when the playhead reaches it: editing live makes no extra sound).
  * KNOB 1 still reaches all 16 lanes; OCT changes banks, KNOB 2 moves the cursor. */
 static void grid_key(uint32_t k)
 {
@@ -506,6 +506,8 @@ static void grid_key(uint32_t k)
         for (idx = 0; idx < 11u; idx++)
             if (PUNCH_BLACK[idx] == k) {
                 drum_lane = GRID_LANE[idx];
+                if (!grid_rec_live())                   /* (recording: already played by key_down) */
+                    audition_lane(drum_lane);
                 ui.force = 1;
                 break;
             }
@@ -530,8 +532,6 @@ static void grid_key(uint32_t k)
         TDRUM->seq_active = 1;
     }
     fm1_irq_on();
-    if (dstep_has(st, drum_lane))
-        audition_lane(drum_lane);
     sync_reload = 1;
 }
 
@@ -582,16 +582,10 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
         ui.hot_t = 40;
         if (!drum_page) {
             dstep_t *st = &TDRUM->dstep[drum_cursor];
-            if (k == 0) {                              /* the sound: heard */
-                uint8_t l = (uint8_t)clamp(drum_lane + s, 0, DRUM_LANES - 1);
-                if (l != drum_lane) audition_lane(l);
-                drum_lane = l;
-            }
-            if (k == 1) {                              /* the step: what it holds, heard */
-                uint8_t c = (uint8_t)clamp(drum_cursor + s, 0, TDRUM->p[P_SLEN] - 1);
-                if (c != drum_cursor) audition_step(&TDRUM->dstep[c]);
-                drum_cursor = c;
-            }
+            if (k == 0)                                /* the sound, silently (black keys audition) */
+                drum_lane = (uint8_t)clamp(drum_lane + s, 0, DRUM_LANES - 1);
+            if (k == 1)                                /* the step, silently: heard from the playhead */
+                drum_cursor = (uint8_t)clamp(drum_cursor + s, 0, TDRUM->p[P_SLEN] - 1);
             if (k >= 2) {
                 if (song.playing && arrangement_enabled) { ui_message("STOP THE SONG FIRST"); continue; }
                 undo_mark(TDRUM, ui.step_sess ? ui.step_sess : (ui.step_sess = (undo_sess += 4u) | 3u));

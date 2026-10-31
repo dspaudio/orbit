@@ -1,6 +1,6 @@
-# ORBIT 0.8.0 User Guide
+# ORBIT 0.10.0 User Guide
 
-ORBIT turns the M-VAVE FM-1 into three synth parts and a drum machine. This guide includes ORBIT 0.9.0 and 0.9.B, not the upstream SLOOP engine registry or installer. [Install/build](BUILDING.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [0.9.0 release notes](docs/releases/0.9.0.md)
+ORBIT turns the M-VAVE FM-1 into three synth parts and a drum machine. This guide covers ORBIT 0.10.0 and the Bluetooth build 0.10.B, not the upstream SLOOP engine registry or installer. [Install/build](BUILDING.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [0.10.0 release notes](docs/releases/0.10.0.md)
 
 SMK-37 source support is merged. The controls below use the FM-1 panel labels; see [SMK37.md](SMK37.md) for the SMK-37 Pro, SMK-37 Elite and MKE-P37 mappings, faders, wheels and pad sound picker. SMK-37 has only USR1/USR2 sample storage and no TRS MIDI IN. **Official v0.8.0 binaries are FM-1 only; SMK-37 binaries are not included.**
 
@@ -87,11 +87,11 @@ While playback and **REC on the selected track** are active, changing a supporte
 
 For keyboard step entry, tap SEQ to STEP: panel or MIDI notes write the cursor's step; release all notes to advance. STEP KNOB 3 edits **LEN** when the cursor holds a note, extending it in steps; on a non-note it edits TIME. Step **VEL** is edited with SEQ + held step + KNOB 2. SELECT also reaches PATTERN and SONG. Ties and slide remain available. Undo/redo restores the last supported sequence edit, including synth nudges, fills and locks.
 
-On track 4, tap **SEQ or EDIT from Tape/Mixer** to open DRUMS. Tap SEQ/EDIT again to switch **GRID / KIT**, or turn SELECT left for GRID and right for KIT. In GRID with no layer held, the eleven black keys silently select voices, left to right: **KICK, SNARE, HAT (closed), OPEN HAT, CLAP, RIM, LOW TOM, HI TOM, CRASH, RIDE, COWBELL**. The 16 white keys toggle only the selected voice's steps on the displayed page; setting a hit auditions it. **OCT-/OCT+** move backward/forward through 16-step pages and wrap at the pattern length, preserving the local cursor where possible and clamping it on a short last page; keys beyond LENGTH do nothing. **KNOB 1** selects and auditions any of the 16 voices, including those without black-key shortcuts; **KNOB 2** moves and auditions the step cursor, **KNOB 3** sets/clears its hit and **KNOB 4** changes its level. In KIT, keys play drums live again. Holding SEQ retains its first-four-black-key page shortcuts; holding EDIT retains erase/live-mute controls.
+On track 4, tap **SEQ or EDIT from Tape/Mixer** to open DRUMS. Tap SEQ/EDIT again to switch **GRID / KIT**, or turn SELECT left for GRID and right for KIT. In GRID with no layer held, the eleven black keys select and audition voices, left to right: **KICK, SNARE, HAT (closed), OPEN HAT, CLAP, RIM, LOW TOM, HI TOM, CRASH, RIDE, COWBELL**. The 16 white keys toggle only the selected voice's steps on the displayed page, silently: a new hit is heard only when the playhead reaches it, so you can edit during a performance without stray sounds. **OCT-/OCT+** move backward/forward through 16-step pages and wrap at the pattern length, preserving the local cursor where possible and clamping it on a short last page; keys beyond LENGTH do nothing. **KNOB 1** silently selects any of the 16 voices, including those without black-key shortcuts; **KNOB 2** silently moves the step cursor, **KNOB 3** sets/clears its hit and **KNOB 4** changes its level. In KIT, keys play drums live again. Holding SEQ retains its first-four-black-key page shortcuts; holding EDIT retains erase/live-mute controls.
 
 GRID shows all sixteen instrument rows against sixteen time columns, following the xOx-style matrix overview. BD/SN/CH mark kick, snare and closed hat; the selected row is highlighted. The cursor marks the edited cell, the playhead marks the sounding column, and the footer gives the absolute step number. Hit brightness shows level and small notches show ratchets. A persistent record indicator replaces the play triangle while REC is active. KIT remains the separate live-pad view.
 
-Arming REC from GRID switches the keys to live recording while the REC/free-take screen is shown; they do not edit GRID steps underneath that screen. In GRID, simultaneous black/white input selects the voice before entering steps, while repeated step presses remain separate toggles. White-key and KNOB 3 deletion both clear nudge, fill and locks when the last hit is removed.
+Arming REC from GRID switches the keys to live recording while the REC/free-take screen is shown; they do not edit GRID steps underneath that screen. While the drum track is playing with REC on, a black key in GRID plays its voice and records it at that moment, just like a live drum key; the white keys still toggle steps silently. In GRID, simultaneous black/white input selects the voice before entering steps, while repeated step presses remain separate toggles. White-key and KNOB 3 deletion both clear nudge, fill and locks when the last hit is removed.
 
 Mixer and KIT knobs are live controls, not automatic sound-parameter recording; their recording header says **NO AUTO**. Global and PATTERN pages also show **NO AUTO** while recording. FX headers distinguish **TRACK** settings from **ALL** (shared delay/reverb) settings. Unsupported drum sound pages explain the route back through HOME to DRUMS editing.
 
@@ -224,25 +224,26 @@ The [native preview](README.md#try-the-native-preview) runs the real C DSP/UI, b
 
 ## MIDI controller mode
 
-New in 0.9.0. The mode turns the FM-1 into a plain MIDI controller for a computer or app, while ORBIT's sequencer keeps running.
+New in 0.9.0; the OCT- + OCT+ tap is new in 0.10.0. The mode turns the FM-1 into a plain MIDI controller for a computer or app, while ORBIT's sequencer keeps running.
 
-**Turn it on or off:** hold **ENV + LFO** together for 2 seconds, or go to **MENU > AUDIO > CONTROLLER** (KNOB 4; right = ON, left = OFF, OCT+ toggles). The mode is always off after a restart. The screen shows **CONTROLLER**, the channel, the four knob CCs with their values and the last message sent.
+**Turn it on or off:** tap **OCT- and OCT+** together on the play screen (press both at once and let go within about half a second, with no other button or key), or go to **MENU > AUDIO > CONTROLLER** (KNOB 4; right = ON, left = OFF, OCT+ toggles). The mode is always off after a restart. The screen shows **CONTROLLER**, the channel, the four knob CCs with their values and the last message sent.
 
 While it's on:
 
 - **Keys** send Note On/Off on the controller channel (default **CH 1**), chromatic from F3 (note 53), shifted by OCT. They don't play the internal sound, the arpeggiator or recording.
 - **KNOB 1-4** each send one CC, by default **CC 7, 74, 71 and 64**. Values are absolute, 0-127, and start at 0 after a restart, so the first turn jumps from 0.
-- **FX, SEL, ENV and LFO** are momentary switches on **CC 80, 81, 82 and 83**: 127 on press, 0 on release. Holding ENV + LFO to leave the mode therefore sends CC 82 and 83, then 0 when you exit.
+- **FX, SEL, ENV and LFO** are momentary switches on **CC 80, 81, 82 and 83**: 127 on press, 0 on release.
 - **EDIT + KNOB n** changes that knob's CC number (0-127). **EDIT + SELECT** changes the channel (1-16). ALGORITHM and PRESETS do nothing, so the track and sound stay put.
-- **PLAY, REC, OCT- and OCT+** work as usual. The sequencer, drums and audio keep playing. Hold HOME for the menu.
+- **PLAY, REC, OCT- and OCT+** work as usual (tapping both together also resets the octave to 0, as it always has).
+  Holding both for longer doesn't toggle the mode, so the 5-second update-mode hold still works. The sequencer, drums and audio keep playing. Hold HOME for the menu.
 
 The knob CCs and channel are saved with the device settings and come back after a restart. When you leave the mode, every note still held gets its Note Off and every pressed switch gets its 0; the keys then play the synth again.
 
 Output goes to USB MIDI. In the Bluetooth build it is also sent over Bluetooth when a device is connected.
 
-## Bluetooth MIDI build (0.9.B)
+## Bluetooth MIDI build (0.10.B)
 
-**0.9.B** is a separate package, `orbit-ble.fwsc`, with Bluetooth MIDI added. Everything else matches 0.9.0 apart from the differences below. **None of it has been tested on an FM-1:** pairing, latency, and audio while the radio is busy are all unverified.
+**0.10.B** is a separate package, `orbit-ble.fwsc`, with Bluetooth MIDI added. Everything else matches 0.10.0 apart from the differences below. The device owner confirmed pairing, external-clock sync and clock out on an FM-1; latency and audio while the radio is busy haven't been measured.
 
 **MENU > SYSTEM > BLUETOOTH** turns the radio on (right) or off (left); OCT+ toggles. Bluetooth is never on after a restart. The menu and the CONTROLLER screen show its state:
 
@@ -253,27 +254,29 @@ Output goes to USB MIDI. In the Bluetooth build it is also sent over Bluetooth w
 | ADVERTISING | Waiting for a computer or app to connect |
 | CONNECTED | A device is connected |
 | STOPPING | Disconnecting and shutting down |
-| FAILED: reason | Bluetooth couldn't start, for example **FAILED: NO RF TRIM IN FLASH** |
+| FAILED: reason | Bluetooth couldn't start, for example **FAILED: RF READ FAIL** (the flash couldn't be read) |
 
-The FM-1 advertises as **ORBIT FM-1**. Connect from the other side (untested, general steps):
+The radio uses the calibration the stock firmware stored. If another firmware erased it, ORBIT starts with built-in recovery values and keeps them in its own settings area. These aren't calibrated for your unit, and range with them hasn't been tested on an FM-1.
+
+The FM-1 advertises as **ORBIT FM-1**. Connect from the other side:
 
 - **macOS:** open Audio MIDI Setup, choose Window > Show MIDI Studio, click the Bluetooth button and connect **ORBIT FM-1**.
 - **iPhone / iPad:** open the app's Bluetooth MIDI settings (for example in Koala Sampler) and pick **ORBIT FM-1**. iOS has no system-wide Bluetooth MIDI pairing; each app connects through its own dialog.
 
 MIDI behaviour:
 
-- Everything ORBIT sends over USB MIDI (clock, notes, controller mode) is also sent over Bluetooth. **Outgoing SysEx is not sent over Bluetooth.**
-- MIDI received over Bluetooth behaves like USB MIDI, including the USB external-clock setting. If the connection drops, ORBIT releases notes and sustain held from Bluetooth.
+- Everything ORBIT sends over USB MIDI (notes, controller mode, and MIDI clock with START/STOP when **GLO > SYSTEM > SYNC = OUT**) is also sent over Bluetooth. **Outgoing SysEx is not sent over Bluetooth.**
+- MIDI received over Bluetooth behaves like USB MIDI. To follow a Bluetooth clock, set **SYNC = USB**; to lead over Bluetooth, set **SYNC = OUT** (see [MIDI control](docs/MIDI-CONTROL.md#channels-and-clock)). If the connection drops, ORBIT releases notes and sustain held from Bluetooth.
 
-Differences from 0.9.0:
+Differences from 0.10.0:
 
 - **Melodic built-in samples** are replaced by light FM voices to make room for the Bluetooth stack. Drum samples and USR1-USR4 are kept. See [Sounds replaced in the Bluetooth build](README.md#sounds-replaced-in-the-bluetooth-build).
 - **The FX delay line is half as long:** at most about 0.74 s, and about 0.37 s per side with PING. Longer TIME settings are held at the maximum.
-- **Radio calibration is protected.** Each FM-1 keeps a factory Bluetooth calibration record in flash, in the same area that the FM6 bank and USR4 can use. 0.9.B refuses FM6 bank or USR4 writes that would overwrite it, and the write reports an error. If the record was already overwritten, for example by filling USR4 in other firmware, Bluetooth can't start and shows **FAILED**. 0.9.B doesn't try to recalibrate the radio.
+- **Radio calibration is protected.** Each FM-1 keeps a factory Bluetooth calibration record in flash, in the same area that the FM6 bank and USR4 can use. 0.10.B refuses FM6 bank or USR4 writes that would overwrite it, and the write reports an error. If the record was already overwritten, for example by filling USR4 in other firmware, 0.10.B uses the recovery values described above instead of failing.
 
 ## Menu
 
-Hold HOME for settings. SELECT chooses SCREEN / LIGHTS / AUDIO / SYSTEM. SCREEN provides STYLE and ZOOM; LIGHTS provides button/key/note illumination; AUDIO provides LOWCUT, USB AUDIO, USB SERIAL and [CONTROLLER](#midi-controller-mode); SYSTEM includes calibration, MIDI LEARN CLEAR and ABOUT, plus [BLUETOOTH](#bluetooth-midi-build-09b) in the 0.9.B build. PRESETS moves the cursor, OCT+ acts, OCT- closes. These device settings are separate from song sound snapshots.
+Hold HOME for settings. SELECT chooses SCREEN / LIGHTS / AUDIO / SYSTEM. SCREEN provides STYLE and ZOOM; LIGHTS provides button/key/note illumination; AUDIO provides LOWCUT, USB AUDIO, USB SERIAL and [CONTROLLER](#midi-controller-mode); SYSTEM includes calibration, MIDI LEARN CLEAR and ABOUT, plus [BLUETOOTH](#bluetooth-midi-build-010b) in the 0.10.B build. PRESETS moves the cursor, OCT+ acts, OCT- closes. These device settings are separate from song sound snapshots.
 
 The full-screen visualizer was removed to free static RAM for future features. HOME on Tape stays on Tape. Pages that draw the output oscilloscope still do.
 

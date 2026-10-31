@@ -131,6 +131,8 @@ for name in midi scan os vm gatt central; do
     $CC -O2 -w -Ifirmware/src -Ifirmware/hal "tests/ble/ble_${name}_test.c" -o "$OUT/ble_${name}_test"
     run "BLE unit: $name" "$OUT/ble_${name}_test"
 done
+$CC -O2 -w -Ifirmware/src -Ifirmware/hal -o "$OUT/ble_rf_test" tests/ble_rf_test.c
+run "BLE RF trim: stock first, kept copy, recovery defaults saved in OBJ_BLE" "$OUT/ble_rf_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/pick_test" tests/pick_test.c -lm
 run "SMK-37 pad sound picker: pages by kind, pads load, < >, drum kits" "$OUT/pick_test" "$OUT"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/fbank_test" tests/fbank_test.c -lm

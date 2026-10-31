@@ -4,9 +4,9 @@
  * every element remembers what it last drew and is redrawn only on change. */
 #ifndef FELUCCA_VERSION
 #if ORBIT_BLE
-#define FELUCCA_VERSION "ORBIT 0.9.B"  /* the Bluetooth MIDI build (orbit-ble.fwsc) */
+#define FELUCCA_VERSION "ORBIT 0.10.B"  /* the Bluetooth MIDI build (orbit-ble.fwsc) */
 #else
-#define FELUCCA_VERSION "ORBIT 0.9.0"  /* the beat machine firmware for the FM-1 (based on Felucca) */
+#define FELUCCA_VERSION "ORBIT 0.10.0"  /* the beat machine firmware for the FM-1 (based on Felucca) */
 #endif
 #endif
 static void project_save(uint32_t slot);

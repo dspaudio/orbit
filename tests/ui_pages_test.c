@@ -929,7 +929,7 @@ int main(int argc, char **argv)
         studio_open(SC_DRUM); drum_page = 0; drum_lane = 0; drum_cursor = 0; frames(2);
         memset(pad_lit, 0, sizeof pad_lit);
         key(key_of_white(2)); frame();
-        check(dstep_has(&TDRUM->dstep[2], 0) && drum_cursor == 2 && pad_lit[0], "grid: white key 3 sets step 3 of the sound (heard), the cursor on it");
+        check(dstep_has(&TDRUM->dstep[2], 0) && drum_cursor == 2 && !pad_lit[0], "grid: white key 3 sets step 3 of the sound (silent), the cursor on it");
         check((keys_lit() >> key_of_white(2)) & 1u, "grid: its key lit");
         key(key_of_white(2));
         check(!dstep_mask(&TDRUM->dstep[2]), "grid: the key again clears it");
@@ -941,10 +941,10 @@ int main(int argc, char **argv)
         check(drum_cursor == 0, "grid: OCT+ wraps at LENGTH, as in the SEQ layer");
         tap(B_OCTDN);
         check(drum_cursor == 16, "grid: OCT- wraps back to the last bank");
-        {   /* All black keys are silent selectors, including while REC runs. */
+        {   /* All black keys select and audition voices; stopped no step is written, while REC runs each hit is recorded. */
             static const uint8_t lanes[11] = {0, 2, 4, 5, 3, 7, 9, 10, 11, 12, 15};
             dstep_t before[NSTEP];
-            uint32_t r, n, seen = 0, ok = 1;
+            uint32_t r, n, seen = 0, recorded = 0, ok = 1;
             memset(TDRUM->dstep, 0, sizeof TDRUM->dstep);
             memcpy(before, TDRUM->dstep, sizeof before);
             song.g[G_CLOCK] = 0;
@@ -955,15 +955,20 @@ int main(int argc, char **argv)
                     uint32_t age = drums.age;
                     memset(pad_lit, 0, sizeof pad_lit); drums.hits = 0;
                     key(PUNCH_BLACK[n]);
-                    ok &= drum_lane == lanes[n] && drum_cursor == 18 && drums.age == age &&
-                          !memcmp(before, TDRUM->dstep, sizeof before);
+                    ok &= drum_lane == lanes[n] && drum_cursor == 18 && drums.age != age;
+                    if (!r) ok &= !memcmp(before, TDRUM->dstep, sizeof before);
                     ok &= (keys_lit() & (1u << PUNCH_BLACK[n])) != 0;
-                    for (i = 0; i < DRUM_LANES; i++) ok &= !pad_lit[i];
+                    for (i = 0; i < DRUM_LANES; i++) ok &= !pad_lit[i] || i == lanes[n];
                     if (!r) { ok &= !(seen & (1u << drum_lane)); seen |= 1u << drum_lane; }
                 }
             }
-            check(ok, "grid: all 11 black keys select unique voices, LED on; no hit, REC or step change");
+            for (i = 0; i < NSTEP; i++) recorded |= dstep_mask(&TDRUM->dstep[i]);
+            check(ok, "grid: all 11 black keys select and audition unique voices, LED on; stopped: no step change");
+            check(recorded == (1u << 0 | 1u << 2 | 1u << 4 | 1u << 5 | 1u << 3 | 1u << 7 | 1u << 9 | 1u << 10 |
+                               1u << 11 | 1u << 12 | 1u << 15),
+                  "grid: playing with REC, every black key records its voice at once");
             song.playing = 0; song.rec = 0;
+            memset(TDRUM->dstep, 0, sizeof TDRUM->dstep);
             {   /* Every white step changes only the chosen lane in the chosen bank. */
                 dstep_t expected[NSTEP];
                 uint32_t b, w, n, idx;
@@ -1052,12 +1057,12 @@ int main(int argc, char **argv)
         }
         memset(pad_lit, 0, sizeof pad_lit);
         encs[panel.enc[EN_K1]] = 3; frames(2);
-        check(drum_lane == 3 && pad_lit[3], "grid: KNOB 1 picks the sound and plays it");
+        check(drum_lane == 3 && !pad_lit[3], "grid: KNOB 1 picks the sound silently");
         dstep_set(&TDRUM->dstep[20], 5, LV_NORM, 0);
         dstep_set(&TDRUM->dstep[20], 7, LV_SOFT, 0);
         memset(pad_lit, 0, sizeof pad_lit);
         drum_cursor = 19; encs[panel.enc[EN_K2]] = 1; frames(2);
-        check(drum_cursor == 20 && pad_lit[5] && pad_lit[7] && !pad_lit[3], "grid: KNOB 2 onto a step plays what it holds");
+        check(drum_cursor == 20 && !pad_lit[5] && !pad_lit[7] && !pad_lit[3], "grid: KNOB 2 onto a step moves silently");
         encs[panel.enc[EN_SELECT]] = 1; frame();
         check(drum_page == 1, "DRUMS: SELECT right: kit");
         frame();
@@ -1678,6 +1683,18 @@ int main(int argc, char **argv)
         lk_push(KB_GRID, 0, 1); lk_push(KB_GRID, 0, 0); lk_push(KB_GRID, 0, 1); lk_push(KB_GRID, 3, 1); frame();
         check(drum_lane == 2 && !dstep_mask(&TDRUM->dstep[0]),
               "GRID same batch: repeated step presses are not collapsed");
+        steps_clear(TDRUM); drum_lane = 0; drum_cursor = 0; aud_lanes = 0;
+        grid_key(0);
+        check(dstep_has(&TDRUM->dstep[0], 0) && aud_lanes == 0u,
+              "GRID white key: the hit is set silently (heard only from the playhead)");
+        grid_key(PUNCH_BLACK[1]);
+        check(drum_lane == GRID_LANE[1] && aud_lanes == 1u << GRID_LANE[1],
+              "GRID black key: selects the voice and auditions it");
+        aud_lanes = 0; drum_lane = 0; drum_cursor = 0;
+        encs[panel.enc[EN_K1]] = 1; drum_screen_input(0, BT_NONE);
+        encs[panel.enc[EN_K2]] = 1; drum_screen_input(0, BT_NONE);
+        check(drum_lane == 1 && drum_cursor == 1 && aud_lanes == 0u,
+              "GRID KNOB 1 / KNOB 2: the voice and the step move silently");
         song.playing = 1; TDRUM->seq_idx = 1; ui.msg_t = 0; ui.force = 1; ui_draw();
         {
             uint16_t header[240 * 24];

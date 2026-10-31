@@ -52,9 +52,9 @@ assets, is entirely governed by the GPL.
 | klattsch by Tony Gies (<https://github.com/tgies/klattsch>): design reference for the VOICE (formant) engine; no code copied. Formant data from Klatt (1980) / Hillenbrand et al. (1995) | MIT (klattsch) | credit only |
 | msfa by Google Inc. and Pascal Gauthier, from Dexed (<https://github.com/asb2m10/dexed>): the FM6 engine's synthesis (SLOOP 2.4), ported to integer C for Felucca 1.0 by Leo Kuroshita (Dexed itself is GPL-3.0; only msfa is used; the FM6 factory patches are Felucca's own) | Apache-2.0 | `firmware/src/fm6_core.c`, `LICENSES/Apache-2.0-msfa.txt` |
 | DaisySP (Electrosmith, Emilie Gillet) and Rings' sympathetic strings (Emilie Gillet): the PHYS engine's models (SLOOP 2.5, from Felucca 1.0, ported to fixed point by Leo Kuroshita) | MIT | `firmware/src/phys_dsp.c`, `firmware/src/phys_symp.c` (the notice is in each file) |
-| Bluetooth MIDI unit, ported from Hortator `4e40f27` by DEADACTIVE (felucca-ble ble-kit), built on Felucca by Leo Kuroshita; compiled only into the 0.9.B build | GPL-3.0 | `firmware/src/ble/`, `firmware/hal/fm1_ble_hal.h`, `firmware/app_ble.ld`, `tools/ble_libs.py` |
+| Bluetooth MIDI unit, ported from Hortator `4e40f27` by DEADACTIVE (felucca-ble ble-kit), built on Felucca by Leo Kuroshita; compiled only into the Bluetooth builds (0.9.B, 0.10.B) | GPL-3.0 | `firmware/src/ble/`, `firmware/hal/fm1_ble_hal.h`, `firmware/app_ble.ld`, `tools/ble_libs.py` |
 | JieLi AC79 SDK Bluetooth tables | Apache-2.0 (JieLi) | `firmware/src/ble/ble_rf_tables.c`, `LICENSES/Apache-2.0.txt` |
-| JieLi AC79 SDK Bluetooth libraries and config sources: linked only into the 0.9.B build, read from the SDK snapshot `64afb30` at build time and pinned by SHA-256 in `tools/ble_libs.py`; not in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK>, `LICENSES/Apache-2.0.txt` |
+| JieLi AC79 SDK Bluetooth libraries and config sources: linked only into the Bluetooth builds (0.9.B, 0.10.B), read from the SDK snapshot `64afb30` at build time and pinned by SHA-256 in `tools/ble_libs.py`; not in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK>, `LICENSES/Apache-2.0.txt` |
 | SLOOP 2.8.4 fixes (isod89/sloop-fm1 `91f3018`), ported in ORBIT 0.9.0 with credit to the SLOOP authors | GPL-3.0-only | throughout `firmware/src/`, listed in `docs/releases/0.9.0.md` |
 | JieLi AC79 SDK: `uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin` are read from your SDK checkout at build time and placed in the package; no SDK files are in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK> |
 
@@ -80,5 +80,5 @@ by those owners.
 
 ## Radio
 
-The default ORBIT build (`orbit.fwsc`) never enables the Bluetooth / Wi-Fi radio of the hardware. Only the separate Bluetooth MIDI build (`orbit-ble.fwsc`, 0.9.B) uses the Bluetooth radio, and only after the user turns **MENU > SYSTEM > BLUETOOTH** on. It never enables Wi-Fi.
+The default ORBIT build (`orbit.fwsc`) never enables the Bluetooth / Wi-Fi radio of the hardware. Only the separate Bluetooth MIDI build (`orbit-ble.fwsc`, 0.10.B) uses the Bluetooth radio, and only after the user turns **MENU > SYSTEM > BLUETOOTH** on. It never enables Wi-Fi.
 

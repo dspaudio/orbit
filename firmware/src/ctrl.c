@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* ORBIT MIDI CONTROLLER mode, the panel side: the FM-1 as a USB MIDI controller while the sequencer, the arp and
- * the drums keep running. ENV + LFO held together 2 s (or MENU > SYSTEM > CONTROLLER) turns it on and off; it is
+ * the drums keep running. OCT- + OCT+ tapped together (or MENU > AUDIO > CONTROLLER) turns it on and off; it is
  * always off at power-on. While on:
  *   keys        Note On / Off on the controller channel (seq.c ctrl_key, in the audio context); no voice, no recording
  *   KNOB 1..4   one CC each (absolute 0..127, kept per knob; the usual knob acceleration)
@@ -9,7 +9,8 @@
  *   PLAY REC OCT- OCT+   as ever; HOME held opens the menu
  * The CC numbers and the channel are settings of the FM-1 (seq.c ctrl_cfg, kept in project.c persist_t.ctl).
  * Included from ui_input.c, so every build of the UI (felucca.c and the host harnesses) has it. */
-#define CTRL_COMBO_MS 2000u
+#define CTRL_TAP_GAP_MS 150u                     /* OCT- and OCT+ pressed at most this far apart */
+#define CTRL_TAP_MS 600u                         /* both let go within this of the first press */
 static const uint8_t CTRL_SW_BTN[4] = {B_FX, B_SCL, B_ENV, B_LFO};
 static uint8_t ctrl_val[4];                      /* KNOB 1..4: the value last sent */
 static uint8_t ctrl_sw;                          /* bit per switch: 127 sent, 0 not yet */
@@ -50,21 +51,37 @@ static void ctrl_set(uint32_t on)
     ui.force = 1;
 }
 
-/* ENV + LFO held together CTRL_COMBO_MS: on / off, once a hold. Alone, ENV and LFO open their pages (nothing changes
- * behind the screen while the hold runs); together they do nothing else */
-static void ctrl_combo(void)
+/* OCT- + OCT+ tapped together: on / off as both are let go. A tap: the two pressed within CTRL_TAP_GAP_MS, both let
+ * go within CTRL_TAP_MS of the first press, no other button and no key pressed meanwhile, on the play screen (not
+ * the song page). Longer holds keep their other uses (main.c: the 5 s update mode; the drum track's ghost / hard).
+ * The presses still do what they always do (both together: octave 0). */
+static void ctrl_oct_tap(uint32_t pressed, uint32_t notes)
 {
     static uint32_t t0;
-    static uint8_t down, fired;
-    if (!ctrl_btn(B_ENV) || !ctrl_btn(B_LFO)) {
-        down = fired = 0;
+    static uint8_t armed, both;
+    uint32_t oct = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]), down = fm1_in.buttons & oct;
+    if (!armed) {
+        if (!(pressed & oct) || down != (pressed & oct) || (fm1_in.buttons & ~oct) || notes ||
+            ui.layer != LY_PLAY || on_song_page())
+            return;
+        armed = 1;
+        both = (uint8_t)(down == oct);
+        t0 = fm1_ms;
+        return;
+    }
+    if ((fm1_in.buttons & ~oct) || (pressed & ~oct) || notes || fm1_ms - t0 > CTRL_TAP_MS) {
+        armed = 0;
+        return;
+    }
+    if (!both) {
+        if (down == oct && fm1_ms - t0 <= CTRL_TAP_GAP_MS)
+            both = 1;
+        else if (!down || fm1_ms - t0 > CTRL_TAP_GAP_MS)
+            armed = 0;
         return;
     }
     if (!down) {
-        down = 1;
-        t0 = fm1_ms;
-    } else if (!fired && fm1_ms - t0 >= CTRL_COMBO_MS) {
-        fired = 1;
+        armed = 0;
         ctrl_set(!ctrl_on);
     }
 }

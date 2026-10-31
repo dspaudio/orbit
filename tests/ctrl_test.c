@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* ORBIT MIDI CONTROLLER mode on the real firmware stack (UI, sequencer, storage.c on a simulated NOR, project.c;
  * only the panel, the flash chip and USB are doubles):
- *   combo     ENV + LFO held 2 s turns it on (not before), held again 2 s turns it off; the menu entry toggles it
+ *   toggle    OCT- + OCT+ tapped together turns it on / off (not a long hold, not two separate presses, not with
+ *             a key or another button); the menu entry toggles it
  *   keys      Note On / Off on the controller channel (key velocity, OCT), no internal voice, nothing recorded
  *   knobs     KNOB 1..4 send their CC with a changing value; EDIT + knob sets the CC number, EDIT + SELECT the channel
  *   switches  FX / SEL / ENV / LFO send 127 on press, 0 on release
@@ -194,24 +195,25 @@ static void boot(void)                                /* the boot path of felucc
     song.g[G_CH1] = midi_set[0], song.g[G_CH2] = midi_set[1], song.g[G_CH3] = midi_set[2];
     song.g[G_DRCH] = midi_set[3], song.g[G_CHOTH] = midi_set[4], song.g[G_BEND] = midi_set[5];
 }
-/* hold ENV + LFO; returns the ms held when the mode changed (0: it did not within limit_ms) */
-static uint32_t combo_hold(uint32_t limit_ms)
+/* OCT- pressed, OCT+ gap_ms later, both let go hold_ms after the first press; 1 if the mode changed */
+static int oct_tap(uint32_t gap_ms, uint32_t hold_ms)
 {
     uint32_t was = ctrl_on, t0 = fm1_ms;
-    press(bit(B_ENV) | bit(B_LFO));
-    while (fm1_ms - t0 <= limit_ms) {
-        uint32_t at = fm1_ms - t0;                    /* (ui_input in this frame sees fm1_ms = t0 + at) */
+    press(bit(B_OCTDN));
+    while (fm1_ms - t0 < gap_ms)
         frame();
-        if (ctrl_on != was)
-            return at;
-    }
-    return 0;
+    press(bit(B_OCTUP));
+    while (fm1_ms - t0 < hold_ms)
+        frame();
+    release(bit(B_OCTDN) | bit(B_OCTUP));
+    frames(2);
+    return ctrl_on != was;
 }
 
 int main(void)
 {
     static const uint8_t SEQN = 48;
-    uint32_t i, held, n60;
+    uint32_t i, n60;
     memset(nor, 0xFF, sizeof nor);
     host_tracks_init();
     arr_defaults(&arrangement);
@@ -235,12 +237,22 @@ int main(void)
     fm1_in.notes = 0;
     frames(30);
 
-    /* ---- the combo: ENV + LFO held 2 s */
-    held = combo_hold(2400u);
-    check(ctrl_on && held >= 2000u && held < 2032u, "ENV + LFO held: on at 2.0 s, not before");
-    release(bit(B_ENV) | bit(B_LFO));
+    /* ---- the toggle: OCT- + OCT+ tapped together */
+    check(!oct_tap(0u, 1000u) && !ctrl_on, "OCT- + OCT+ held 1 s: no toggle (long holds keep their other uses)");
+    check(!oct_tap(300u, 400u) && !ctrl_on, "OCT- then OCT+ 0.3 s later: no toggle (two octave presses)");
+    press(bit(B_OCTDN) | bit(B_OCTUP));
+    frame();
+    fm1_in.notes = 1u << 7;
+    frame();
+    fm1_in.notes = 0;
+    release(bit(B_OCTDN) | bit(B_OCTUP));
     frames(2);
-    check(count_cc_num(82u) == 0u && count_cc_num(83u) == 0u, "the combo's own ENV / LFO hold sends no switch CC");
+    check(!ctrl_on, "OCT- + OCT+ tapped with a key pressed meanwhile: no toggle");
+    frames(30);
+    clear_out();
+    check(oct_tap(32u, 160u) && ctrl_on && song.octave == 0,
+          "OCT- + OCT+ tapped (0.03 s apart, let go at 0.16 s): on, octave 0");
+    check(nout == 0u, "the tap itself sends no MIDI");
     clear_out();
 
     /* ---- keys: Note On / Off on CH 1, no voice */
@@ -354,14 +366,20 @@ int main(void)
     mi_set(MI_CTRL, 0);
     frames(2);
     check(ctrl_on && !ui.menu, "MENU > SYSTEM > CONTROLLER: on again (the menu closes)");
+    check(oct_tap(0u, 96u) && !ctrl_on, "OCT- + OCT+ tapped in the mode: off");
+    check(oct_tap(0u, 96u) && ctrl_on, "OCT- + OCT+ tapped again: on");
     clear_out();
 
-    /* ---- exit with a key held */
+    /* ---- exit with a key and switches held */
+    press(bit(B_ENV) | bit(B_LFO));
+    frames(2);
+    check(!oct_tap(0u, 96u) && ctrl_on, "OCT- + OCT+ tapped with ENV / LFO held: no toggle");
     fm1_in.notes = 1u << 3;                           /* (key 3: note 56) */
     frames(2);
     check(count_pkt(NOTE_ON(1u, 56u, 100u)) == 1u, "key 3 held: note 56 on CH 2");
-    held = combo_hold(2400u);
-    check(!ctrl_on && held >= 2000u && held < 2032u, "ENV + LFO held 2 s again: off");
+    mi_set(MI_CTRL, 0);
+    frames(2);
+    check(!ctrl_on, "MENU > SYSTEM > CONTROLLER with a key and switches held: off");
     check(count_pkt(NOTE_OFF(1u, 56u)) == 1u, "exit: the held note gets its note-off");
     check(count_pkt(CC(1u, 82u, 127u)) == 1u && count_pkt(CC(1u, 82u, 0u)) == 1u &&
           count_pkt(CC(1u, 83u, 127u)) == 1u && count_pkt(CC(1u, 83u, 0u)) == 1u,

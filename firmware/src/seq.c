@@ -160,9 +160,12 @@ static uint32_t layer_now(void)
     return LY_PLAY;
 }
 /* the DRUMS grid page shown (the UI sets it every frame): with no layer, the keys are its steps (KB_GRID
- * events of lk_q, ui_studio.c grid_key) and play nothing */
+ * events of lk_q, ui_studio.c grid_key) and play nothing; a black key while the drum track records plays its
+ * voice and records it at once (key_down) */
 #define KB_GRID LY_COUNT
 static volatile uint8_t kb_grid;
+static const uint8_t GRID_LANE[11] = {0, 2, 4, 5, 3, 7, 9, 10, 11, 12, 15};   /* the voice of PUNCH_BLACK[i] */
+static int grid_rec_live(void) { return ((song.rec >> TRK_DRUM) & 1u) && song.playing; }
 /* the keys of the layers the UI handles (steps, key, mix): key k down / up, in order */
 #define LKQ 16u
 static volatile uint16_t lk_q[LKQ];
@@ -1566,6 +1569,17 @@ static void key_down(uint32_t k)
         break;
     }
     if (is_drum(t) && layer == LY_PLAY && kb_grid) {   /* the DRUMS grid page: a step key */
+        for (i = 0; i < 11u && grid_rec_live(); i++)
+            if (PUNCH_BLACK[i] == k) {             /* a black key, recording: its voice played and recorded now */
+                uint32_t lane = GRID_LANE[i], lvl = key_lvl_of(k);
+                kb_kind[k] = KS_DRUM;
+                kb_nt[k][0] = (uint8_t)lane;
+                kb_n[k] = 1;
+                drum_input(lane, lvl, 0, 1);
+                midi_out_note(trk_midi_ch(sel), (uint32_t)LANE_NOTE[lane], lvl_vel(lvl, 100));
+                lk_push(KB_GRID, k, 1);             /* (the UI still selects the voice) */
+                return;
+            }
         kb_kind[k] = KS_UI;
         kb_nt[k][0] = (uint8_t)KB_GRID;
         lk_push(KB_GRID, k, 1);
@@ -1678,7 +1692,7 @@ static void key_up(uint32_t k)
     }
 }
 
-/* the UI asks to hear drum sounds (a sound or a step picked with a knob, a step set from a key):
+/* the UI asks to hear drum sounds (a GRID black key, a layer, the pad picker; GRID steps and knobs stay silent):
  * aud_lanes the lanes, each at its level aud_lvl (2 bits a lane), played here, in the audio context */
 static volatile uint32_t aud_lanes, aud_lvl;
 static void audition_req(uint32_t lanes, uint32_t lvls)
@@ -1689,14 +1703,6 @@ static void audition_req(uint32_t lanes, uint32_t lvls)
     fm1_irq_on();
 }
 static void audition_lane(uint32_t lane) { audition_req(1u << (lane & 15u), 0u); }   /* (LV_NORM = 0) */
-static void audition_step(const dstep_t *s)            /* every sound of a drum step, at its level */
-{
-    uint32_t m = dstep_mask(s), lv = 0, l;
-    for (l = 0; l < 16u; l++)
-        if ((m >> l) & 1u)
-            lv |= dstep_lvl(s, l) << (2u * l);
-    audition_req(m, lv);
-}
 static void audition_block(void)
 {
     uint32_t m = aud_lanes, lv = aud_lvl, l;
@@ -2528,7 +2534,7 @@ static struct {
 
 static int mclk_on(void)                          /* the clock drives the sequencer */
 {
-    return song.g[G_SYNC] && mclk.alive && fm1_ms - mclk.last_ms < 500u;
+    return (song.g[G_SYNC] == 1 || song.g[G_SYNC] == 2) && mclk.alive && fm1_ms - mclk.last_ms < 500u;
 }
 
 /* SLOOP 2.8: average eight beats, with 0.8 BPM hysteresis once full. A >=5 BPM
@@ -2617,6 +2623,29 @@ static uint32_t mclk_adv(uint32_t n)               /* units to advance this bloc
 
 /* everything that happens between two rendered blocks: transport, input, the steps of every
  * track at the clock, the click, the rolls and the arps; then the clock moves on by n samples */
+/* GLO > SYSTEM > SYNC = OUT: ORBIT's own tempo, sent to USB MIDI (and BLE) as MIDI clock, 24 pulses a beat, with
+ * START on PLAY and STOP on stop. Pulses go out at block starts while playing; swing stays in the pattern */
+#define SYNC_OUT 3
+static uint32_t clko_left;                        /* units to the next pulse */
+static uint8_t clko_was;                          /* playing in the last block */
+static void clock_out_block(uint32_t adv)
+{
+    int on = song.g[G_SYNC] == SYNC_OUT;
+    if (song.playing != clko_was) {
+        clko_was = song.playing;
+        clko_left = 0;                            /* the first pulse with START: the downbeat */
+        if (on)
+            midi_out_event(song.playing ? 0xFA0Fu : 0xFC0Fu);
+    }
+    if (!on || !song.playing)
+        return;
+    while (clko_left < adv) {
+        midi_out_event(0xF80Fu);
+        clko_left += MCLK_PULSE_U;
+    }
+    clko_left -= adv;
+}
+
 static void events_block(uint32_t n)
 {
     uint32_t i, pr, adv;
@@ -2874,6 +2903,7 @@ static void events_block(uint32_t n)
     roll_block(adv);
     for (i = 0; i < NPART; i++)
         arp_tick(&trk[i], adv);
+    clock_out_block(adv);
     if (song.playing) {
         song.tick++;
         clk_pos += adv;

@@ -2,8 +2,8 @@
 
 Play three independent synth parts and drums, route an external sequencer,
 or use a controller's knobs for sound design. USB MIDI and the TRS MIDI IN
-jack are supported. Bluetooth MIDI exists only in the separate 0.9.B build
-(`orbit-ble.fwsc`, untested on hardware; see the [guide](../GUIDE.md#bluetooth-midi-build-09b)).
+jack are supported. Bluetooth MIDI exists only in the separate 0.10.B build
+(`orbit-ble.fwsc`; see the [guide](../GUIDE.md#bluetooth-midi-build-010b)).
 Direct USB keyboard hosting is not supported.
 [User guide](../GUIDE.md) · [Install/build](../BUILDING.md)
 
@@ -39,8 +39,12 @@ firmware's fallback channel rather than becoming a new arbitrary channel.
 | 3 | OUT | KEYS sends panel playing; SEQ also sends sequencer, arp and rolls |
 | 4 | BEND | Pitch-bend range, 1-12 semitones |
 
-The SYSTEM page also exposes OUT, SYNC and IN. SYNC = INT uses ORBIT's clock;
-USB or TRS follows that input's MIDI clock and START/CONTINUE/STOP.
+The SYSTEM page also exposes OUT, SYNC and IN. SYNC = INT uses ORBIT's clock
+and sends no clock. USB or TRS follows that input's MIDI clock and
+START/CONTINUE/STOP. SYNC = OUT runs on ORBIT's own tempo and sends it over USB
+MIDI (and Bluetooth in 0.10.B) as MIDI clock, 24 pulses per beat, with START on
+PLAY and STOP on stop. Swing stays in ORBIT's pattern and isn't added to the
+clock. TRS has no MIDI output, and ORBIT doesn't forward an incoming clock.
 Received notes are not echoed back as new output notes. Changing routing
 releases held input/output notes. Sustain CC 64 holds synth note-offs while
 the pedal value is at least 64; releasing it ends the waiting notes.

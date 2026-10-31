@@ -1169,7 +1169,7 @@ static void ui_input(void)
     page_fix();                                         /* (a page the track does not have: its neighbour, 2.6) */
     midi_entry();                                       /* (the STEP page's MIDI notes: read every frame, 2.6) */
     if (!ui.menu)
-        ctrl_combo();                                   /* ENV + LFO held 2 s: CONTROLLER on / off (ctrl.c) */
+        ctrl_oct_tap(pressed, notes);                   /* OCT- + OCT+ tapped: CONTROLLER on / off (ctrl.c) */
     if (home == BT_HOLD) {                              /* HOME held: open the menu, or leave it */
         if (ui.menu) {
             menu_close();

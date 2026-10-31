@@ -27,6 +27,32 @@ static int ble_vm_rf_ok(const uint8_t *d)
     return inner && inner == ble_vm_crc16(d, 64);
 }
 
+/* Recovery values, NOT a per-device calibration. The pinned wl_rf_common.a
+ * wf_rf_cal.c starts TX IQ at 1023/1023, phase/DC at 0 and TX LO at 64/64
+ * (txiq_tune_soft); RX IQ starts at 255/255, phase/DC at 0 (rxiq_tune_soft,
+ * rxdc_tune_soft). set_anl_rxdc_i/q encode positive zero as 0x200 in the
+ * four gain-state DC pairs. The two bandwidth words are the FM-1 reference
+ * in tests/ble/ble_vm_test.c, not an invented all-zero filter setting.
+ * Use only without stock or kept trim. RF sensitivity still needs device
+ * validation; never copy these values into the stock VM or trim sectors. */
+static void ble_vm_rf_fallback(uint8_t rec[BLE_VM_RF_TRIM_LEN])
+{
+    static const uint8_t values[64] = {
+        [0] = 0xFF, [1] = 3, [8] = 0xFF, [9] = 3,
+        [24] = 64, [25] = 64, [26] = 255, [27] = 255,
+        [40] = 0xFF, [41] = 0xFF, [42] = 0x89, [43] = 0x3B,
+        [44] = 0xFF, [45] = 0xFF, [46] = 0x89, [47] = 0x3B,
+        [49] = 2, [51] = 2, [53] = 2, [55] = 2,
+        [57] = 2, [59] = 2, [61] = 2, [63] = 2
+    };
+    uint32_t crc;
+    memcpy(rec, values, sizeof values);
+    crc = ble_vm_crc16(rec, sizeof values);
+    rec[64] = (uint8_t)crc;
+    rec[65] = (uint8_t)(crc >> 8);
+    rec[66] = rec[67] = 0;
+}
+
 /* the record the radio gets: the store's (found, 0 = none there), else the copy the firmware kept (kept, 0 = none;
  * core_rf_keep_get), into rec: 1 the store's (*keep: 1 when the kept copy is missing or another: keep this one), 2 the
  * kept copy (the store lost it: the firmware's own data may cover it), 0 none */

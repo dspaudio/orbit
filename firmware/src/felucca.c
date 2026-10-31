@@ -277,6 +277,10 @@ static void orbit_ble_bind(void)
             break;
     }
     orbit_ble_rf_scanned = (uint8_t)scanned;
+    if (scanned && !orbit_ble_rf_get(rec)) {
+        ble_vm_rf_fallback(rec);
+        orbit_ble_rf_keep(rec);                        /* persist before audio starts, even with BT still off */
+    }
     {
         uint8_t addr[6];
         orbit_ble_mac(addr);                            /* keep identity before audio/transport can defer saves */
