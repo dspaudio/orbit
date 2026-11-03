@@ -1,6 +1,6 @@
-# ORBIT 0.10.0 User Guide
+# ORBIT 1.0.0 User Guide
 
-ORBIT turns the M-VAVE FM-1 into three synth parts and a drum machine. This guide covers ORBIT 0.10.0 and the Bluetooth build 0.10.B, not the upstream SLOOP engine registry or installer. [Install/build](BUILDING.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [0.10.0 release notes](docs/releases/0.10.0.md)
+ORBIT turns the M-VAVE FM-1 into three synth parts and a drum machine. This guide covers ORBIT 1.0.0 and the Bluetooth build 1.0.B, not the upstream SLOOP engine registry or installer. [Install/build](BUILDING.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [1.0.0 release notes](docs/releases/1.0.0.md)
 
 SMK-37 source support is merged. The controls below use the FM-1 panel labels; see [SMK37.md](SMK37.md) for the SMK-37 Pro, SMK-37 Elite and MKE-P37 mappings, faders, wheels and pad sound picker. SMK-37 has only USR1/USR2 sample storage and no TRS MIDI IN. **Official v0.8.0 binaries are FM-1 only; SMK-37 binaries are not included.**
 
@@ -121,6 +121,8 @@ The default build has **17 engines and 189 factory sounds**. The first twelve so
 
 The three synth parts share **eight sounding voices globally**. CLUSTER caps POLY/UNISON at four voices per part, CLOUD at three and FM6 at six; PHYS limits vary by model. MONO and LEGATO intentionally play one voice. UNISON spreads voices across one note; it is not a chord mode. New notes can steal voices, and CPU overload can fade extra voices. These are allocation limits, not guaranteed worst-case FM-1 polyphony. [CLUSTER details](docs/OP1-CLUSTER.md).
 
+On the chord page, **OPEN** raises the third to a tenth, **OPEN7** adds a seventh, **ADD9** includes a ninth and **6TH** includes a sixth. When you switch chords within one arpeggiator step, the arp keeps its place instead of repeatedly starting on the root.
+
 In **0.8.1**, drums use a free voice first. When all **six drum voices** are busy, a repeated sound reuses its own voice; a new sound steals the oldest non-kick, or the oldest kick if all voices are kicks. Kick protection applies to notes 35/36. This applies to GM, sampled and SYN kits while retaining existing hat choke and declick tails.
 
 CLOUD's pages are **GRAINS** (WAVE, SIZE, DENS, SPRD) and **SPECTRUM** (DTUN, CHRP, STCK, TONE). WAVE morphs oscillator shapes; SIZE/DENS change grain length/start rate; SPRD adds timing/phase variation; DTUN spreads pitch; signed CHRP sweeps each grain; STCK introduces fifths/octaves; TONE filters it. It does not require a sample slot. GRAIN instead selects sample SRC and POS.
@@ -224,7 +226,7 @@ The [native preview](README.md#try-the-native-preview) runs the real C DSP/UI, b
 
 ## MIDI controller mode
 
-New in 0.9.0; the OCT- + OCT+ tap is new in 0.10.0. The mode turns the FM-1 into a plain MIDI controller for a computer or app, while ORBIT's sequencer keeps running.
+New in 0.9.0; the OCT- + OCT+ tap was added in 0.10.0. The mode turns the FM-1 into a plain MIDI controller for a computer or app, while ORBIT's sequencer keeps running.
 
 **Turn it on or off:** tap **OCT- and OCT+** together on the play screen (press both at once and let go within about half a second, with no other button or key), or go to **MENU > AUDIO > CONTROLLER** (KNOB 4; right = ON, left = OFF, OCT+ toggles). The mode is always off after a restart. The screen shows **CONTROLLER**, the channel, the four knob CCs with their values and the last message sent.
 
@@ -232,18 +234,19 @@ While it's on:
 
 - **Keys** send Note On/Off on the controller channel (default **CH 1**), chromatic from F3 (note 53), shifted by OCT. They don't play the internal sound, the arpeggiator or recording.
 - **KNOB 1-4** each send one CC, by default **CC 7, 74, 71 and 64**. Values are absolute, 0-127, and start at 0 after a restart, so the first turn jumps from 0.
-- **FX, SEL, ENV and LFO** are momentary switches on **CC 80, 81, 82 and 83**: 127 on press, 0 on release.
+- **FX, SEL, ENV and LFO** send **CC 80, 81, 82 and 83** by default. Each can be momentary (127 on press, 0 on release) or toggle (127 on the first press, 0 on the next). **EDIT + switch** changes its mode; the screen shows which switches are on and marks toggles with T.
+- Incoming CC feedback on the controller channel updates matching knob values and toggle states on the screen, so a DAW's automation can move them too.
 - **EDIT + KNOB n** changes that knob's CC number (0-127). **EDIT + SELECT** changes the channel (1-16). ALGORITHM and PRESETS do nothing, so the track and sound stay put.
 - **PLAY, REC, OCT- and OCT+** work as usual (tapping both together also resets the octave to 0, as it always has).
   Holding both for longer doesn't toggle the mode, so the 5-second update-mode hold still works. The sequencer, drums and audio keep playing. Hold HOME for the menu.
 
-The knob CCs and channel are saved with the device settings and come back after a restart. When you leave the mode, every note still held gets its Note Off and every pressed switch gets its 0; the keys then play the synth again.
+The knob CCs, channel and switch modes are saved with the device settings and come back after a restart. When you leave the mode, every note still held gets its Note Off and every momentary switch still pressed gets its 0; toggles keep their state until pressed again or changed by incoming CC feedback. The keys then play the synth again.
 
 Output goes to USB MIDI. In the Bluetooth build it is also sent over Bluetooth when a device is connected.
 
-## Bluetooth MIDI build (0.10.B)
+## Bluetooth MIDI and audio build (1.0.B)
 
-**0.10.B** is a separate package, `orbit-ble.fwsc`, with Bluetooth MIDI added. Everything else matches 0.10.0 apart from the differences below. The device owner confirmed pairing, external-clock sync and clock out on an FM-1; latency and audio while the radio is busy haven't been measured.
+**1.0.B** is a separate package, `orbit-ble.fwsc`, with Bluetooth MIDI and phone audio. Everything else matches 1.0.0 apart from the differences below. Bluetooth MIDI pairing, external-clock sync and clock out were confirmed for the earlier 0.10.B build; radio/audio timing remains unmeasured.
 
 **MENU > SYSTEM > BLUETOOTH** turns the radio on (right) or off (left); OCT+ toggles. Bluetooth is never on after a restart. The menu and the CONTROLLER screen show its state:
 
@@ -268,15 +271,17 @@ MIDI behaviour:
 - Everything ORBIT sends over USB MIDI (notes, controller mode, and MIDI clock with START/STOP when **GLO > SYSTEM > SYNC = OUT**) is also sent over Bluetooth. **Outgoing SysEx is not sent over Bluetooth.**
 - MIDI received over Bluetooth behaves like USB MIDI. To follow a Bluetooth clock, set **SYNC = USB**; to lead over Bluetooth, set **SYNC = OUT** (see [MIDI control](docs/MIDI-CONTROL.md#channels-and-clock)). If the connection drops, ORBIT releases notes and sustain held from Bluetooth.
 
-Differences from 0.10.0:
+Pair a phone to **ORBIT FM-1 Audio** in its Bluetooth audio settings (separate from **ORBIT FM-1** for MIDI). Its music plays alongside the FM-1 instruments. When connected, **GLO > BT AUDIO** provides a PHONE level on KNOB 1; it starts at the master volume and can be adjusted separately. Pairing keys are saved for reconnecting after a power cycle.
+
+Differences from 1.0.0:
 
 - **Melodic built-in samples** are replaced by light FM voices to make room for the Bluetooth stack. Drum samples and USR1-USR4 are kept. See [Sounds replaced in the Bluetooth build](README.md#sounds-replaced-in-the-bluetooth-build).
-- **The FX delay line is half as long:** at most about 0.74 s, and about 0.37 s per side with PING. Longer TIME settings are held at the maximum.
-- **Radio calibration is protected.** Each FM-1 keeps a factory Bluetooth calibration record in flash, in the same area that the FM6 bank and USR4 can use. 0.10.B refuses FM6 bank or USR4 writes that would overwrite it, and the write reports an error. If the record was already overwritten, for example by filling USR4 in other firmware, 0.10.B uses the recovery values described above instead of failing.
+- **The FX delay line is shorter:** at most about 0.37 s, and about 0.19 s per side with PING. Longer TIME settings are held at the maximum.
+- **Radio calibration is protected.** Each FM-1 keeps a factory Bluetooth calibration record in flash, in the same area that the FM6 bank and USR4 can use. 1.0.B refuses FM6 bank or USR4 writes that would overwrite it, and the write reports an error. If the record was already overwritten, for example by filling USR4 in other firmware, 1.0.B uses the recovery values described above instead of failing.
 
 ## Menu
 
-Hold HOME for settings. SELECT chooses SCREEN / LIGHTS / AUDIO / SYSTEM. SCREEN provides STYLE and ZOOM; LIGHTS provides button/key/note illumination; AUDIO provides LOWCUT, USB AUDIO, USB SERIAL and [CONTROLLER](#midi-controller-mode); SYSTEM includes calibration, MIDI LEARN CLEAR and ABOUT, plus [BLUETOOTH](#bluetooth-midi-build-010b) in the 0.10.B build. PRESETS moves the cursor, OCT+ acts, OCT- closes. These device settings are separate from song sound snapshots.
+Hold HOME for settings. SELECT chooses SCREEN / LIGHTS / AUDIO / SYSTEM. SCREEN provides STYLE and ZOOM; LIGHTS provides button/key/note illumination; AUDIO provides LOWCUT, USB AUDIO, USB SERIAL and [CONTROLLER](#midi-controller-mode); SYSTEM includes calibration, MIDI LEARN CLEAR and ABOUT, plus [BLUETOOTH](#bluetooth-midi-and-audio-build-10b) in the 1.0.B build. PRESETS moves the cursor, OCT+ acts, OCT- closes. These device settings are separate from song sound snapshots.
 
 The full-screen visualizer was removed to free static RAM for future features. HOME on Tape stays on Tape. Pages that draw the output oscilloscope still do.
 
@@ -292,7 +297,7 @@ ORBIT 0.8.0 writes **ORP8 projects** and **OPB3 USER preset banks**:
 
 **Older ORBIT, including 0.7.0 and 0.7.1, cannot read ORP8 or OPB3.** A downgrade can see slots as invalid/empty, and autosave can overwrite new work. Restore the matching pre-update backup on the matching old firmware. Don't assume SYN-kit/MIDI-setting preservation by old firmware that cannot read the new settings.
 
-The [Pages installer](https://dspaudio.github.io/orbit/) validates the latest published package before Connect and checks identity before Install. Check that it shows 0.8.0 before installing this release. For local installation, use [BUILDING.md](BUILDING.md); default build identity is FM-1_900. Keep USB/power connected through the write and reboot. A failed download is not an invitation to skip validation.
+The [Pages installer](https://dspaudio.github.io/orbit/) validates the published package before Connect and checks identity before Install. Choose 1.0.0 or 1.0.B and check the version before installing. For local installation, use [BUILDING.md](BUILDING.md); default build identity is FM-1_900. Keep USB/power connected through the write and reboot. A failed download is not an invitation to skip validation.
 
 The no-demo **0.8 hardware candidate** was installed on an FM-1 on 2026-10-27: write 100%, reboot and returned identity succeeded. The device owner confirmed the normal screen, cleared the earlier autosave with NEW PROJECT and accepted the hardware for release. INFO/PING timed out, so the firmware version was not confirmed by a successful query. The version-only **0.8.0 rebuild has not been separately hardware-tested**. Earlier 0.7.1 software checks, 0.7.0 installation/version/PING checks and the 0.6.0 USB recording remain historical. See [VALIDATION](docs/VALIDATION.md) for the full record.
 

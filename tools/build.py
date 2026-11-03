@@ -198,14 +198,22 @@ def build_ble(flags):
     objs = ble_libs.members(libdir)
     cmds = [("cc", "-c", FW / "src" / "ble" / "fm1_ctx.S", "-o", OUT / "fm1_ctx.o")]
     objs.append(OUT / "fm1_ctx.o")
+    cmds.append(("cc", *flags, "-fno-lto", "-c", FW / "src/ble/ble_memcpy.c", "-o", OUT / "ble_memcpy.o"))
+    objs.append(OUT / "ble_memcpy.o")
     for source in ble_libs.SDK_CONFIG_SOURCES:
         obj = cfgdir / (Path(source).stem + ".o")
-        cmds.append(("cc", *ble_libs.SDK_CFLAGS, "-c", f"/sdk/{source}", "-o", obj))
+        config = (FW / "src/ble/sdkcfg/controller_config.c"
+                  if Path(source).name == "lib_btctrler_config.c" else f"/sdk/{source}")
+        cmds.append(("cc", *ble_libs.SDK_CFLAGS, "-c", config, "-o", obj))
         objs.append(obj)
     obj = cfgdir / "ble_lto_stubs.o"
     cmds.append(("cc", "-mcpu=r3", "-Os", "-flto", "-Wall", "-c", SRC / ble_libs.LTO_STUBS, "-o", obj))
     objs.append(obj)
-    cmds.append(("cc", *flags, "-mllvm", "-pi32v2-large-program=true", "-c",
+    obj = cfgdir / "a2dp.o"
+    cmds.append(("cc", *ble_libs.SDK_CFLAGS, "-Ifirmware/src/ble", "-c",
+                 FW / "src" / "ble" / "a2dp.c", "-o", obj))
+    objs.append(obj)
+    cmds.append(("cc", *flags, "-flto", "-Oz", "-mllvm", "-pi32v2-large-program=true", "-c",
                  FW / "src" / "ble" / "ble.c", "-o", OUT / "ble.o"))
     tc_all(*cmds)
     objs.append(OUT / "ble.o")
@@ -217,7 +225,7 @@ def build_app():
     ble = os.environ.get("ORBIT_BLE") == "1"
     if ble:
         flags[-1] = "-I" + str(GEN.relative_to(SRC))
-        flags.append("-DORBIT_BLE=1")
+        flags += ["-DORBIT_BLE=1", "-Oz"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_CDC", "FELUCCA_UAC", "FELUCCA_UART",
                  "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_CDC_ON", "FELUCCA_DATA_UNTAGGED_OK"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c

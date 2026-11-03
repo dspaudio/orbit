@@ -62,7 +62,8 @@ static const char *const N_SYNC[] = {"INT", "USB", "TRS", "OUT"};   /* G_SYNC: t
 static const char *const N_GO[] = {"--", "GO"};
 static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_OFF .. SL_STUT (slicer.c) */
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
-static const char *const N_CHORD[] = {"OFF", "TRIAD", "7TH", "9TH", "SUS4", "POWER"};   /* seq.c CHORD_DEG */
+static const char *const N_CHORD[] = {"OFF", "TRIAD", "7TH", "9TH", "SUS4", "POWER", "OPEN", "OPEN7",
+                                     "ADD9", "6TH"};   /* seq.c CHORD_DEG */
 static const char *const N_ROLL[] = {"1/8", "1/16", "1/32", "32T", "1/64"};   /* seq.c ROLL_DEN */
 static const char *const N_ENGNAME[] = {"ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN",
 #if FELUCCA_SLICE
@@ -423,6 +424,14 @@ typedef struct {
     uint8_t id[4];               /* param ids; 0xFF = empty slot */
 } page_t;
 
+#if ORBIT_BLE
+/* the mixer's BT AUDIO page: the phone's stream (A2DP) after MASTER, at its own level, 0..127 on the volume knob's
+ * curve; it follows the volume knob (master_k10) until KNOB 1 turns it (fx.c mix_block), until power-off */
+#define G_BTLVL 0xFEu
+int a2dp_link(void);                               /* ble/a2dp.c: a phone connected */
+static int16_t bt_level = 90;
+static uint16_t master_k10 = 724;                 /* the volume knob 0..1023 (main.c), master_q12 = k10^2 >> 8 */
+#endif
 static const page_t PAGES[] = {
     {"ENV", FAM_ENV, SC_TRACK, GR_ADSR, {P_ATK, P_DEC, P_SUS, P_REL}},
     {"ENV DEST", FAM_ENV, SC_TRACK, GR_NONE, {P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ESYNC}},   /* (P_ED_FX: the level trim, no
@@ -469,6 +478,9 @@ static const page_t PAGES[] = {
     {"SONG", FAM_SEQ, SC_SONG, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"TRACKS", FAM_TRK, SC_TRK, GR_TRK, {P_LEVEL, P_LEVEL, P_LEVEL, P_LEVEL}},   /* GLO: 믹서 level 화면, KNOB 1..4 = 트랙 1..4 level (드럼은 G_DRLVL) */
     {"PAN", FAM_TRK, SC_TRK, GR_TRK, {P_PAN, P_PAN, P_PAN, P_PAN}},   /* SELECT: 네 트랙의 pan */
+#if ORBIT_BLE
+    {"BT AUDIO", FAM_TRK, SC_TRK, GR_TRK, {G_BTLVL, 0xFF, 0xFF, 0xFF}},   /* a phone connected: its level, KNOB 1 */
+#endif
     {"TRACK", FAM_TRK, SC_TRK, GR_TRK, {0xFF, 0xFF, 0xFF, 0xFF}},   /* SELECT 한 번 더: 예전 경로, 전역 SWING / 선택 트랙의 LEVEL / LEN / PAN */
     {"DRUMS", FAM_TRK, SC_DRUM, GR_NONE, {0xFF,0xFF,0xFF,0xFF}},
 };
@@ -489,6 +501,10 @@ static int page_for_drum(const page_t *pg)
 /* a page the buttons and SELECT reach on the selected track: EDIT > FILTER (TYPE) on ANALOG only */
 static int page_shown(const page_t *pg)
 {
+#if ORBIT_BLE
+    if (pg->id[0] == G_BTLVL)
+        return a2dp_link();                            /* (the mixer's BT AUDIO page: a phone connected) */
+#endif
     if (pg->graph == GR_MACROS || pg->graph == GR_PERFORM)
         return !is_drum(TSEL);
     return pg->id[0] != P_FTYPE || (!is_drum(TSEL) && TSEL->eng_req % NENGINES == 0u);

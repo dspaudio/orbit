@@ -252,17 +252,22 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
 
 /* chord mode (P_CHORD): the chord of the scale built on note n (in the scale; CHR: minor), into c[];
  * the notes it holds (<= 4, the most a step keeps) */
-static const int8_t CHORD_DEG[6][4] = {
+#define CHORD_MAX 9                      /* the last chord type (params.c N_CHORD) */
+static const int8_t CHORD_DEG[CHORD_MAX + 1][4] = {
     {0, -1, -1, -1},                     /* OFF */
     {0, 2, 4, -1},                       /* TRIAD: 1 3 5 */
     {0, 2, 4, 6},                        /* 7TH: 1 3 5 7 */
     {0, 2, 6, 8},                        /* 9TH: 1 3 7 9 (the lo-fi / R&B voicing) */
     {0, 3, 4, -1},                       /* SUS4: 1 4 5 */
     {0, -1, -1, -1},                     /* POWER: 1 5 8 (semitones, below) */
+    {0, 4, 2, -1},                       /* OPEN: 1 5 10 (the third an octave up) */
+    {0, 4, 6, 2},                        /* OPEN7: 1 5 7 10 */
+    {0, 2, 4, 8},                        /* ADD9: 1 3 5 9 */
+    {0, 2, 4, 5},                        /* 6TH: 1 3 5 6 */
 };
 static uint32_t chord_notes(const track_t *t, uint32_t n, uint8_t *c)
 {
-    uint32_t type = (uint32_t)clamp(t->p[P_CHORD], 0, 5), mask = t->p[P_SCALE] ? scale_mask(t) : SCALE_MASK[2];
+    uint32_t type = (uint32_t)clamp(t->p[P_CHORD], 0, CHORD_MAX), mask = t->p[P_SCALE] ? scale_mask(t) : SCALE_MASK[2];
     uint32_t k = 0, j;
     if (type == 5u) {
         static const uint8_t PW[3] = {0, 7, 12};
@@ -273,11 +278,13 @@ static uint32_t chord_notes(const track_t *t, uint32_t n, uint8_t *c)
     }
     for (j = 0; j < 4u && CHORD_DEG[type][j] >= 0; j++) {
         int32_t m = (int32_t)n, d = CHORD_DEG[type][j], guard = 48;
+        int32_t tenth = (type == 6u && j == 2u) || (type == 7u && j == 3u);
         while (d > 0 && guard--) {                       /* d scale degrees up */
             m++;
             if ((mask >> (uint32_t)((m - t->p[P_ROOT] + 120) % 12)) & 1u)
                 d--;
         }
+        m += tenth * 12;
         if (m < 128)
             c[k++] = (uint8_t)m;
     }
@@ -323,14 +330,17 @@ static void sort_notes(uint8_t *c, uint32_t n)
 /* the chord of white key n with the modifiers held, voiced (VLEAD); its notes (<= 4) into c[] */
 static uint32_t chord_play_notes(track_t *t, uint32_t n, uint32_t mods, uint8_t *c)
 {
-    uint32_t k = chord_notes(t, n, c), j, type = (uint32_t)clamp(t->p[P_CHORD], 0, 5), part = trk_index(t);
+    uint32_t k = chord_notes(t, n, c), j, type = (uint32_t)clamp(t->p[P_CHORD], 0, CHORD_MAX), part = trk_index(t);
     if (type != 5u && k >= 2u && mods) {                /* (POWER: the inversion only) */
         uint32_t third = scale_up(t, n, 2u);
         for (j = 0; j < k; j++) {
-            if (c[j] == third && (mods & CM_SUS4))
-                c[j] = (uint8_t)scale_up(t, n, 3u);     /* the 4th instead of the 3rd */
-            else if (c[j] == third && (mods & CM_MINOR))
-                c[j] = (uint8_t)(c[j] - n == 4u ? c[j] - 1u : c[j] - n == 3u ? c[j] + 1u : c[j]);
+            uint32_t up = c[j] == third + 12u ? 12u : 0u;   /* (OPEN: the 10th is the third) */
+            if (c[j] != third && !up)
+                continue;
+            if (mods & CM_SUS4)
+                c[j] = (uint8_t)(scale_up(t, n, 3u) + up);   /* the 4th instead of the 3rd */
+            else if (mods & CM_MINOR)
+                c[j] = (uint8_t)(third - n == 4u ? c[j] - 1u : third - n == 3u ? c[j] + 1u : c[j]);
         }
         if ((mods & CM_SEVEN) && k < 4u) {
             uint32_t s7 = scale_up(t, n, 6u);
@@ -1036,6 +1046,10 @@ static int erasing(const track_t *t) { return trk_index(t) == er_trk && (er_lane
 static uint8_t held_key[NTRK][16];
 static int8_t held_dt[NTRK][16];
 static uint8_t in_key;
+/* #7: how long each track's arp has had no notes (units, saturating). A chord changed within one arp step (the keys
+ * let go and the next chord pressed, in rhythm) continues the pattern where it was instead of starting it again from
+ * its lowest note: else a progression played in time arpeggiates only its roots */
+static uint32_t arp_gap[NTRK] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
 static void arp_add(track_t *t, uint32_t note)
 {
     uint32_t i;
@@ -1053,8 +1067,12 @@ static void arp_add(track_t *t, uint32_t note)
         t->held[t->nheld++] = (uint8_t)note;
     }
     if (t->nheld == 1u) {
-        t->arp_new = 1;                             /* the first note: now (or on the grid just ahead) */
-        t->arp_idx = 0xFFFFFFFFu;
+        if (arp_gap[trk_index(t) % NTRK] <= div_units((uint32_t)t->p[P_ARATE] % NDIV_SHORT)) {
+            t->arp_new = 2;                         /* a chord change: the pattern goes on, on its grid */
+        } else {
+            t->arp_new = 1;                         /* the first note: now (or on the grid just ahead) */
+            t->arp_idx = 0xFFFFFFFFu;
+        }
     }
 }
 
@@ -1065,6 +1083,12 @@ static void arp_remove(track_t *t, uint32_t note)
         t->arp_phys--;
     if (t->p[P_AHOLD])
         return;
+    for (i = 0; i < 27u; i++)                       /* #7: still held by another key (the next chord shares it) */
+        if (kb_kind[i] == KS_NOTE && &trk[kb_trk[i] % NTRK] == t)
+            for (k = 0; k < kb_n[i] && k < 4u; k++)
+                if (kb_nt[i][k] == note)
+                    return;
+    k = 0;
     for (i = 0; i < t->nheld; i++)
         if (t->held[i] != note) {
             held_key[trk_index(t)][k] = held_key[trk_index(t)][i];
@@ -1138,6 +1162,10 @@ static void arp_tick(track_t *t, uint32_t adv)
             t->arp_off -= adv;
         }
     }
+    if (t->nheld)
+        arp_gap[trk_index(t) % NTRK] = 0;
+    else if (arp_gap[trk_index(t) % NTRK] < 0x80000000u)
+        arp_gap[trk_index(t) % NTRK] += adv;
     if (!t->p[P_AMODE] || !t->nheld) {
         if (!t->nheld && t->arp_note) {
             trk_note_off(t, t->arp_note);
@@ -1149,7 +1177,9 @@ static void arp_tick(track_t *t, uint32_t adv)
     }
     if (song.playing) {
         abs = grid_at(div, swings(div) ? swing_units(t->p[P_ASWING], u) : 0u, &into, &slen);
-        if (t->arp_new) {
+        if (t->arp_new == 2u) {
+            t->arp_new = 0;                         /* (a chord change: this step played already, or plays now) */
+        } else if (t->arp_new) {
             t->arp_new = 0;
             t->arp_abs = into * 4u >= slen * 3u ? abs : abs - 1u;   /* the last quarter: the grid plays it */
         } else if (div != t->arp_den) {
@@ -1162,8 +1192,9 @@ static void arp_tick(track_t *t, uint32_t adv)
         t->arp_abs = abs;
     } else {
         if (t->arp_new) {
+            if (t->arp_new == 1u)
+                t->arp_pos = u;                     /* (a chord change keeps the phase) */
             t->arp_new = 0;
-            t->arp_pos = u;
         }
         slen = u;
         t->arp_pos += adv;
@@ -1488,7 +1519,9 @@ static void chord_revoice(uint32_t sel)
             for (j = 0; j < nn && nw[j] != kb_nt[k][i]; j++)
                 ;
             if (j == nn) {
+                kb_kind[k] = KS_NONE;               /* (this key lets it go: arp_remove looks at the others) */
                 input_off(t, kb_nt[k][i]);
+                kb_kind[k] = KS_NOTE;
                 midi_out_note(mc, (uint32_t)kb_nt[k][i], 0);
             }
         }
@@ -1799,9 +1832,12 @@ static void pick_aud_block(void)
  * channel; nothing sounds here and nothing is recorded. Every message of the mode leaves through ctrl_send, in the
  * audio context only (midi_out_event has one producer: this interrupt). The UI queues its CCs with ctrl_push
  * (interrupts off around the write), drained here by ctrl_block every audio block */
-typedef struct { uint8_t ch, cc[4], sw[4]; } ctrl_cfg_t;   /* channel 0..15; KNOB 1..4 CCs; FX SEL ENV LFO CCs */
-#define CTRL_CFG_DEF {0, {7, 74, 71, 64}, {80, 81, 82, 83}}
+typedef struct { uint8_t ch, cc[4], sw[4], tg; } ctrl_cfg_t;   /* channel 0..15; KNOB 1..4 CCs; FX SEL ENV LFO CCs;
+                                                                * tg: bit per switch, 1 toggle, 0 momentary */
+#define CTRL_CFG_DEF {0, {7, 74, 71, 64}, {80, 81, 82, 83}, 0}
 static ctrl_cfg_t ctrl_cfg = CTRL_CFG_DEF;
+static volatile uint8_t ctrl_val[4];            /* KNOB 1..4: the value last sent or heard (ctrl_feedback) */
+static volatile uint8_t ctrl_sw;                /* bit per switch: on (127 sent or, toggles, heard) */
 static volatile uint8_t ctrl_on;                /* set by the UI (ctrl.c ctrl_set) */
 static uint8_t ctrl_was;                        /* the mode as this context last saw it */
 static uint8_t ctrl_note[27], ctrl_kch[27];     /* per key: note + 1 sent on (0 none), its channel */
@@ -1847,6 +1883,26 @@ static void ctrl_block(void)
         ctrl_send(ctrl_q[ctrl_qr % CTRL_Q]);
         ctrl_qr++;
     }
+}
+
+/* a CC heard on the controller channel while the mode is on (the DAW's fader moved, its automation playing): the
+ * knob with that CC takes the value (the screen shows it, the next turn goes on from it); a toggle switch with it
+ * turns on (64..127) or off. 1: one of the controller's CCs, not passed on to the synth */
+static int ctrl_feedback(uint32_t cc, uint32_t v)
+{
+    uint32_t i, hit = 0;
+    for (i = 0; i < 4u; i++) {
+        if (ctrl_cfg.cc[i] == cc) {
+            ctrl_val[i] = (uint8_t)v;
+            hit = 1;
+        }
+        if (ctrl_cfg.sw[i] == cc) {
+            if ((ctrl_cfg.tg >> i) & 1u)
+                ctrl_sw = (uint8_t)(v >= 64u ? ctrl_sw | 1u << i : ctrl_sw & ~(1u << i));
+            hit = 1;
+        }
+    }
+    return (int)hit;
 }
 
 static void keyboard_block(void)
@@ -2805,6 +2861,8 @@ static void events_block(uint32_t n)
             mclk_event((pkt >> 8) & 0xFFu, ((pkt >> 4) & 15u) ? 2u : 1u);
             continue;
         }
+        if (ctrl_on && st == 0xB0u && ch == ctrl_cfg.ch && ctrl_feedback(d1, d2))
+            continue;                                 /* CONTROLLER: the DAW's value back on the screen */
         if (song.g[G_ROUTE] >= 2) {                   /* 2.6: IN = CH n: that channel only, on the selected
                                                        * track (notes and CCs); every other channel ignored */
             if (ch != (uint32_t)song.g[G_ROUTE] - 2u)

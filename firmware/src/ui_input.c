@@ -257,6 +257,11 @@ static void ui_leds(void)
         led_pos_init();
         ready = 1;
     }
+    if (ctrl_on) {                                 /* CONTROLLER: FX SEL ENV LFO lit while their switch is on */
+        static const uint8_t sb[4] = {B_FX, B_SCL, B_ENV, B_LFO};
+        for (k = 0; k < 4u; k++)
+            led_put(nl, panel.btn[sb[k]], (ctrl_sw >> k) & 1u);
+    } else
     led_put(nl, panel.btn[ui.layer != LY_PLAY ? LAYER_BTN[ui.layer] : cur_btn()],
             ly_lock == LY_PLAY || ((fm1_ms / 300u) & 1u) != 0u || (fm1_in.buttons & ly_bit[ly_lock % LY_COUNT]) != 0u);   /* locked: blinks */
     led_put(nl, panel.btn[B_PLAY], play_led() || (song.playing && !song.rec && ft_on) ||
@@ -393,6 +398,14 @@ static void tracks_edit(uint32_t slot, int32_t steps)
     track_t *t = kind == MX_TRACK ? TSEL : &trk[slot % NTRK];
     int16_t *vp;
     const param_desc_t *d;
+    if (kind == MX_BT) {                                  /* BT AUDIO: KNOB 1 the phone's level (fx.c: no longer
+                                                           * the volume knob's once turned) */
+#if ORBIT_BLE
+        if (slot == 0u)
+            bt_level = (int16_t)clamp(bt_level + accel(EN_K1, steps, 127), 0, 127);
+#endif
+        return;
+    }
     if (kind == MX_PAN || (kind == MX_TRACK && slot == 3u)) {
         vp = &t->p[P_PAN];
         d = &TP[P_PAN];

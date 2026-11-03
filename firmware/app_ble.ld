@@ -3,8 +3,8 @@
 /* ORBIT: ported from Hortator 4e40f27 by DEADACTIVE, felucca-ble ble-kit. */
 /* ORBIT's BLE build (ORBIT_BLE=1, tools/build.py): app.ld (the same memory map) plus the JieLi BT libraries'
  * sections, placed as the AC79 SDK's cpu/wl82/sdk_ld_sfc.c does (Apache-2.0, JieLi): their code and constants in
- * XIP (.text), their data in .data, their zeroed data in .bss. The fragments' pool symbols are given with zero
- * size (no classic BT, no TWS). The radio calibration (*.rf.text.cache.L2.rf_trim, .volatile_ram_code) runs from RAM, in .ram_text, as
+ * XIP (.text), their data in .data, their zeroed data in .bss. TWS pool symbols
+ * have zero size; classic ACL buffers live in POOL. The radio calibration (*.rf.text.cache.L2.rf_trim, .volatile_ram_code) runs from RAM, in .ram_text, as
  * the SDK's demos build it (CONFIG_RF_TRIM_CODE_AT_RAM): during the ~500 ms trim the flash must not be read
  * (ble_port.c's enter/exit_wifi_rf_trim_region turn interrupts off; build.py's reach check: .ram_text reaches
  * nothing in XIP). build.py fails the link on any other *ram_code* section.
@@ -35,6 +35,7 @@ SECTIONS
         a2dp_sink_media_probe_begin = .; KEEP(*(.a2dp_sink_media_probe)) a2dp_sink_media_probe_end = .;
         a2dp_sink_media_codec_begin = .; KEEP(*(.a2dp_sink_media_codec)) a2dp_sink_media_codec_end = .;
         a2dp_event_handler_begin = .; KEEP(*(.a2dp_event_handler)) a2dp_event_handler_end = .;
+        audio_hwaccel_begin = .; KEEP(*(.audio_hwaccel)) audio_hwaccel_end = .;
         sdp_record_item_begin = .; KEEP(*(.sdp_record_item)) sdp_record_item_end = .;
         bt_sleep_begin = .; KEEP(*(.bt_sleep)) bt_sleep_end = .;
         tws_func_stub_begin = .; KEEP(*(.tws_func_stub)) tws_func_stub_end = .;
@@ -56,12 +57,25 @@ SECTIONS
     _data_load = LOADADDR(.data);
     .bss (NOLOAD) : {
         _bss_start = .; *(.bss*) *(.sbss*) *(COMMON)
-        *(.bd_base) *(.*_bulk) *(.*_bss) *(.btstack_pool)
-        acl_tx_pool = .; acl_tx_pool_end = .; acl_rx_pool = .; acl_rx_pool_end = .;
         tws_bulk_pool = .; tws_bulk_pool_end = .;
         . = ALIGN(4); _bss_end = .;
     } > RAM
-    .pool (NOLOAD) : { _pool_start = .; *(.pool*) . = ALIGN(4); _pool_end = .; } > POOL
+    .pool (NOLOAD) : {
+        /* the classic controller hands the radio its buffers as 16-bit offsets from a base by bd_base (it asserts
+         * on any further: link_inquiry_scan_enable): the BT libraries' zeroed data, their heap (ble.c ble_heap) and
+         * the ACL pools together, first, within 64 KB. (main.c zeroes the pool at boot, as crt0 the .bss) */
+        _pool_start = .; _bt_mem_start = .;
+        *(.bd_base) *(.*_bulk) *(.*_bss) *(.btstack_pool) . = ALIGN(4);
+        acl_tx_pool = .; . += 6144; acl_tx_pool_end = .;     /* (bt_malloc's packets: TX pointers reach 32 KB) */
+        acl_rx_pool = .; . += 12288; acl_rx_pool_end = .;
+        _bt_acl_end = .;
+        *(.pool.bt) . = ALIGN(4);
+        _bt_mem_end = .;
+        *(.pool*) . = ALIGN(4);
+        _pool_end = .;
+    } > POOL
+    ASSERT(_bt_mem_end - _bt_mem_start <= 0xF800, "BT buffers must lie within 64 KB of bd_base")
+    ASSERT(_bt_acl_end - _bt_mem_start <= 0x7C00, "BT ACL pools must lie within 32 KB of bd_base")
     .noinit (NOLOAD) : { *(.noinit*) } > NOINIT
     _guard0 = 0x01C74000; _ustack_lo = 0x01C74100; _ustack_top = 0x01C7A000;
     _guard1 = 0x01C7A000; _sstack_lo = 0x01C7A100; _sstack_top = 0x01C7C000;

@@ -1,5 +1,64 @@
 # ORBIT validation record
 
+## ORBIT 1.0.0 and 1.0.B release, 2026-11-03
+
+These are local build and host results before publication. The device owner
+confirmed that the firmware works on the FM-1. Phone pairing,
+simultaneous A2DP/BLE-MIDI traffic, SBC hardware decoding, audio quality,
+latency, drift under radio load, and task-stack/heap high-water marks have
+not been separately measured here. The current source stores classic link
+keys in the BLM1 flash object, preserving earlier 80-byte objects.
+
+With `/tmp/orbit-venv/bin` first in `PATH` and the Bluetooth SDK pinned at
+`~/fw-AC79_AIoT_SDK-V1.2.0`:
+
+| Check | Measured result |
+| --- | --- |
+| `ORBIT_BLE=1 sh build.sh` | Exit 0, including all build.py checks; image 565,940 / 581,564 B; static RAM `.data+.bss` 87,412 / 98,304 B; POOL 332,288 / 344,064 B |
+| BLE remaining capacity | XIP 15,624 B; static RAM 10,892 B; POOL 11,776 B, keeping the required 8,192 B reserve |
+| BLE RAM-code gate | 7,056 B, 2,351 instructions, 210 calls confined to RAM, no XIP reference |
+| `sh build.sh` | Exit 0; image 566,328 B; static RAM 78,776 / 98,304 B; POOL 328,444 / 344,064 B |
+| `python3 tests/target_budget.py build/felucca.dis tests/target_budget.txt` | Exit 0; budgets unchanged |
+| `/tmp/orbit-venv/bin/python tools/orbit_check.py` | 45 PASS; only the pre-existing macOS `irq_init_test` compilation failure |
+| `a2dp_pcm_test` with Homebrew LLVM and ASan/UBSan | Exit 0; sample-rate ratios, stereo mixing, ring wrap, underrun, stop/restart, drift adjustment, SBC frame bounds and session-key bounds |
+| BLE OS, sample and MIDI bridge tests | Exit 0; five task slots including encryption/decoder, sample stand-ins and MIDI bridge |
+| Default `regress` | 218 renders match the reviewed goldens; zero health, voice/routing, CPU-budget failures or crashes |
+| `sh tests/run_tests.sh` with Homebrew LLVM ASan/UBSan | Exit 0, `ALL HOST TESTS PASSED`; includes the 10-minute soak, BLE bridge, package, golden and web checks |
+| `python3 tests/orbit_preview_test.py` | Exit 0; HTTP/native DSP preview renders audio and handles panel events |
+| `node web/test_web.mjs` | Exit 0; browser installer/editor checks passed |
+| `python3 tests/site_test.py` | Exit 0; both real packages copied and checked in the generated dual-version installer |
+
+PEN's five-note scale exposed an OPEN/OPEN7 voicing error in review:
+the 10th had been counted as nine scale degrees instead of the third
+raised an octave. Three new `seq2_test` assertions failed before the
+correction and pass afterward, including the F# modifier. Both target
+packages were rebuilt after the correction.
+
+The `preset/LOFI/02_8BIT_ARP` render changed from
+`8ba73e2cfbd0b963` to `9c1f285c44d3931d`. The regression phrase releases
+its first note for 50 ms before the next, within one arp step; the new
+chord-change continuity keeps that arp in phase instead of starting on its
+root. The earlier preprocessed default DSP was identical with the
+then-current and pre-change mixers and reproduced the new hash in both,
+excluding the Bluetooth mixer as a cause. Only this intended render's
+golden was updated; the other 217 stayed unchanged.
+
+Shortening the BLE PIANO and VIBES stand-ins freed no XIP bytes (they hold
+no stored ADPCM), so their lengths stay at 65 x 512 samples. 48 kHz USB
+audio and FM6_EXP2 remain present. BLE-only `-Oz` saved 26,148 B. The
+controller keeps the SDK's full LE roles so the BLE host role (ROLE HOST,
+`ble_central.c`) still scans and connects; restricting them to the
+peripheral role would have saved 5,572 B and was reverted. The BT heap
+is now shared by BLE host links and the classic sink; its high-water with a
+host link and an A2DP stream at once is unmeasured. The final static RAM and POOL margins are not runtime free-memory
+or timing measurements. Earlier work logs are in `build/a2dp-study/`; final
+package builds are in `build/release-1.0-default.log` and `build/release-1.0-ble.log`.
+
+The 1.0.0 package is 610,032 B with SHA-256
+`6f6c73e86807f2b9c96402c5cc9aac2f1024417d4ebd4763568e098fbb30d791`.
+The 1.0.B package is 610,032 B with SHA-256
+`fa36959e69aca062ee4125fc67417c81289cf0314a8a5c146bf01365b1be7fce`.
+
 ## ORBIT 0.10.0 and 0.10.B release, 2026-10-31
 
 The default package identifies its firmware as `ORBIT 0.10.0`; the Bluetooth

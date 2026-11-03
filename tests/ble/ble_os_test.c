@@ -119,12 +119,18 @@ int main(void)
     }
     {   /* Q_CALLBACK: func(argv[3], argv[4]) runs in the pend (flags 2 = two args); a plain message still returns */
         int c[4];
-        ble_os_init(heap, sizeof heap);         /* (the hog never sleeps: a fresh OS, three task slots, NTASK) */
+        ble_os_init(heap, sizeof heap);         /* Fresh OS; five tasks including classic encryption and decoding. */
         nlog = 0;
         task_create(cb_consumer, 0, "cbtask");
-        CHECK(task_create(consumer, 0, "two") == 0 && task_create(consumer, 0, "three") == 0 &&
-              task_create(consumer, 0, "four") == -1, "tasks: three slots (app_core, btctrler, btstack), a fourth refused");
+        CHECK(task_create(consumer, 0, "btctrler") == 0 && task_create(consumer, 0, "btstack") == 0 &&
+              task_create(consumer, 0, "btencry") == 0 && task_create(consumer, 0, "decoder") == 0 &&
+              task_create(consumer, 0, "sixth") == -1, "tasks: five slots, a sixth refused");
         ble_os_service(1000);
+        c[0] = 71; os_taskq_post_type("btencry", BLE_SDK_Q_MSG, 1, c);
+        c[0] = 72; os_taskq_post_type("decoder", BLE_SDK_Q_MSG, 1, c);
+        ble_os_service(1000);
+        CHECK(nlog == 2 && log_[0] == 71 && log_[1] == 72, "encryption and decoder tasks both receive messages");
+        nlog = 0;
         c[0] = 1;   /* (the handle of add2: pointers are 64-bit on the host) */ c[1] = 2; c[2] = 30; c[3] = 12;
         os_taskq_post_type("cbtask", BLE_SDK_Q_CALLBACK, 4, c);
         c[0] = 5; os_taskq_post_type("cbtask", BLE_SDK_Q_EVENT | 1, 1, c);

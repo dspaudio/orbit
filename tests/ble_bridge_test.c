@@ -8,6 +8,7 @@ static uint32_t sent[512], nsent, isr_calls, test_isr;
 static uint32_t received[128], rx_r, rx_w, rx_drops;
 void ble_service(void) {}
 ble_status_t ble_get_status(void) { return test_status; }
+int a2dp_link(void) { return 0; }
 void ble_user_start(void) { test_status = BLE_STATUS_ADVERTISING; }
 void ble_user_stop(void) { test_status = BLE_STATUS_OFF; }
 const char *ble_last_error(uint32_t *code) { *code = 0; return "NO RF TRIM IN FLASH"; }

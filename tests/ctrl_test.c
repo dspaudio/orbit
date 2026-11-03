@@ -315,6 +315,49 @@ int main(void)
     check(count_pkt(CC(0u, 80u, 0u)) == 1u, "FX release: CC 80 = 0");
     clear_out();
 
+    /* ---- toggle switches: EDIT + FX, then a press on, the next off */
+    press(bit(B_EDIT));
+    frames(1);
+    press(bit(B_FX));
+    frames(1);
+    release(bit(B_FX) | bit(B_EDIT));
+    frames(2);
+    check(ctrl_cfg.tg == 1u && nout == 0u, "EDIT + FX: FX toggle, nothing sent");
+    press(bit(B_FX));
+    frames(1);
+    release(bit(B_FX));
+    frames(2);
+    check(count_pkt(CC(0u, 80u, 127u)) == 1u && count_pkt(CC(0u, 80u, 0u)) == 0u && (ctrl_sw & 1u),
+          "FX toggle: a press 127, no 0 on release; on");
+    clear_out();
+    press(bit(B_FX));
+    frames(1);
+    release(bit(B_FX));
+    frames(2);
+    check(count_pkt(CC(0u, 80u, 0u)) == 1u && !(ctrl_sw & 1u), "FX toggle: the next press 0; off");
+    clear_out();
+
+    /* ---- CC feedback: the DAW's values on the controller channel */
+    midi_in_q[mi_w % MQ] = CC(0u, 10u, 90u);
+    mi_w++;
+    midi_in_q[mi_w % MQ] = CC(0u, 80u, 127u);
+    mi_w++;
+    frames(2);
+    check(ctrl_val[0] == 90u && (ctrl_sw & 1u) && nout == 0u, "CC 10 = 90 heard: KNOB 1 at 90; CC 80 heard: FX on");
+    turn(EN_K1, 1);
+    frames(1);
+    check(last_cc(0u, 10u) == 91, "KNOB 1 goes on from the heard value (91)");
+    clear_out();
+    press(bit(B_EDIT));
+    frames(1);
+    press(bit(B_FX));
+    frames(1);
+    release(bit(B_FX) | bit(B_EDIT));
+    frames(2);
+    check(ctrl_cfg.tg == 0u && count_pkt(CC(0u, 80u, 0u)) == 1u && !(ctrl_sw & 1u),
+          "EDIT + FX again: momentary; the on toggle sent 0 first");
+    clear_out();
+
     /* ---- channel: EDIT + SELECT */
     {
         int16_t bpm = song.g[G_BPM];

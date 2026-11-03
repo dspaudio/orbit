@@ -18,9 +18,9 @@
 #define BLE_UNLOCK() fm1_irq_on()
 #endif
 
-#define NTASK 3                                    /* app_core, btctrler, btstack: the libraries create no other
-                                                    * (SDK demo_ble task_info_table); a 4th slot's 2.5 KB went to the heap */
-#define QWORDS 96                                  /* message words per task queue */
+#define NTASK 5                                    /* app_core, btctrler, btstack, btencry, decoder */
+#define QWORDS 256                                 /* message words per task queue (96 overflowed btstack's as a
+                                                    * classic link came up: its connection events were lost) */
 #define NTIMER 16
 #define STACK_WORDS BLE_STACK_WORDS
 
@@ -420,6 +420,19 @@ int os_sem_pend(void *s, int timeout)
             BLE_UNLOCK();
             return BLE_SDK_OS_TIMEOUT;
         }
+#ifndef BLE_OS_HOST
+        if (tasks[cur].name[0] == 'd' && tasks[cur].name[1] == 'e' && tasks[cur].name[2] == 'c') {   /* "decoder" */
+            /* the SBC decoder waits on the hardware's interrupt (well under 0.5 ms): wait here; yielding cost a whole
+             * round of the main loop per frame (4.4 ms > the frame's 2.9 ms while a pattern played: dropouts) */
+            uint32_t t0 = fm1_ticks();
+            BLE_UNLOCK();
+            while (x->count <= 0 && fm1_ticks() - t0 < 500u * FM1_TICKS_PER_US)
+                ;
+            BLE_LOCK();
+            if (x->count > 0)
+                break;
+        }
+#endif
         tasks[cur].wait_obj = s;
         tasks[cur].sleeping = timeout != 0;
         tasks[cur].wake_ms = until;
@@ -433,9 +446,42 @@ int os_sem_pend(void *s, int timeout)
     return BLE_SDK_OS_NO_ERR;
 }
 
-int os_mutex_create(void *m) { return os_sem_create(m, 1); }
-int os_mutex_pend(void *m, int timeout) { return os_sem_pend(m, timeout); }
-int os_mutex_post(void *m) { return os_sem_post(m); }
+/* the SDK's mutexes are taken again by their owner (btstack: get_link_key under the link-key mutex it already holds,
+ * as a classic link comes up): owner (the task + 2, the core 1) and depth (the byte after sem_t) make them recursive */
+int os_mutex_create(void *m)
+{
+    os_sem_create(m, 1);
+    ((uint8_t *)m)[sizeof(sem_t)] = 0;
+    return BLE_SDK_OS_NO_ERR;
+}
+int os_mutex_pend(void *m, int timeout)
+{
+    sem_t *x = m;
+    uint8_t me = (uint8_t)(cur + 2), *depth = (uint8_t *)m + sizeof(sem_t);
+    int r;
+    if (x->owner == me && *depth) {
+        ++*depth;
+        return BLE_SDK_OS_NO_ERR;
+    }
+    r = os_sem_pend(m, timeout);
+    if (r == BLE_SDK_OS_NO_ERR) {
+        x->owner = me;
+        *depth = 1;
+    }
+    return r;
+}
+int os_mutex_post(void *m)
+{
+    sem_t *x = m;
+    uint8_t *depth = (uint8_t *)m + sizeof(sem_t);
+    if (*depth > 1) {
+        --*depth;
+        return BLE_SDK_OS_NO_ERR;
+    }
+    *depth = 0;
+    x->owner = 0;
+    return os_sem_post(m);
+}
 int os_mutex_del(void *m, int force) { (void)m; (void)force; return BLE_SDK_OS_NO_ERR; }
 
 /* ---- timers ---- */
@@ -531,6 +577,7 @@ static uint32_t run_timers(void)
 #ifdef BLE_OS_HOST
 #define BLE_OS_HOST_SWITCHES 64
 #endif
+volatile uint32_t ble_os_busy_ticks;               /* (bring-up: time spent running the BT tasks, memr) */
 uint32_t ble_os_service(uint32_t budget_us)
 {
     uint32_t ran = 0, progress = 1;
@@ -562,6 +609,7 @@ uint32_t ble_os_service(uint32_t budget_us)
                 uint32_t t1 = fm1_ticks();
                 run(i);
                 t1 = fm1_ticks() - t1;
+                ble_os_busy_ticks += t1;
                 if (t1 > run_max)
                     run_max = t1;
             }

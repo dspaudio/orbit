@@ -128,6 +128,10 @@ static void orbit_mixer_draw(void)
     static uint32_t cache,footer;
     uint32_t k,kind=mixer_kind(),pan=kind==MX_PAN,sig=song.sel+song.solo*31u+song.g[G_BPM]*71u+kind*7u;
     char b[16],hint[32];
+#if ORBIT_BLE
+    if(kind==MX_BT && !a2dp_link()) { studio_open(SC_TRK); kind=mixer_kind(); pan=0; }   /* (the phone left) */
+    sig=sig*31u+(uint32_t)bt_level;
+#endif
     for(k=0;k<NTRK;k++) sig=sig*31u+trk[k].p[P_LEVEL]+trk[k].p[P_MUTE]*521u+trk[k].p[P_PAN]*17u+trk[k].eng_req*97u;
     sig=sig*31u+song.g[G_DRLVL];
     sig=(sig*31u+(uint32_t)batt_shown())*2u+(song.rec!=0u);
@@ -137,13 +141,23 @@ static void orbit_mixer_draw(void)
         cv_begin(240,36,C_BLACK);
         cv_text(8,2,&FONT_S,song.rec?"REC / NO AUTO":"mixer",C_WHITE); fmt_int(b,song.g[G_BPM]); cv_text(178,2,&FONT_S,b,TE_G3);
         draw_battery(0);
-        if(kind==MX_TRACK) {                        /* 둘째 줄: 이 페이지의 네 knob과 SELECT가 가는 곧 */
+        if(kind==MX_BT) str_cpy(hint,"bluetooth audio / knob 1",sizeof hint);
+        else if(kind==MX_TRACK) {                        /* 둘째 줄: 이 페이지의 네 knob과 SELECT가 가는 곧 */
             str_cpy(hint,"track ",sizeof hint); fmt_int(hint+6,(int32_t)song.sel+1);
             str_cpy(hint+str_len(hint)," / select: pan",sizeof hint-str_len(hint));
         } else str_cpy(hint,pan?"pan 1-4 / select: level":"level 1-4 / select: pan",sizeof hint);
         cv_text(8,20,&FONT_S,hint,TE_G3); cv_blit(0,0);
         cv_begin(240,124,C_BLACK);
         if(pl_shown()) { cv_oy=0; graph_browse(); }   /* PRESETS turned: the sounds around the one just loaded */
+#if ORBIT_BLE
+        else if(kind==MX_BT) {                      /* the phone's stream: one strip, as a track's, in column 1 */
+            int32_t cx=30,j,y=108-bt_level*82/127;
+            cv_text(cx-8,2,&FONT_S,"BT",TE_COL[0]); orbit_ring(cx,11,10,C_WHITE);
+            for(j=0;j<6;j++) cv_line(cx-18,26+j*16,cx+18,26+j*16,TE_G1);
+            cv_rect(cx-2,25,4,86,TE_G2); cv_rect(cx-2,y,4,109-y,TE_COL[0]);
+            cv_rect(cx-17,y-3,34,8,TE_COL[0]); cv_line(cx-12,y,cx+12,y,C_BLACK);
+        }
+#endif
         else for(k=0;k<NTRK;k++) {
             int32_t cx=30+(int32_t)k*60,level=(int32_t)trk_level(k),j;
             uint16_t col=trk_silent(&trk[k])?TE_DIM[k]:TE_COL[k];
@@ -164,7 +178,8 @@ static void orbit_mixer_draw(void)
         }
         cv_blit(0,36);
         cv_begin(240,24,C_BLACK);
-        for(k=0;k<NTRK;k++) {                       /* 열의 이름: 트랙의 엔진(드럼 트랙은 drum) */
+        if(kind==MX_BT) te_text_c(30,2,"phone",TE_G4);
+        else for(k=0;k<NTRK;k++) {                       /* 열의 이름: 트랙의 엔진(드럼 트랙은 drum) */
             te_lower(b,is_drum(&trk[k])?"DRUM":ENGINES[trk[k].eng_req%NENGINES]->name,8);
             te_text_c(30+(int32_t)k*60,2,b,k==song.sel?TE_G4:TE_G3);
         }
@@ -175,9 +190,15 @@ static void orbit_mixer_draw(void)
         static const char *const LAB_LVL[4]={"level 1","level 2","level 3","level 4"};
         static const char *const LAB_PAN[4]={"pan 1","pan 2","pan 3","pan 4"};
         static const char *const LAB_TRK[4]={"swing","level","steps","pan"};
+        static const char *const LAB_BT[4]={"phone","","",""};
         char v[4][8]; const char *val[4]={v[0],v[1],v[2],v[3]};
         int32_t ratio[4];
-        if(kind==MX_TRACK) {
+        if(kind==MX_BT) {
+#if ORBIT_BLE
+            fmt_int(v[0],bt_level*100/127); ratio[0]=bt_level*1000/127;
+#endif
+            for(k=1;k<4u;k++) { v[k][0]=0; ratio[k]=0; }
+        } else if(kind==MX_TRACK) {
             const track_t *t=TSEL; int32_t level=(int32_t)trk_level(song.sel);
             swing_str(v[0],song.g[G_SWING]); ratio[0]=song.g[G_SWING]*10;
             if(t->p[P_MUTE]) { str_cpy(v[1],"mute",sizeof v[1]); ratio[1]=0; }
@@ -190,6 +211,6 @@ static void orbit_mixer_draw(void)
             else if(trk[k].p[P_MUTE]) { str_cpy(v[k],"mute",sizeof v[k]); ratio[k]=0; }
             else { fmt_int(v[k],level*100/127); ratio[k]=level*1000/127; }
         }
-        te_dials(184,kind==MX_TRACK?LAB_TRK:pan?LAB_PAN:LAB_LVL,val,ratio,sig,&footer);
+        te_dials(184,kind==MX_BT?LAB_BT:kind==MX_TRACK?LAB_TRK:pan?LAB_PAN:LAB_LVL,val,ratio,sig,&footer);
     }
 }

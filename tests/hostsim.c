@@ -30,6 +30,19 @@
 static struct { volatile uint32_t notes, buttons; } fm1_in;
 static void fm1_irq_off(void) {}                 /* (the host: one thread) */
 static void fm1_irq_on(void) {}
+#if ORBIT_BLE
+/* Real phone PCM ring, with no radio producer in the host harness. */
+#define A2DP_POOL
+static uint32_t a2dp_generation;
+static volatile uint8_t a2dp_active;
+#define local_irq_disable fm1_irq_off
+#define local_irq_enable fm1_irq_on
+static void os_time_dly(int ticks) { (void)ticks; abort(); }
+#include "../firmware/src/ble/a2dp_pcm.c"
+#undef local_irq_disable
+#undef local_irq_enable
+#undef A2DP_POOL
+#endif
 #include "../firmware/src/core.h"
 #include "../firmware/src/engines.c"
 #include "../firmware/src/drums.c"

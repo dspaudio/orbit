@@ -4,14 +4,15 @@
 /* ORBIT: ported from Hortator 4e40f27 by DEADACTIVE, felucca-ble ble-kit. */
 /* The configuration the JieLi SDK's BT config sources (apps/common/config/log_config/lib_btctrler_config.c,
  * apps/common/config/bt_profile_config.c; Apache-2.0) are compiled with for the FM-1:
- * one peripheral link, no central links, classic BT, TWS, mesh or emitter.
+ * the BLE device role, the BLE host role (ble_central.c) and one classic A2DP sink; no TWS, mesh or emitter.
  * Replaces the SDK demo's app_config.h. */
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 #define LIB_DEBUG                       0       /* library logs off */
 #define CONFIG_DEBUG_LIB(x)             (x & LIB_DEBUG)
 #define TCFG_USER_BLE_ENABLE            1
-#define TCFG_USER_BT_CLASSIC_ENABLE     0
+#define TCFG_USER_BT_CLASSIC_ENABLE     1
+#define APP_PRIVATE_PROFILE_CFG        1
 #define BT_NET_HID_EN                   0
 #define TRANS_DATA_EN                   0
 #define BT_NET_CENTRAL_EN               0
@@ -25,5 +26,5 @@
 #define TCFG_BD_NUM                     1
 #define TCFG_BLE_SECURITY_EN            0
 #define BT_SUPPORT_MUSIC_VOL_SYNC       0
-/* (USER_SUPPORT_PROFILE_*: the SDK's bt_profile_cfg.h sets them; they matter only with classic BT) */
+#define TCFG_BT_SUPPORT_AAC             0
 #endif

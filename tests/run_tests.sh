@@ -119,6 +119,8 @@ run "rounded mix: clean fades on the DAC and USB FULL" "$OUT/fade_noise_test"
 run "editor protocol, external inputs, reproducers and boot sounds under ASan + UBSan" \
     env EDFZ_OUT="$OUT/edfz" sh tests/editor_fuzz.sh "${EDFZ_N:-2000}" 1
 # Bluetooth build (ORBIT_BLE, orbit-ble.fwsc): its sample header without the melodic sets, the BLE unit, the bridge
+$CC -O2 -o "$OUT/a2dp_pcm_test" tests/a2dp_pcm_test.c
+run "A2DP PCM: resampling, stereo mix, ring bounds, underrun and drift" "$OUT/a2dp_pcm_test"
 mkdir -p build/gen_ble
 ORBIT_BLE=1 python3 tools/gen_samples.py build/gen_ble/felucca_samples.h > /dev/null
 $CC -O2 -w -DORBIT_BLE=1 -Ibuild/gen_ble -Ibuild/gen -Ifirmware/src -Ifirmware/hal \

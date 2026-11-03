@@ -24,6 +24,11 @@
 #include "felucca_tables.h"
 
 #include "libc.c"
+#if ORBIT_BLE
+static void orbit_ble_yield(void);       /* below: the BT tasks between LCD strips (a long redraw starved the
+                                           * phone audio's decoder: dropouts while a pattern played) */
+#define LCD_YIELD() orbit_ble_yield()
+#endif
 #include "lcd.c"
 #include "gfx.c"
 #include "core.h"
@@ -189,8 +194,31 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 static struct {
     uint32_t magic;
     uint8_t mac[6], mac_valid, rf_valid, rf[68];
+    uint8_t keys_valid, keys_pad[3], keys[21][32];   /* (1.0.B) the phones paired for audio: the stack's link-key
+                                                   * records (ble/a2dp_keys.c); an older 80-byte BLM1 has none */
 } orbit_ble_store;
+#define ORBIT_BLE_STORE_V1 80u                         /* magic, mac, mac_valid, rf_valid, rf */
 static uint8_t orbit_ble_dirty;
+/* the BT side's link keys (ble/a2dp_keys.c): read at its start, handed back after each write; saved when quiet */
+void core_bt_keys_get(uint8_t *p, uint32_t n)
+{
+    if (n > sizeof orbit_ble_store.keys)
+        n = sizeof orbit_ble_store.keys;
+    if (orbit_ble_store.keys_valid == 0xA5u)
+        memcpy(p, orbit_ble_store.keys, n);
+    else
+        memset(p, 0xFF, n);
+}
+void core_bt_keys_put(const uint8_t *p, uint32_t n)
+{
+    if (n > sizeof orbit_ble_store.keys)
+        n = sizeof orbit_ble_store.keys;
+    if (orbit_ble_store.keys_valid != 0xA5u || memcmp(orbit_ble_store.keys, p, n)) {
+        memcpy(orbit_ble_store.keys, p, n);
+        orbit_ble_store.keys_valid = 0xA5u;
+        orbit_ble_dirty = 1;
+    }
+}
 #define ORBIT_BLE_STORE_MAGIC 0x314D4C42u             /* BLM1 */
 static uint32_t orbit_ble_ms(void) { return fm1_ms; }
 static void orbit_ble_wdt(void) { fm1_wdt_feed(); }
@@ -256,9 +284,14 @@ static void orbit_ble_bind(void)
     uint8_t buf[512], rec[68];
     uint32_t off, i;
     int scanned = 1;
-    if (flash_ok && (st_load(OBJ_BLE, &orbit_ble_store, sizeof orbit_ble_store) != sizeof orbit_ble_store ||
-                     orbit_ble_store.magic != ORBIT_BLE_STORE_MAGIC))
-        memset(&orbit_ble_store, 0, sizeof orbit_ble_store);
+    {
+        int n = flash_ok ? st_load(OBJ_BLE, &orbit_ble_store, sizeof orbit_ble_store) : -1;
+        if ((n != (int)sizeof orbit_ble_store && n != (int)ORBIT_BLE_STORE_V1) ||
+            orbit_ble_store.magic != ORBIT_BLE_STORE_MAGIC)
+            memset(&orbit_ble_store, 0, sizeof orbit_ble_store);
+        else if (n == (int)ORBIT_BLE_STORE_V1)         /* (an older object: its MAC and RF kept, no keys yet) */
+            memset(&orbit_ble_store.keys_valid, 0, sizeof orbit_ble_store - ORBIT_BLE_STORE_V1);
+    }
     orbit_ble_store.magic = ORBIT_BLE_STORE_MAGIC;
     for (off = 0xE5000u; off < 0xFC000u; off += sizeof buf - 71u) {
         uint32_t n = 0xFC000u - off < sizeof buf ? 0xFC000u - off : sizeof buf;
@@ -288,6 +321,15 @@ static void orbit_ble_bind(void)
     if (orbit_ble_dirty && flash_ok && st_save(OBJ_BLE, &orbit_ble_store, sizeof orbit_ble_store) == 0)
         orbit_ble_dirty = 0;
     (void)ble_configure(&platform);                    /* once; never starts the radio */
+}
+int a2dp_streaming(void);               /* ble/a2dp.c: a phone's stream plays */
+static void orbit_ble_yield(void)
+{
+    static uint32_t last;
+    if (fm1_ms - last < (a2dp_streaming() ? 4u : 8u))   /* (a stream: 4 ms, or a pattern's redraws starve it) */
+        return;
+    last = fm1_ms;
+    orbit_ble_bridge_service();
 }
 static void orbit_ble_core_service(void)
 {

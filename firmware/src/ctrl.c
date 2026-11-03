@@ -4,16 +4,17 @@
  * always off at power-on. While on:
  *   keys        Note On / Off on the controller channel (seq.c ctrl_key, in the audio context); no voice, no recording
  *   KNOB 1..4   one CC each (absolute 0..127, kept per knob; the usual knob acceleration)
- *   FX SEL ENV LFO   momentary switch CCs: 127 pressed, 0 let go
+ *   FX SEL ENV LFO   switch CCs, each momentary (127 pressed, 0 let go) or toggle (a press 127, the next 0); lit on
  *   EDIT + KNOB n    the CC number of KNOB n (0..127); EDIT + SELECT the channel (1..16); SELECT alone the tempo
+ *   EDIT + FX..LFO   that switch momentary / toggle
+ *   CCs heard        on the controller channel with a knob's or a toggle's CC: its value / state (seq.c ctrl_feedback)
  *   PLAY REC OCT- OCT+   as ever; HOME held opens the menu
  * The CC numbers and the channel are settings of the FM-1 (seq.c ctrl_cfg, kept in project.c persist_t.ctl).
  * Included from ui_input.c, so every build of the UI (felucca.c and the host harnesses) has it. */
 #define CTRL_TAP_GAP_MS 150u                     /* OCT- and OCT+ pressed at most this far apart */
 #define CTRL_TAP_MS 600u                         /* both let go within this of the first press */
 static const uint8_t CTRL_SW_BTN[4] = {B_FX, B_SCL, B_ENV, B_LFO};
-static uint8_t ctrl_val[4];                      /* KNOB 1..4: the value last sent */
-static uint8_t ctrl_sw;                          /* bit per switch: 127 sent, 0 not yet */
+static const char *const CTRL_SW_NAME[4] = {"FX", "SEL", "ENV", "LFO"};
 static uint8_t ctrl_sw_mute;                     /* bit per switch: held as the mode came on, ignored until let go */
 
 static uint32_t ctrl_btn(uint32_t label) { return (fm1_in.buttons >> panel.btn[label]) & 1u; }
@@ -29,7 +30,9 @@ static void ctrl_set(uint32_t on)
     if (on == ctrl_on)
         return;
     if (on) {
-        ctrl_sw = 0;
+        fm1_irq_off();
+        ctrl_sw &= ctrl_cfg.tg;                  /* (a toggle keeps its state) */
+        fm1_irq_on();
         ctrl_sw_mute = 0;
         for (i = 0; i < 4u; i++)
             if (ctrl_btn(CTRL_SW_BTN[i]))
@@ -41,10 +44,12 @@ static void ctrl_set(uint32_t on)
         thr_req = 0;
         kb_grid = 0;
     } else {
-        for (i = 0; i < 4u; i++)                 /* a switch still held: its 0 */
-            if ((ctrl_sw >> i) & 1u)
+        for (i = 0; i < 4u; i++)                 /* a momentary switch still held: its 0 */
+            if ((ctrl_sw & ~ctrl_cfg.tg) >> i & 1u)
                 ctrl_cc(ctrl_cfg.sw[i], 0);
-        ctrl_sw = 0;
+        fm1_irq_off();
+        ctrl_sw &= ctrl_cfg.tg;
+        fm1_irq_on();
         ui_message("CONTROLLER OFF");
     }
     ctrl_on = (uint8_t)on;                       /* (seq.c ctrl_block ends the held notes as it sees it go) */
@@ -91,15 +96,35 @@ static void ctrl_input(uint32_t pressed)
     uint32_t i, edit = ctrl_btn(B_EDIT), oct = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
     int32_t s;
     for (i = 0; i < 4u; i++) {
-        uint32_t b = 1u << i, d = ctrl_btn(CTRL_SW_BTN[i]);
+        uint32_t b = 1u << i, d = ctrl_btn(CTRL_SW_BTN[i]), p = (pressed >> panel.btn[CTRL_SW_BTN[i]]) & 1u, on;
         if (ctrl_sw_mute & b) {
             if (!d)
                 ctrl_sw_mute &= (uint8_t)~b;
             continue;
         }
-        if (d != ((ctrl_sw & b) != 0u)) {
+        if (edit) {                              /* EDIT + switch: momentary <-> toggle */
+            if (p) {
+                char m[16];
+                if ((ctrl_sw & b) != 0u)         /* (on as it changes: off first) */
+                    ctrl_cc(ctrl_cfg.sw[i], 0);
+                fm1_irq_off();
+                ctrl_sw &= (uint8_t)~b;
+                fm1_irq_on();
+                ctrl_cfg.tg ^= (uint8_t)b;
+                ctrl_sw_mute |= (uint8_t)b;      /* (the press itself sends nothing) */
+                settings_later = 1;
+                str_cpy(m, CTRL_SW_NAME[i], sizeof m);
+                str_cpy(m + str_len(m), (ctrl_cfg.tg & b) ? " TOGGLE" : " MOMENTARY", sizeof m - str_len(m));
+                ui_message(m);
+            }
+            continue;
+        }
+        on = (ctrl_sw & b) != 0u;
+        if ((ctrl_cfg.tg & b) ? p != 0u : d != on) {
+            fm1_irq_off();
             ctrl_sw ^= (uint8_t)b;
-            ctrl_cc(ctrl_cfg.sw[i], d ? 127u : 0u);
+            fm1_irq_on();
+            ctrl_cc(ctrl_cfg.sw[i], on ? 0u : 127u);
         }
     }
     for (i = 0; i < 4u; i++) {
@@ -167,7 +192,7 @@ static void ctrl_msg(char *b, uint32_t n, uint32_t pkt)
 static void ctrl_draw(void)
 {
     static uint32_t head, sig_top, sig_k, sig_foot;
-    uint32_t i, edit = ctrl_btn(B_EDIT), cnt = ctrl_count, last = ctrl_last, sig;
+    uint32_t i, edit = ctrl_btn(B_EDIT), cnt = ctrl_count, last = ctrl_last, sw = ctrl_sw, sig;
     char b[24];
     if (!ctrl_shown) {
         lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -219,7 +244,7 @@ static void ctrl_draw(void)
         }
         cv_blit(0, 80);
     }
-    sig = cnt * 2654435761u + last;
+    sig = cnt * 2654435761u + last + (sw | (uint32_t)ctrl_cfg.tg << 4 | edit << 8) * 40503u;
     if (ui.force || sig != sig_foot) {
         sig_foot = sig;
         cv_begin(240, 40, C_BLACK);
@@ -231,7 +256,18 @@ static void ctrl_draw(void)
         } else {
             cv_text(52, 4, &FONT_S, "-", TE_G3);
         }
-        cv_text(4, 22, &FONT_S, "EDIT+KNOB: CC  EDIT+SEL: CH", TE_G3);
+        if (edit) {
+            cv_text(4, 22, &FONT_S, "KNOB:CC SEL:CH BTN:MODE", TE_G3);
+        } else {
+            for (i = 0; i < 4u; i++) {           /* the switches: lit while on; T toggle */
+                int32_t x = (int32_t)i * 60, lit = (int32_t)((sw >> i) & 1u);
+                str_cpy(b, CTRL_SW_NAME[i], sizeof b);
+                if ((ctrl_cfg.tg >> i) & 1u)
+                    str_cpy(b + str_len(b), " T", sizeof b - str_len(b));
+                cv_rect(x + 2, 20, 56, 18, lit ? TE_COL[i] : TE_G1);
+                cv_text(x + 6, 22, &FONT_S, b, lit ? C_BLACK : TE_G4);
+            }
+        }
         cv_blit(0, 200);
     }
 }

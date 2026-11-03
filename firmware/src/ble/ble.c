@@ -11,12 +11,14 @@
 #include "ble/ble_core.h"
 #include "ble/ble_sdk_abi.h"
 #include "ble/ble_sdk.h"
+#include "ble/a2dp.h"
 #include "ble/ble_platform.c"
 uint32_t ble_os_now_ms(void) { return core_ms(); }
 #define BLE_DIAG_MAGIC 0xB1E0D1A6u
 static struct {
     uint32_t magic, stage, task, starts, trim, delays, last_us, t4_stalls, irq_leaks, fatal;
     uint32_t heap_high, alloc_fails, irq_lowered;
+    uint32_t assert_ra, assert_ra2;                /* the library assert's callers (cpu_assert_debug), for the map */
 } ble_diag __attribute__((section(".noinit"), unused));
 static __attribute__((unused)) void ble_stage(uint32_t s)
 {
@@ -36,13 +38,11 @@ static __attribute__((unused)) void ble_stage(uint32_t s)
 #include "ble/ble_scan.c"
 #include "ble/ble_vm.c"
 #include "ble/ble_port.c"
-/* the BT libraries' heap, in .pool: the measured high-water + 25 % (budget, user-approved 2026-10-09): 10824 B on the
- * FM-1 started, connected to the SMC-Mixer and receiving (docs/ble/DEVICE_STEPS.md), so 13530, rounded up to 512 B;
- * with two links at once (ROLE HOST + LINK) 17920 B ran out (measured on the FM-1 2026-10-22: 17880 B high with the
- * controller and an FM-1 linked; a link lost, then the whole heap in use and a library assert, `fatal 1`): 23552 B,
- * what the pool keeps (8 KB spare) with the BT task table one slot smaller (ble_os.c NTASK) */
-#define BLE_HEAP_BYTES 23552u
-static uint8_t ble_heap[BLE_HEAP_BYTES] __attribute__((section(".pool")));
+/* Bluetooth heap in POOL. The former BLE-only 23552-byte heap grows for
+ * classic pairing and a concurrent MIDI link. This is a static reservation;
+ * its high-water mark under A2DP radio load still needs device measurement. */
+#define BLE_HEAP_BYTES 32768u                       /* Classic link/SSP headroom; hardware high-water unmeasured. */
+static uint8_t ble_heap[BLE_HEAP_BYTES] __attribute__((section(".pool.bt")));   /* (app_ble.ld: by bd_base) */
 static uint8_t ble_on;
 int ble_started(void) { return ble_on; }
 /* how far the last run got, kept over a crash reboot (.noinit) for the console's `ble`: stage 1 OS ready, 2 stack
@@ -72,13 +72,14 @@ void ble_service(void)                             /* the main loop (ed_service)
     }
     if (!ble_on)
         return;
-    ble_os_service(5000);
+    ble_os_service(a2dp_streaming() ? 8000u : 5000u);   /* (a phone's stream: longer turns, measured on the FM-1) */
 #if BLE_CONSOLE
     ble_diag.heap_high = ble_os_heap_high();       /* (.noinit: kept over a crash reboot, for the heap's size) */
     ble_diag.alloc_fails = ble_os_alloc_fails();
 #endif
     ble_tick();                                    /* the start's deadline */
     ble_auto();                                    /* Device advertising/disconnect and stale input cleanup. */
+    a2dp_enable(want);
     ble_out_flush();                               /* MIDI out as BLE-MIDI notifications. */
     /* Input stays queued until the core drains ble_midi_take(). */
 }

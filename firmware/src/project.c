@@ -834,7 +834,7 @@ static uint32_t persist_part_len(uint32_t len);
 #endif
 
 /* the MIDI CONTROLLER settings (seq.c ctrl_cfg) in persist_t.ctl: "CTL1", the channel (0..15), the CCs of KNOB 1..4,
- * the CCs of FX SEL ENV LFO, 3 zero bytes. Without the tag (an older object) or out of range: the defaults */
+ * the CCs of FX SEL ENV LFO, the toggle switches (bit per switch; 0 in older objects: momentary), 2 zero bytes. Without the tag (an older object) or out of range: the defaults */
 static void ctrl_encode(uint8_t *b)
 {
     memset(b, 0, 16);
@@ -842,6 +842,7 @@ static void ctrl_encode(uint8_t *b)
     b[4] = ctrl_cfg.ch;
     memcpy(b + 5, ctrl_cfg.cc, 4);
     memcpy(b + 9, ctrl_cfg.sw, 4);
+    b[13] = ctrl_cfg.tg;
 }
 static void ctrl_decode(const uint8_t *b)          /* b 0: the defaults */
 {
@@ -857,6 +858,7 @@ static void ctrl_decode(const uint8_t *b)          /* b 0: the defaults */
             if (b[9 + k] <= 127u)
                 c.sw[k] = b[9 + k];
         }
+        c.tg = b[13] & 15u;
     }
     fm1_irq_off();                                  /* (the audio context reads the channel) */
     ctrl_cfg = c;

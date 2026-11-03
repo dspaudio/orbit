@@ -580,7 +580,7 @@ static void layer_knobs(uint32_t layer)
         case LY_SCALE:
             if (k == 0u) {
                 if (!is_drum(t))
-                    t->p[P_CHORD] = (int16_t)clamp(t->p[P_CHORD] + s, 0, 5);
+                    t->p[P_CHORD] = (int16_t)clamp(t->p[P_CHORD] + s, 0, CHORD_MAX);
             } else if (k == 1u) {
                 uint32_t i;
                 int16_t v = (int16_t)clamp(trk[0].p[P_SCALE] + s, 0, NSCALES - 1);
@@ -944,7 +944,7 @@ static void layer_screen_draw(void)
                 uint8_t c[4];
                 uint32_t n = kb_map(t, k), m;
                 if (n != KB_SILENT && (m = chord_notes(t, n, c)) != 0u) {
-                    uint32_t third = m > 1u ? (uint32_t)(c[1] - c[0]) : 4u;
+                    uint32_t third = scale_up(t, n, 2u) - n;   /* (OPEN: the 3rd is the 10th) */
                     str_cpy(tl[i].lab, N_NOTE[c[0] % 12u], 8);
                     if (t->p[P_CHORD] == 5)
                         str_cpy(tl[i].lab + str_len(tl[i].lab), "5", 2);
@@ -960,13 +960,13 @@ static void layer_screen_draw(void)
             tl[i].fg = pc == root ? C_BLACK : in ? C_WHITE : TE_G2;
         }
         lab[0] = "chord", lab[1] = "scale", lab[2] = "keys", lab[3] = "transp";
-        te_lower(v[0], N_CHORD[clamp(t->p[P_CHORD], 0, 5)], 8);
+        te_lower(v[0], N_CHORD[clamp(t->p[P_CHORD], 0, CHORD_MAX)], 8);
         te_lower(v[1], N_SCALE[clamp(trk[0].p[P_SCALE], 0, NSCALES - 1)], 8);
         te_lower(v[2], N_QUANT[clamp(t->p[P_QUANT], 0, 2)], 8);
         fmt_int(v[3], t->p[P_TRANS]);
         if (is_drum(t))
             v[0][0] = v[2][0] = v[3][0] = 0;
-        ratio[0] = t->p[P_CHORD] * 200;
+        ratio[0] = t->p[P_CHORD] * 1000 / CHORD_MAX;
         ratio[1] = trk[0].p[P_SCALE] * 1000 / (NSCALES - 1);
         ratio[2] = t->p[P_QUANT] * 500;
         ratio[3] = (t->p[P_TRANS] + 24) * 1000 / 48;

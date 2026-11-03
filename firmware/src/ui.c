@@ -4,9 +4,9 @@
  * every element remembers what it last drew and is redrawn only on change. */
 #ifndef FELUCCA_VERSION
 #if ORBIT_BLE
-#define FELUCCA_VERSION "ORBIT 0.10.B"  /* the Bluetooth MIDI build (orbit-ble.fwsc) */
+#define FELUCCA_VERSION "ORBIT 1.0.B"   /* the Bluetooth build: MIDI and phone audio (orbit-ble.fwsc) */
 #else
-#define FELUCCA_VERSION "ORBIT 0.10.0"  /* the beat machine firmware for the FM-1 (based on Felucca) */
+#define FELUCCA_VERSION "ORBIT 1.0.0"  /* the beat machine firmware for the FM-1 (based on Felucca) */
 #endif
 #endif
 static void project_save(uint32_t slot);
@@ -97,10 +97,14 @@ static struct {
 static const page_t *cur_page(void) { return &PAGES[ui.page]; }
 /* 믹서(GLO)의 페이지, SELECT로 오간다: TRACKS(네 knob = 트랙 1..4 level) -> PAN(트랙 1..4 pan) -> TRACK(예전 경로 그대로:
  * 전역 SWING, 선택 트랙의 LEVEL / LEN / PAN). 페이지는 id[0]으로 구분한다(P_LEVEL, P_PAN, 0xFF) */
-enum { MX_LEVEL, MX_PAN, MX_TRACK };
+enum { MX_LEVEL, MX_PAN, MX_TRACK, MX_BT };
 static uint32_t mixer_kind(void)
 {
     const page_t *pg = cur_page();
+#if ORBIT_BLE
+    if (pg->scope == SC_TRK && pg->id[0] == G_BTLVL)
+        return MX_BT;                                   /* the phone's level (params.c) */
+#endif
     return pg->scope != SC_TRK ? MX_LEVEL : pg->id[0] == P_PAN ? MX_PAN : pg->id[0] == 0xFFu ? MX_TRACK : MX_LEVEL;
 }
 static int32_t accel(uint32_t role, int32_t s, int32_t range);   /* ui_input.c */

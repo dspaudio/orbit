@@ -22,7 +22,7 @@ LIBS = ["cpu/wl82/liba/btctrler.a", "cpu/wl82/liba/btstack.a", "cpu/wl82/liba/wl
 # single members of archives that are too entangled to link whole (system.a brings the SDK's own OS, cpu.a its
 # start-up): extracted after the archive's hash is checked
 MEMBERS = {"cpu/wl82/liba/system.a": ["lbuf.c.o", "circular_buf.c.o"],
-           "cpu/wl82/liba/cpu.a": ["wlc.c.o", "encryption.c.o"]}
+           "cpu/wl82/liba/cpu.a": ["wlc.c.o", "encryption.c.o", "sbc.c.o"]}
 # The SDK's BT config sources (Apache-2.0), compiled from the SDK (mounted at /sdk) against our
 # firmware/src/ble/sdkcfg/app_config.h (BLE device only): the libraries' config_* / CONFIG_* / log_tag_const_*
 # constants with the SDK's own types and values. As bitcode (-flto, as the SDK builds them): LTO folds the constants

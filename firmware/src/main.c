@@ -263,6 +263,9 @@ static void fm1_main(void)
                 knob += (a * 16 - knob) / 8;
                 k10 = (uint32_t)(knob / 16);
                 song.master_q12 = (k10 * k10) >> 8;            /* 0 .. ~4096 */
+#if ORBIT_BLE
+                master_k10 = (uint16_t)k10;                    /* (GLO > BT follows it until turned) */
+#endif
             }
         }
         {   /* OCT- + OCT+ held 5 s, stopped: enter UBOOT with RAM intact (debug / update); a countdown

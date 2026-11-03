@@ -386,6 +386,73 @@ static int notes_are(const uint8_t *c, uint32_t n, int a, int b, int d, int e)
     return (uint32_t)m == n;
 }
 static void keys(uint32_t mask) { fm1_in.notes = mask; run_block(); run_block(); }
+/* #7: chords changed in time under the arp; the open voicings */
+static void t_arp_chords(void)
+{
+    uint8_t c[8];
+    uint32_t n, k, i, roots = 0, fires = 0, last;
+    static const uint32_t KEY[2] = {7, 12};          /* C4, F4 */
+    reset(120);
+    song.sel = 0;
+    for (k = 0; k < NTRK; k++) {
+        trk[k].p[P_MUTE] = 0;
+        steps_clear(&trk[k]);
+        trk_all_off(&trk[k]);
+    }
+    if (song.playing) { transport_req = 2; run_block(); }
+    trk[0].p[P_VOICE] = 0; trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHORD] = 1;
+    trk[0].p[P_STRUM] = 0; trk[0].p[P_VLEAD] = 0; trk[0].p[P_AHOLD] = 0; trk[0].p[P_AMODE] = 1;
+    trk[0].p[P_APROB] = 127; trk[0].p[P_AOCT] = 1;
+    trk[0].nheld = trk[0].arp_phys = 0;
+    for (k = 0; k < NTRK; k++) arp_gap[k] = 0xFFFFFFFFu;
+    transport_req = 1;
+    run_block();
+    for (i = 0; i < 12u; i++) {                      /* a chord per arp step: let go, the next one pressed */
+        fm1_in.notes = 1u << KEY[i & 1u];
+        last = trk[0].arp_note;
+        for (k = 0; k < 2000u && (trk[0].arp_note == last || !trk[0].arp_note); k++)
+            run_block();
+        fires++;
+        roots += trk[0].arp_note == 60u || trk[0].arp_note == 65u;
+        fm1_in.notes = 0;
+        run_block();
+    }
+    check(fires == 12u && roots < fires, "#7 ARP: a chord per step goes on through the chord, not its root over and over");
+    trk[0].p[P_VLEAD] = 1;                           /* legato: C held, F pressed (C4 shared, voiced), C let go */
+    fm1_in.notes = 1u << 7; run_block(); run_block();
+    fm1_in.notes = 1u << 7 | 1u << 12; run_block();
+    fm1_in.notes = 1u << 12; run_block();
+    check(trk[0].nheld == 3u, "#7 ARP + VLEAD: the next chord keeps a note it shares with the one let go");
+    fm1_in.notes = 0;
+    for (k = 0; k < 20u; k++) run_block();
+    transport_req = 2;
+    run_block();
+    trk[0].p[P_AMODE] = 0; trk[0].p[P_VLEAD] = 0;
+    trk[0].p[P_CHORD] = 6;
+    n = chord_play_notes(&trk[0], 60, 0, c);
+    check(notes_are(c, n, 60, 67, 76, -1), "#7 OPEN: C4: C G E5 (1 5 10)");
+    n = chord_play_notes(&trk[0], 60, CM_MINOR, c);
+    check(notes_are(c, n, 60, 67, 75, -1), "#7 OPEN + F#: the 10th flips minor, C G Eb5");
+    trk[0].p[P_CHORD] = 7;
+    n = chord_play_notes(&trk[0], 62, 0, c);
+    check(notes_are(c, n, 62, 69, 72, 77), "#7 OPEN7: D4: D A C F5 (1 5 7 10)");
+    trk[0].p[P_CHORD] = 8;
+    n = chord_play_notes(&trk[0], 60, 0, c);
+    check(notes_are(c, n, 60, 64, 67, 74), "#7 ADD9: C E G D5");
+    trk[0].p[P_CHORD] = 9;
+    n = chord_play_notes(&trk[0], 60, 0, c);
+    check(notes_are(c, n, 60, 64, 67, 69), "#7 6TH: C E G A");
+    trk[0].p[P_SCALE] = 5;                           /* PEN: five degrees per octave */
+    trk[0].p[P_CHORD] = 6;
+    n = chord_play_notes(&trk[0], 60, 0, c);
+    check(notes_are(c, n, 60, 69, 76, -1), "#7 OPEN in PEN: the third rises by an octave");
+    n = chord_play_notes(&trk[0], 60, CM_MINOR, c);
+    check(notes_are(c, n, 60, 69, 75, -1), "#7 OPEN in PEN: F# changes the raised third");
+    trk[0].p[P_CHORD] = 7;
+    n = chord_play_notes(&trk[0], 60, 0, c);
+    check(notes_are(c, n, 60, 69, 74, 76), "#7 OPEN7 in PEN: the tenth stays the raised third");
+    trk[0].p[P_CHORD] = 0;
+}
 static void t_chordplus(void)
 {
     uint8_t c[8];
@@ -1731,6 +1798,7 @@ int main(void)
     t_chords();
     t_mute();
     t_chordplus();
+    t_arp_chords();
     printf("seq2: %s\n", fails ? "FAILED" : "all checks ok");
     return fails;
 }

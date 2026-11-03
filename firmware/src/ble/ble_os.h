@@ -8,7 +8,7 @@
 #define BLE_OS_H
 #include <stdint.h>
 #include "ble_sdk_abi.h"
-#define BLE_STACK_WORDS 512                        /* 2 KiB per task (budget, spec amendment 4), in .pool */
+#define BLE_STACK_WORDS 768                        /* 3 KiB per task in POOL; SDK classic btstack requirement. */
 int task_create(void (*task)(void *p), void *p, const char *name);
 const char *os_current_task(void);
 const char *os_current_task_rom(void);

@@ -93,6 +93,9 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
         return;
     lcd_window(x, y, x + w - 1u, y + h - 1u);
     lcd_data(px, w * h * 2u);
+#ifdef LCD_YIELD
+    LCD_YIELD();
+#endif
 }
 
 #if BOARD_SMK37

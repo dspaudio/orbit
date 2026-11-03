@@ -39,6 +39,11 @@ int strcmp(const char *a, const char *b)
     }
     return (int)(uint8_t)*a - (int)(uint8_t)*b;
 }
+int strncmp(const char *a, const char *b, unsigned n)
+{
+    while (n && *a && *a == *b) { ++a; ++b; --n; }
+    return n ? (int)(uint8_t)*a - (int)(uint8_t)*b : 0;
+}
 /* logging: off, in ble_lto_stubs.c (bitcode: LTO sees the empty functions and drops the calls and their text) */
 
 /* ---- interrupts: the libraries' critical sections nest; their radio IRQs go into our vector table ---- */
@@ -53,7 +58,11 @@ int cpu_in_irq(void) { return 0; }                       /* (only CRC16's hardwa
 void request_irq(unsigned char index, unsigned char priority, void (*handler)(void), unsigned char cpu_id)
 {
     (void)cpu_id;                                        /* one core runs everything here */
-    if (priority > 2u) {                                 /* BT stays below the audio (3) and the timer (4) (spec);
+    priority = 5u;                                       /* above the audio block (3) and TIMER5 (4): at 2 the classic
+                                                          * link starves while the audio block runs and the phone's
+                                                          * stream drops out (heard on the FM-1, 1.0.B); the BT
+                                                          * handlers are short */
+    if (priority > 5u) {                                 /* BT stays below the audio (3) and the timer (4) (spec);
                                                           * the libraries ask for 2 (fm1-lsdj docs/ble/LINK_NOTES.md) */
         priority = 2u;
 #if BLE_CONSOLE
@@ -107,14 +116,6 @@ BLE_RAM void delay_us(unsigned int us)
 #endif
 }
 BLE_RAM void hw_udelay(unsigned int us) { delay_us(us); }
-BLE_RAM void *__wrap_memcpy(void *d, const void *s, unsigned n)   /* (build.py --wrap=memcpy) */
-{
-    uint8_t *o = d;
-    const uint8_t *i = s;
-    while (n--)
-        *o++ = *i++;
-    return d;
-}
 BLE_RAM void delay(unsigned int n) { volatile unsigned int i = n; while (i--) ; }   /* (a spin count, as the SDK's) */
 int clk_get(const char *name)
 {
@@ -154,7 +155,11 @@ static void ble_fatal(uint32_t why)
     core_audio_stop();
     core_reboot();                                        /* (uptime > 30 s: not counted by the boot guard) */
 }
-void cpu_assert_debug(void) { ble_fatal(1); }
+__attribute__((noinline)) void cpu_assert_debug(void)
+{
+    ble_diag.assert_ra = (uint32_t)__builtin_return_address(0);   /* (where the library asserted: llvm-nm the ELF) */
+    ble_fatal(1);
+}
 void P33_SYSTEM_RESET(void) { ble_fatal(2); }
 const int config_asser = 1;                              /* the libraries' asserts on: a fault shows, not corrupts */
 
@@ -189,7 +194,7 @@ int syscfg_read(uint16_t item_id, void *buf, uint16_t len)
 }
 int syscfg_write(uint16_t item_id, void *buf, uint16_t len) { (void)item_id; (void)buf; (void)len; return 0; }
 int norflash_ioctl(void *device, uint32_t cmd, uint32_t arg) { (void)device; (void)cmd; (void)arg; return -1; }
-void *bt_vm_interface(void) { return 0; }                /* no VM: bonding off (TCFG_BLE_SECURITY_EN 0) */
+#include "ble/a2dp_keys.c"
 uint32_t sdfile_get_disk_capacity(void) { return 0x100000u; }
 
 /* ---- the radio's Wi-Fi-side calibration (SDK apps/common/net/wifi_conf.c, user_cfg.c; board demo_ble defaults).
@@ -237,7 +242,7 @@ unsigned int gpio_close_uart1(void) { return 0; }
 void aes_hw_lock(void) {}                                               /* one user: the stack's own task */
 void aes_hw_unlock(void) {}
 
-/* ---- features compiled out (classic BT, TWS, A2DP, SBC, BT-over-air update): never reached in BLE-only ---- */
+/* ---- disabled TWS, voice, energy detection and BT-over-air update ---- */
 void bredr_esco_standard_tws_link_open(void *a, void *b, int c, uint8_t d) { (void)a; (void)b; (void)c; (void)d; }
 void bredr_esco_standard_tws_link_close(void *a) { (void)a; }
 void channel_packet_clear(void) {}
@@ -253,7 +258,7 @@ int task_kill(const char *name) { (void)name; return 0; }
  * interrupts off (TIMER5, USB, the UBOOT key all dead until the watchdog). Count it and turn interrupts back on. */
 static void ble_irq_check(int task)
 {
-    if (!ble_os_stack_intact((uint32_t)task))     /* its 2 KB stack overflowed: stop before the neighbour breaks */
+    if (!ble_os_stack_intact((uint32_t)task))     /* Stack overflow: stop before the neighbour breaks. */
         ble_fatal(3);
     if (fm1_ble_irq_depth) {
 #if BLE_CONSOLE
@@ -271,6 +276,7 @@ static void ble_app_core(void *arg)
     int msg[8];
     (void)arg;
     ble_stage(4);
+    orbit_a2dp_init(ble_mac);
     btstack_init();
     ble_stage(5);
     for (;;)
@@ -288,6 +294,7 @@ int bt_event_notify(int from, struct bt_event *event)
 {
     ble_events++;
     ble_last_event = (uint32_t)from << 8 | event->event;
+    a2dp_event(from, event->event, event->value);
     ble_on_event(from, event);
     return 0;
 }

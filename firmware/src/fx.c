@@ -4,12 +4,13 @@
  * Stereo dry mix; the chorus and the reverb come back in stereo; the delay in the middle (TYPE MONO), or WIDE (its
  * right side read a little later) or PING (left and right echoes in turn), ORBIT 0.8.2. */
 #if ORBIT_BLE
-#define DLY_LEN 32768u           /* 0.74 s at 44.1 kHz; longer tempo delays clamp to the line. */
+#include "ble/a2dp.h"
+#define DLY_LEN 16384u           /* 0.37 s; A2DP uses the released 32 KiB. Longer delays clamp. */
 #else
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 down to 41 BPM, 1/8 dotted down to 31, 1/4 dotted down to 61 (clamped below) */
 #endif
 #define CHO_LEN 2048u
-#define DLY_HALF (DLY_LEN / 2u)  /* PING: split left/right, 0.37 s each with BLE, otherwise 0.74 s. */
+#define DLY_HALF (DLY_LEN / 2u)  /* PING: split left/right, 0.19 s each with BLE, otherwise 0.74 s. */
 #define DLY_WIDE 573u            /* WIDE: the right side 13 ms after the left */
 #define DLY_CLR 2048u            /* a TYPE change: the line cleared this much a block (stale echoes would jump sides) */
 static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
@@ -1213,10 +1214,29 @@ static void mix_block(int32_t *out, uint32_t n)
     {
         static int32_t ol[CTL], orr[CTL], ul[CTL], ur[CTL];
         static uint8_t usb_was;
+#if ORBIT_BLE
+        static int32_t pl[CTL], pr[CTL];               /* the phone's stream (A2DP): after MASTER, at GLO > BT */
+        static int16_t bt_seen = -1;
+        int32_t pq;
+        uint32_t pk;
+        if (bt_seen < 0 || bt_level == bt_seen)        /* untouched: it follows the volume knob */
+            bt_level = bt_seen = (int16_t)((master_k10 * 127u + 511u) / 1023u);
+        else
+            bt_seen = 0x7FFF;                          /* (turned: its own value from now on) */
+        pk = ((uint32_t)bt_level * 1023u + 63u) / 127u;
+        pq = (int32_t)((pk * pk) >> 8);                /* the volume knob's curve: 127 = full */
+        memset(pl, 0, n * sizeof pl[0]);
+        memset(pr, 0, n * sizeof pr[0]);
+        a2dp_mix(pl, pr, n, 128);
+#endif
         for (i = 0; i < n; i++) {
             int32_t m = m0 + (((m1 - m0) * (int32_t)i) >> CTL_LOG2);
             ol[i] = MULQ12R(mix_l[i], m, 2);           /* (rounded; (x >> 2) * m >> 10 floored to 4 LSB) */
             orr[i] = MULQ12R(mix_r[i], m, 2);
+#if ORBIT_BLE
+            ol[i] += MULQ12R(pl[i], pq, 2);
+            orr[i] += MULQ12R(pr[i], pq, 2);
+#endif
             master_pre(&ol[i], &orr[i]);
             if ((i & 1u)) {                             /* the scope: every other sample, as audio.c reads it */
                 vis_tap[2u * i] = (int16_t)knee(mix_l[i]);

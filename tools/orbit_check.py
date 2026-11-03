@@ -13,7 +13,7 @@ CASES = ['fm6_test', 'userkit_test', 'stress_test', 'ui_pages_test', 'uac_test',
          'sample_replacement_test', 'chop_attack_test', 'drum_steal_test', 'cluster_test', 'editor_wide_test', 'cloud_test', 'cluster_math_test',
          'insert_test', 'modulation_test', 'midi_learn_test', 'ctrl_test', 'macro_test', 'track_filter_test',
          'delay_type_test', 'knob_walk_test', 'song_arm_test', 'unison_level_test', 'phys_tune_test',
-         'noise_clock_test', 'sample_pitch_test', 'grain_release_test', 'fade_noise_test']
+         'noise_clock_test', 'sample_pitch_test', 'grain_release_test', 'fade_noise_test', 'a2dp_pcm_test']
 
 
 def main():
