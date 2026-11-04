@@ -194,10 +194,11 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 static struct {
     uint32_t magic;
     uint8_t mac[6], mac_valid, rf_valid, rf[68];
-    uint8_t keys_valid, keys_pad[3], keys[21][32];   /* (1.0.B) the phones paired for audio: the stack's link-key
-                                                   * records (ble/a2dp_keys.c); an older 80-byte BLM1 has none */
+    uint8_t keys_valid, buffer_setting, keys_pad[2], keys[21][32];   /* the phones paired for audio and the
+                                               * buffer setting in a formerly reserved byte; same BLM1 layout */
 } orbit_ble_store;
 #define ORBIT_BLE_STORE_V1 80u                         /* magic, mac, mac_valid, rf_valid, rf */
+_Static_assert(sizeof orbit_ble_store == 84u + 21u * 32u, "BLM1 layout stays compatible");
 static uint8_t orbit_ble_dirty;
 /* the BT side's link keys (ble/a2dp_keys.c): read at its start, handed back after each write; saved when quiet */
 void core_bt_keys_get(uint8_t *p, uint32_t n)
@@ -293,6 +294,10 @@ static void orbit_ble_bind(void)
             memset(&orbit_ble_store.keys_valid, 0, sizeof orbit_ble_store - ORBIT_BLE_STORE_V1);
     }
     orbit_ble_store.magic = ORBIT_BLE_STORE_MAGIC;
+    /* Stored 0 is an old BLM1 without this setting; 1..3 encode 46/58/70 ms. */
+    bt_buffer_setting = orbit_ble_store.buffer_setting >= 1u &&
+                        orbit_ble_store.buffer_setting <= NELEM(N_BTBUF) ?
+                        orbit_ble_store.buffer_setting - 1u : 1;
     for (off = 0xE5000u; off < 0xFC000u; off += sizeof buf - 71u) {
         uint32_t n = 0xFC000u - off < sizeof buf ? 0xFC000u - off : sizeof buf;
         fm1_wdt_feed();
@@ -334,7 +339,11 @@ static void orbit_ble_yield(void)
 static void orbit_ble_core_service(void)
 {
     orbit_ble_bridge_service();
-    if (orbit_ble_dirty && flash_ok && !song.playing && !transport_req &&
+    if (orbit_ble_store.buffer_setting != (uint8_t)(bt_buffer_setting + 1)) {
+        orbit_ble_store.buffer_setting = (uint8_t)(bt_buffer_setting + 1);
+        orbit_ble_dirty = 1;
+    }
+    if (orbit_ble_dirty && flash_ok && !song.playing && !transport_req && !a2dp_streaming() &&
         st_save(OBJ_BLE, &orbit_ble_store, sizeof orbit_ble_store) == 0)
         orbit_ble_dirty = 0;
 }

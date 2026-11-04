@@ -4,6 +4,8 @@
 #define A2DP_RING_FRAMES 4096u
 #define A2DP_PREBUFFER 2048u
 #define A2DP_PUBLISH() __asm__ volatile("" ::: "memory")
+extern int16_t bt_buffer_setting;
+static uint32_t a2dp_target(void) { return A2DP_PREBUFFER + (uint32_t)bt_buffer_setting * 512u; }
 static int16_t a2dp_pcm[A2DP_RING_FRAMES][2] A2DP_POOL;
 static volatile uint32_t a2dp_head, a2dp_tail, a2dp_playing;
 static volatile uint32_t a2dp_pcm_generation;
@@ -28,7 +30,7 @@ void a2dp_mix(int32_t *left, int32_t *right, uint32_t frames, int32_t gain_q7)
     if (!a2dp_active || a2dp_pcm_generation != a2dp_generation)
         return;
     if (!a2dp_playing) {
-        if (h - t < A2DP_PREBUFFER)
+        if (h - t < a2dp_target())
             return;
         a2dp_playing = 1;
     }
@@ -52,9 +54,9 @@ static void a2dp_pcm_write(const int16_t *pcm, uint32_t frames, uint32_t channel
     int32_t fill = (int32_t)(h - a2dp_tail), step;
     /* A dead band avoids following packet jitter. Limit correction to 100 Hz. */
     if (a2dp_playing) {
-        if (fill < 1536 && a2dp_correction > -100)
+        if (fill < (int32_t)a2dp_target() - 512 && a2dp_correction > -100)
             --a2dp_correction;
-        else if (fill > 2560 && a2dp_correction < 100)
+        else if (fill > (int32_t)a2dp_target() + 512 && a2dp_correction < 100)
             ++a2dp_correction;
     }
     step = (int32_t)rate + a2dp_correction;

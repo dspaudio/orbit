@@ -428,6 +428,10 @@ typedef struct {
 /* the mixer's BT AUDIO page: the phone's stream (A2DP) after MASTER, at its own level, 0..127 on the volume knob's
  * curve; it follows the volume knob (master_k10) until KNOB 1 turns it (fx.c mix_block), until power-off */
 #define G_BTLVL 0xFEu
+#define G_BTBUF 0xFDu
+static const char *const N_BTBUF[] = {"46", "58", "70"};
+static const param_desc_t BT_BUF_DESC = { "BUF", F_ENUM, 0, 2, 0, N_BTBUF, "ms" };
+int16_t bt_buffer_setting = 1;                     /* default 2560; 0/1/2 select 2048/2560/3072 PCM frames */
 int a2dp_link(void);                               /* ble/a2dp.c: a phone connected */
 static int16_t bt_level = 90;
 static uint16_t master_k10 = 724;                 /* the volume knob 0..1023 (main.c), master_q12 = k10^2 >> 8 */
@@ -460,6 +464,9 @@ static const page_t PAGES[] = {
     {"GLOBAL", FAM_GLO, SC_GLOBAL, GR_NONE, {G_BPM, G_SWING, G_CLOCK, G_TUNE}},
     {"MASTER", FAM_GLO, SC_GLOBAL, GR_NONE, {G_DUST, G_DUCK, G_FILT, G_ROLL}},
     {"SYSTEM", FAM_GLO, SC_GLOBAL, GR_NONE, {G_MIDI, G_SYNC, G_ROUTE, G_INFO}},
+#if ORBIT_BLE
+    {"BT BUFFER", FAM_GLO, SC_GLOBAL, GR_NONE, {G_BTBUF, 0xFF, 0xFF, 0xFF}},
+#endif
     {"DRUMS", FAM_GLO, SC_GLOBAL, GR_NONE, {G_DRCH, G_DRLVL, G_DRREV, G_DRDLY}},   /* GM kit on MIDI ch 10 */
     {"MIDI", FAM_GLO, SC_GLOBAL, GR_NONE, {G_CH1, G_CH2, G_CH3, G_DRCH}},   /* 2.6: each track's channel, the drums' too */
     {"MIDI 2", FAM_GLO, SC_GLOBAL, GR_NONE, {G_ROUTE, G_CHOTH, G_MIDI, G_BEND}},   /* 2.6: IN, OTHER, OUT, BEND: every MIDI
@@ -529,6 +536,12 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
         return 0;
     }
     if (pg->scope == SC_GLOBAL) {
+#if ORBIT_BLE
+        if (id == G_BTBUF) {
+            *valp = &bt_buffer_setting;
+            return &BT_BUF_DESC;
+        }
+#endif
         *valp = &song.g[id];
         return &GP[id];
     }

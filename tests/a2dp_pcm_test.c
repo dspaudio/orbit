@@ -8,6 +8,7 @@
 #define A2DP_POOL
 static uint32_t a2dp_generation;
 static volatile uint8_t a2dp_active;
+int16_t bt_buffer_setting;
 static void local_irq_disable(void) {}
 static void local_irq_enable(void) {}
 static void os_time_dly(int ticks);
@@ -64,6 +65,7 @@ static void reset(void)
 {
     a2dp_pcm_reset();
     a2dp_active = 1;
+    bt_buffer_setting = 0;
     received = stop_on_wait = 0;
 }
 
@@ -115,6 +117,31 @@ static void prebuffer_and_stop(void)
     reset();
     consume();
     assert(received == 0);
+}
+
+static void selectable_prebuffer(void)
+{
+    int16_t pcm[3073];
+    unsigned i;
+    reset();
+    bt_buffer_setting = 2;                   /* 3072 frames: above the old 2048-frame minimum. */
+    expected_l = expected_r = 2222;
+    for (i = 0; i < 3073u; ++i)
+        pcm[i] = 2222;
+    a2dp_pcm_write(pcm, 3072, 1, 44100, a2dp_generation);
+    consume();
+    assert(received == 0);                  /* The larger setting must delay initial playback. */
+    a2dp_pcm_write(pcm + 3072, 1, 1, 44100, a2dp_generation);
+    consume();
+    assert(received == 256);
+    a2dp_pcm_write(pcm, 1, 1, 44100, a2dp_generation);
+    assert(a2dp_correction == 0);           /* Do not drift back toward the old 2048-frame target. */
+    reset();
+    a2dp_pcm_write(pcm, 2049, 1, 44100, a2dp_generation);
+    consume();
+    bt_buffer_setting = 2;                   /* Raising the target during playback must refill the ring. */
+    a2dp_pcm_write(pcm, 1, 1, 44100, a2dp_generation);
+    assert(a2dp_correction == -1);
 }
 
 static void drift_and_extremes(void)
@@ -193,6 +220,7 @@ int main(void)
     ratio(32000, 1, 3201, 4410);
     ratio(16000, 1, 1601, 4410);
     prebuffer_and_stop();
+    selectable_prebuffer();
     drift_and_extremes();
     puts("a2dp_pcm_test: PASS (rates, stereo, wrap, underrun, stop, drift, SBC bounds, session keys)");
     return 0;

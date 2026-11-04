@@ -241,6 +241,42 @@ int main(void)
     audio_pass();
     check(k && !sounding(70) && !sus_on[0] && !ch_sus[0],
           "BLE core RX ring full: dropped pedal-up is retried safely");
+
+    {
+        uint32_t page = 0;
+        for (k = 0; k < NPAGES; k++)
+            if (PAGES[k].fam == FAM_GLO && PAGES[k].id[0] == G_BTBUF)
+                page = k;
+        ctrl_set(0);
+        ui.home = 0;
+        ui.page = page;
+        ui.force = 1;
+        frame();
+        check(PAGES[page].id[0] == G_BTBUF && bt_buffer_setting == 1 && strstr(ui.col[0], "BUF|58"),
+              "GLO BT BUFFER: default 58 ms is displayed");
+        encs[panel.enc[EN_K1]] = -panel.dir[EN_K1];
+        frame();
+        check(bt_buffer_setting == 0 && strstr(ui.col[0], "BUF|46"),
+              "GLO BT BUFFER: KNOB 1 can select the old 46 ms minimum");
+        encs[panel.enc[EN_K1]] = panel.dir[EN_K1];
+        frame();
+        check(bt_buffer_setting == 1 && strstr(ui.col[0], "BUF|58"),
+              "GLO BT BUFFER: KNOB 1 returns to the 58 ms default");
+        encs[panel.enc[EN_K1]] = 2 * panel.dir[EN_K1];
+        frame();
+        check(bt_buffer_setting == 2 && strstr(ui.col[0], "BUF|70"),
+              "GLO BT BUFFER: upper limit stays inside the PCM ring");
+        if (outdir)
+            ppm("ble-buffer-page");
+        encs[panel.enc[EN_K1]] = -2 * panel.dir[EN_K1];
+        frame();
+        check(bt_buffer_setting == 0 && strstr(ui.col[0], "BUF|46"),
+              "GLO BT BUFFER: KNOB 1 returns to the existing minimum");
+        encs[panel.enc[EN_K1]] = 2 * panel.dir[EN_K1];
+        frame();
+        project_new();
+        check(bt_buffer_setting == 2, "GLO BT BUFFER: a project reset keeps the device setting");
+    }
     printf("ble_bridge: %d failed\n", fails);
     return fails != 0;
 }
