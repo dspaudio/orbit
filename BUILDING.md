@@ -1,6 +1,6 @@
 # Building ORBIT
 
-The default release is **ORBIT 1.0.0**; **1.0.B** is the separate Bluetooth MIDI and phone audio build. Both target the **FM-1**. Device builds require the pi32v2 toolchain and AC79 SDK. The [validation record](docs/VALIDATION.md#orbit-100-and-10b-release-2026-11-03) owns resource measurements and detailed evidence, with earlier release results kept historical. Generated packages are not committed to the repository.
+The default release is **ORBIT 1.0.0**; **1.0.1B** is the separate Bluetooth MIDI and phone audio build. Both target the **FM-1**. Device builds require the pi32v2 toolchain and AC79 SDK. The [validation record](docs/VALIDATION.md#orbit-101b-bluetooth-release-2026-11-04) owns resource measurements and detailed evidence, with earlier release results kept historical. Generated packages are not committed to the repository.
 
 The build produces these artifacts in `build/`:
 
@@ -54,7 +54,7 @@ Build 1.0.0 with `PYTHON=~/.jieli/orbit-venv/bin/python sh build.sh`.
 The default source version is `ORBIT 1.0.0`, and the install identity remains
 `FM-1_900`. **Don't use `--release`:** that upstream option accepts only
 single-digit `X.Y` versions, changes the identity and appends BETA. It does
-not accept `1.0.0` or `1.0.B`. Confirm the actual package and source version before
+not accept `1.0.0` or `1.0.1B`. Confirm the actual package and source version before
 labelling a generated site; the site generator's `--version 1.0.0` supplies
 matching metadata, not a firmware version rewrite.
 
@@ -71,9 +71,9 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 | `FELUCCA_ICONS` | 1 if the icon atlas exists | Built-in icons |
 | `FELUCCA_SLICE` | 0 | Optional SLICE engine |
 
-### Bluetooth MIDI and phone audio build (1.0.B)
+### Bluetooth MIDI and phone audio build (1.0.1B)
 
-The default build is unchanged: `sh build.sh` writes `build/orbit.fwsc` (`ORBIT 1.0.0`). The separate Bluetooth build (`ORBIT 1.0.B`) needs an extra SDK snapshot with the Bluetooth libraries:
+The default build is unchanged: `sh build.sh` writes `build/orbit.fwsc` (`ORBIT 1.0.0`). The separate Bluetooth build (`ORBIT 1.0.1B`) needs an extra SDK snapshot with the Bluetooth libraries:
 
 1. Download the JieLi AC79 SDK at commit `64afb30b805af5f5d3c2e6471e970c3fd0ba40ad` from
    `https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK/repository/archive/64afb30b805af5f5d3c2e6471e970c3fd0ba40ad.zip`
@@ -199,12 +199,14 @@ then use **SAVE > TOOLS > NEW** to clear it; the device confirms
 
 ## Build and serve the installer site locally
 
-After building and checking the actual ORBIT 0.8.2 package
+After building and checking both current FM-1 packages
 (this local example does not publish a release):
 
 ```sh
-python3 tools/make_site.py --package build/orbit.fwsc --version 0.8.2 --out build/site \
-  --release-url https://github.com/dspaudio/orbit/releases/tag/v0.8.2
+python3 tools/make_site.py --package build/orbit.fwsc --version 1.0.0 --out build/site \
+  --release-url https://github.com/dspaudio/orbit/releases/tag/v1.0.0 \
+  --ble-package build/orbit-ble.fwsc --ble-version 1.0.1B \
+  --ble-release-url https://github.com/dspaudio/orbit/releases/tag/v1.0.1B
 python3 -m http.server 8766 --bind 127.0.0.1 --directory build/site
 ```
 
@@ -213,7 +215,7 @@ give `--package` once per package, the FM-1's first
 (`--package build/orbit.fwsc --package build/orbit-smk37.fwsc --package build/orbit-smk37-elite.fwsc --package build/orbit-smk37-mke.fwsc`).
 They are listed in `manifest.json` under `packages`, and the installer
 selects the one for the connected keyboard. These locally built packages
-are not part of the official v0.8.2 assets.
+are not part of the official v1.0.0 or v1.0.1B assets.
 
 Open http://127.0.0.1:8766/ for the installer and
 http://127.0.0.1:8766/editor.html for the editor. Localhost is suitable for Web
@@ -238,11 +240,12 @@ and allow release tags matching `v*`: release-triggered runs use the tag ref,
 so a main-only environment rejects their deployment.
 
 `.github/workflows/pages.yml` runs after a published release or manual dispatch.
-It selects the latest published release, downloads `orbit.fwsc` and `SHA256SUMS`,
-checks the checksum, generates/tests the site, then uploads a Pages artifact.
-Repository Pages must use **GitHub Actions** as its source. The v0.8.0
-release uses the FM-1 `orbit.fwsc` and `SHA256SUMS`; SMK-37 packages are not
-release assets. Keep site metadata matched to the actual 0.8.0 package.
+It keeps the latest numeric release (`v1.0.0`) as the default package and
+selects the newest published Bluetooth release in the same major.minor series
+(`v1.0.1B`). It downloads both packages and their separate `SHA256SUMS`,
+verifies the checksums, generates/tests the site and deploys it. Repository
+Pages must use **GitHub Actions** as its source. Keep site metadata matched
+to the actual packages.
 
 Installing firmware is at your own risk. If an install fails and the FM-1 no longer
 starts, recovery needs [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).

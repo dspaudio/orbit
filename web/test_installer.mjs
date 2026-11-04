@@ -396,6 +396,9 @@ async function releaseVariants() {
   const base = new URL(`${SITE}manifest.json`);
   ok(parseManifest(MANIFEST, base).variants.length === 1, "single release: one default version");
   ok(parseManifest(VARIANTS, base).variants.length === 2, "variants: numeric and Bluetooth versions accepted");
+  const current = { ...RELEASE_BLE, version: "1.0.1B", package: "firmware/orbit-1.0.1B.fwsc" };
+  ok(parseManifest({ ...current, variants: [RELEASE_090, current] }, base).variants[1].version === "1.0.1B",
+    "variants: a patch-numbered Bluetooth release is selectable");
   for (const variants of [[], [RELEASE_090], [RELEASE_BLE, RELEASE_BLE], [{ version: "0.9.B" }], "invalid"]) {
     let bad;
     try { parseManifest({ ...VARIANTS, variants }, base); } catch (e) { bad = e; }

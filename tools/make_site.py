@@ -28,7 +28,7 @@ INDEX = "installer.html"
 COPIED = ["installer.js", "fm1ota.js", "fm1pkg.js", "editor.html", "fukiai.ttf", "FUKIAI-LICENSE.txt",
           "screens/envelope.svg", "screens/preset.svg", "screens/tape.svg"]
 VERSION = re.compile(r"\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?")
-BLE_VERSION = re.compile(r"\d+\.\d+\.B")
+BLE_VERSION = re.compile(r"\d+\.\d+\.(?:\d+)?B")
 
 
 class SiteError(Exception):
@@ -82,7 +82,7 @@ def generate(package, version, out, release_url=None, *, ble_package=None, ble_v
         if not all(value is not None for value in ble_options):
             raise SiteError("--ble-package, --ble-version and --ble-release-url are required together")
         if not BLE_VERSION.fullmatch(ble_version):
-            raise SiteError(f"BLE version {ble_version!r} is not MAJOR.MINOR.B (no leading v)")
+            raise SiteError(f"BLE version {ble_version!r} is not MAJOR.MINOR.B or MAJOR.MINOR.PATCHB (no leading v)")
         if not ble_release_url or not ble_release_url.startswith("https://"):
             raise SiteError(f"BLE release URL {ble_release_url!r} is not https")
     manifest, package_files = release_manifest(package, version, release_url)
@@ -116,7 +116,7 @@ def main(argv=None):
     parser.add_argument("--out", type=Path, default=ROOT / "build/site", help="output directory (default: build/site)")
     parser.add_argument("--release-url", help="https URL of the release page, recorded in manifest.json")
     parser.add_argument("--ble-package", type=Path, help="BLE .fwsc for a separate release variant")
-    parser.add_argument("--ble-version", help="BLE release version, MAJOR.MINOR.B")
+    parser.add_argument("--ble-version", help="BLE release version, MAJOR.MINOR.B or MAJOR.MINOR.PATCHB")
     parser.add_argument("--ble-release-url", help="https URL of the BLE release page")
     args = parser.parse_args(argv)
     try:

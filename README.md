@@ -4,7 +4,9 @@
 
 ORBIT is a four-track groovebox firmware for the **M-VAVE FM-1**: three synth parts and a drum machine, played through a color-coded Synth / Drum / Event Tape / Mixer workflow. Record a loop, turn it into a song, and keep your favorite sound controls together with user macros. Based on SLOOP/Felucca, with original ORBIT engines and graphics inspired by the original OP-1's four encoder roles.
 
-[Play in your browser](https://dspaudio.github.io/orbit-web-emu/) · [Install](#install) · [Get started](GUIDE.md#get-started) · [User guide](GUIDE.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [1.0.0 release notes](docs/releases/1.0.0.md) · [1.0.B release notes](docs/releases/1.0.B.md)
+[Play in your browser](https://dspaudio.github.io/orbit-web-emu/) · [Install](#install) · [Get started](GUIDE.md#get-started) · [User guide](GUIDE.md) · [MIDI controllers](docs/MIDI-CONTROL.md) · [1.0.0 release notes](docs/releases/1.0.0.md) · [1.0.1B release notes](docs/releases/1.0.1B.md)
+
+**1.0.1B (Bluetooth build):** **GLO > BT BUFFER** offers 46, 58 or 70 ms for phone audio, with 58 ms as the default. The choice is saved on the FM-1 independently of projects, while the regular 1.0.0 build stays unchanged. The installed 1.0.1B firmware answered its version over USB MIDI; the device owner tested it and approved release. See the [release notes](docs/releases/1.0.1B.md) and [validation record](docs/VALIDATION.md#orbit-101b-bluetooth-release-2026-11-04).
 
 **1.0.0 / 1.0.B:** Four new CHORD voicings (OPEN, OPEN7, ADD9 and 6TH) and arpeggios that keep their phase across a quick chord change. MIDI controller mode now offers saved momentary/toggle switches and shows incoming DAW CC feedback. The 1.0.B build also mixes a phone's Bluetooth audio into the FM-1, with a separate PHONE level on GLO > BT AUDIO and stored pairing keys. Its shorter delay and phone pairing steps are in the [1.0.B notes](docs/releases/1.0.B.md).
 
@@ -73,7 +75,7 @@ On the drum track's **GRID** page, the 16 white keys are the steps of the select
 
 With **OUT**, a DAW or another device set to external sync starts, stops and keeps tempo with ORBIT. Swing stays in the pattern rather than the clock. The FM-1 has no TRS MIDI output, and ORBIT doesn't forward an incoming clock. See [MIDI control](docs/MIDI-CONTROL.md#channels-and-clock).
 
-Bluetooth MIDI and phone audio exist only in the separate **1.0.B** build, `orbit-ble.fwsc`. The default `orbit.fwsc` never turns the radio on. Start Bluetooth from **MENU > SYSTEM > BLUETOOTH**, then connect to `ORBIT FM-1` from macOS Audio MIDI Setup or an iOS app's Bluetooth MIDI dialog. Pair phone audio separately to `ORBIT FM-1 Audio` and balance it on **GLO > BT AUDIO**. Everything ORBIT sends over USB MIDI goes out over Bluetooth too, including notes, controller mode and the SYNC = OUT clock; incoming Bluetooth MIDI is treated like USB MIDI. Earlier Bluetooth MIDI pairing and clock out were confirmed by the device owner; latency and audio under radio load haven't been measured. If another firmware erased the stock radio calibration, the Bluetooth build starts with recovery values, which may give shorter range. The build trades some features for room: the melodic samples below, a shorter delay line and refused writes over the radio calibration. Read the [Bluetooth section of the guide](GUIDE.md#bluetooth-midi-and-audio-build-10b) before installing it.
+Bluetooth MIDI and phone audio exist only in the separate **1.0.1B** build, `orbit-ble.fwsc`. The default `orbit.fwsc` never turns the radio on. Start Bluetooth from **MENU > SYSTEM > BLUETOOTH**, then connect to `ORBIT FM-1` from macOS Audio MIDI Setup or an iOS app's Bluetooth MIDI dialog. Pair phone audio separately to `ORBIT FM-1 Audio` and balance it on **GLO > BT AUDIO**. **GLO > BT BUFFER** chooses 46, 58 (default) or 70 ms of prebuffer. Everything ORBIT sends over USB MIDI goes out over Bluetooth too, including notes, controller mode and the SYNC = OUT clock; incoming Bluetooth MIDI is treated like USB MIDI. Earlier Bluetooth MIDI pairing and clock out were confirmed by the device owner; latency and audio under radio load haven't been measured. If another firmware erased the stock radio calibration, the Bluetooth build starts with recovery values, which may give shorter range. The build trades some features for room: the melodic samples below, a shorter delay line and refused writes over the radio calibration. Read the [Bluetooth section of the guide](GUIDE.md#bluetooth-midi-and-audio-build-10b) before installing it.
 
 ### Sounds replaced in the Bluetooth build
 
@@ -115,7 +117,9 @@ python3 tools/fm1_install.py --info
 python3 tools/fm1_install.py build/orbit.fwsc
 ```
 
-The source version is **ORBIT 1.0.0** (`ORBIT 1.0.B` for the Bluetooth build), and the FM-1 install identity remains **FM-1_900**. Use the default build command, **not `--release`**, whose upstream version scheme changes the identity and appends BETA. See [BUILDING.md](BUILDING.md) for the toolchain, local site generation and CLI instructions. The v1.0.0 release assets are **`orbit.fwsc` and `SHA256SUMS`**; v1.0.B carries **`orbit-ble.fwsc` and its `SHA256SUMS`**. The browser installer lets you choose either. Generated firmware packages are not committed to this tree.
+The source version is **ORBIT 1.0.0** (`ORBIT 1.0.1B` for the Bluetooth build), and the FM-1 install identity remains **FM-1_900**. Use the default build command, **not `--release`**, whose upstream version scheme changes the identity and appends BETA. See [BUILDING.md](BUILDING.md) for the toolchain, local site generation and CLI instructions. The v1.0.0 release assets are **`orbit.fwsc` and `SHA256SUMS`**; v1.0.1B carries **`orbit-ble.fwsc` and its `SHA256SUMS`**. The browser installer lets you choose either. Generated firmware packages are not committed to this tree.
+
+**1.0.1B validation:** the BLE target build and focused buffer tests passed. The FM-1 update completed, rebooted and returned the new version through USB MIDI; the device owner tested it and approved release. The host check retains a macOS-only IRQ compile failure and the BLE target-cost checker reports three existing estimate overruns. See the [1.0.1B validation record](docs/VALIDATION.md#orbit-101b-bluetooth-release-2026-11-04) for exact results and unmeasured hardware timing.
 
 **1.0.0 / 1.0.B validation:** both FM-1 packages built within target memory limits and the device owner confirmed the firmware works on an FM-1. The reviewed golden renders include the 8BIT ARP phrase changed by the new arpeggio continuity. Browser builds and functional checks cover both sound variants; Bluetooth radio and phone audio are hardware-only. See the [validation record](docs/VALIDATION.md#orbit-100-and-10b-release-2026-11-03) for hashes, tests and unmeasured performance.
 
@@ -134,7 +138,7 @@ The source version is **ORBIT 1.0.0** (`ORBIT 1.0.B` for the Bluetooth build), a
 **[Open the ORBIT web emulator](https://dspaudio.github.io/orbit-web-emu/)**
 and press **POWER ON**. No FM-1 or local installation is required: the real
 firmware sound engine and display run as WebAssembly in your browser.
-Select **1.0.0** for original melodic samples or **1.0.B** for FM replacements.
+The browser runs the current **1.0.1B** firmware sound build with FM replacements.
 The drum GRID's quiet editing and the controller tap work in the browser too.
 Use the on-screen keys and knobs or your computer keyboard to play.
 Check the version shown on the page; browser audio does not establish
@@ -156,7 +160,7 @@ Open http://127.0.0.1:8080 and press **Start audio**. The preview includes its o
 - [GUIDE.md](GUIDE.md): panel workflow, recording, Event Tape, sound design, macros and saving.
 - [MIDI control](docs/MIDI-CONTROL.md): channels, CC learn, MiniLab routing and controller limits.
 - [BUILDING.md](BUILDING.md): build, local installer site and checks.
-- [1.0.0 release notes](docs/releases/1.0.0.md), [1.0.B release notes](docs/releases/1.0.B.md), [0.10.0 release notes](docs/releases/0.10.0.md), [0.10.B release notes](docs/releases/0.10.B.md), [0.9.0 release notes](docs/releases/0.9.0.md) and [validation record](docs/VALIDATION.md).
+- [1.0.0 release notes](docs/releases/1.0.0.md), [1.0.1B release notes](docs/releases/1.0.1B.md), [1.0.B release notes](docs/releases/1.0.B.md), [0.10.0 release notes](docs/releases/0.10.0.md), [0.10.B release notes](docs/releases/0.10.B.md), [0.9.0 release notes](docs/releases/0.9.0.md) and [validation record](docs/VALIDATION.md).
 - Earlier releases: [0.7.1](docs/releases/0.7.1.md), [0.7.0](docs/releases/0.7.0.md), [0.6.0](docs/releases/0.6.0.md), [0.5.0](docs/releases/0.5.0.md), [0.4.1](docs/releases/0.4.1.md); [SLOOP 2.5 integration](docs/SLOOP-2.5-INTEGRATION.md).
 - [Original ORBIT engines](docs/OP1-ENGINES.md), [CLUSTER](docs/OP1-CLUSTER.md), [design](DESIGN.md), [editor protocol](web/EDITOR_PROTOCOL.md) and [Dots](DOTS.md).
 

@@ -15,7 +15,7 @@ import { validatePackage, sha256hex } from "./fm1pkg.js";
 const MAXDATA = 512;                                  // the largest read the loader asks for (fm1ota.js)
 const IS_OTA = (id) => /^ota-/i.test(id.model);
 const modelOf = (id) => id.model.replace(/^ota-/i, "");
-const VERSION = /^\d+\.\d+\.(?:\d+|B)(-[0-9A-Za-z.]+)?$/;
+const VERSION = /^\d+\.\d+\.(?:\d+B?|B)(-[0-9A-Za-z.]+)?$/;
 const IDENTITY = /^[^_]+_\d+$/;
 const number = new Intl.NumberFormat("en-US");
 const fail = (code, msg, detail = "") => Object.assign(new Error(msg), { code, detail });

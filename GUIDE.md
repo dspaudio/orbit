@@ -273,6 +273,8 @@ MIDI behaviour:
 
 Pair a phone to **ORBIT FM-1 Audio** in its Bluetooth audio settings (separate from **ORBIT FM-1** for MIDI). Its music plays alongside the FM-1 instruments. When connected, **GLO > BT AUDIO** provides a PHONE level on KNOB 1; it starts at the master volume and can be adjusted separately. Pairing keys are saved for reconnecting after a power cycle.
 
+In **ORBIT 1.0.1B**, **GLO > BT BUFFER** lets KNOB 1 choose 46, 58 or 70 ms of phone-audio prebuffer. The old 46 ms value remains the minimum; the default is 58 ms. Larger values add latency. This device setting is independent of projects and saves when playback and phone audio have stopped. Controller Mode transition timing has not been separately measured on an FM-1.
+
 Differences from 1.0.0:
 
 - **Melodic built-in samples** are replaced by light FM voices to make room for the Bluetooth stack. Drum samples and USR1-USR4 are kept. See [Sounds replaced in the Bluetooth build](README.md#sounds-replaced-in-the-bluetooth-build).

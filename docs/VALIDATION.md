@@ -1,5 +1,31 @@
 # ORBIT validation record
 
+## ORBIT 1.0.1B Bluetooth release, 2026-11-04
+
+This release changes only the Bluetooth build. The default firmware remains
+ORBIT 1.0.0. The phone-audio prebuffer is selectable at 46, 58 or 70 ms
+(58 ms by default) and saves in a reserved byte of the existing BLM1 settings
+record. Project changes do not reset it; older records without a selection
+start at 58 ms. Phone pairing keys and the record size are unchanged.
+
+| Check | Observed result |
+| --- | --- |
+| `cc -O2 -w -o build/host/a2dp_pcm_test tests/a2dp_pcm_test.c && build/host/a2dp_pcm_test` | Exit 0, PASS: prebuffer threshold, drift and prior A2DP cases |
+| `cc -O2 -w -DORBIT_BLE=1 -Ibuild/gen_ble -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o build/host/ble_bridge_test tests/ble_bridge_test.c -lm && build/host/ble_bridge_test` | Exit 0, 0 failed: 58 ms default, 46/70 ms choices and project reset |
+| `~/.jieli/orbit-venv/bin/python tools/orbit_check.py` | 45 PASS, 1 FAIL: `irq_init_test` does not compile on macOS (`.noinit` section and missing Linux `MAP_FIXED_NOREPLACE`). All other cases pass |
+| `ORBIT_BLE=1 JIELI_DOCKER=1 ~/.jieli/orbit-venv/bin/python tools/build.py` | Exit 0; app 566,116 B; `.data+.bss` 87,412 / 98,304 B; POOL 332,288 / 344,064 B; RAM-code 7,056 B |
+| `~/.jieli/orbit-venv/bin/python tests/target_budget.py build/ble/felucca.dis tests/target_budget.txt` | Exit 1: `sample_render` 245 / 126, `slicer_track` 941 / 825 and `noise_render` 4284 / 264 exceed estimated costs. No timing measurement on the FM-1 |
+| `tools/fm1_install.py build/orbit-ble.fwsc --port Felucca --yes` | Exit 0: FM-1_900 accepted the write to 100%, restarted and returned as FM-1_900 |
+| USB MIDI editor INFO after restart | `FELUCCA ORBIT 1.0.1B`; before update the same connected port returned `FELUCCA ORBIT 1.0.B` |
+
+The `build/orbit-ble.fwsc` package is 610,032 B, identity `FM-1_900`,
+SHA-256 `7309faae591d43cc21490c5a465dc4143ac4e3939c4482c8a1214bc16d61e164`.
+Its package structure and checksum passed the installer parser. The device owner
+tested the installed firmware and approved release; the specific controls and
+audio listening conditions tested by the owner were not recorded. Bluetooth
+latency, audio under radio load, Controller Mode transition timing and runtime
+memory high-water remain unmeasured. Logs are in `build/host/orbit-101b-*.log`.
+
 ## ORBIT 1.0.0 and 1.0.B release, 2026-11-03
 
 These are local build and host results before publication. The device owner

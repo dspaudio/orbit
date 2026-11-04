@@ -162,14 +162,15 @@ def smk_packages(good):
                      "--out", str(TMP / "site-twice"))
     ok(rc == 2 and "same identity" in err and not (TMP / "site-twice").exists(), "two packages with one identity: exit 2, nothing written")
     dual_packages(paths, good, "site-smk-ble")
+    dual_packages(paths, good, "site-smk-ble-101b", "1.0.1B")
 
 
-def dual_packages(paths, ble, label):
+def dual_packages(paths, ble, label, ble_version="0.9.B"):
     """Generate both releases and compare complete manifests with the input bytes."""
     out = TMP / label
     releases = "https://github.com/dspaudio/orbit/releases/tag/v"
     expected = []
-    for inputs, version in ((paths, "0.9.0"), ([ble], "0.9.B")):
+    for inputs, version in ((paths, "0.9.0"), ([ble], ble_version)):
         entries = [{"product": I.product_of(path.read_bytes()),
                     "package": f"firmware/{path.stem if i else 'orbit'}-{version}.fwsc",
                     "size": path.stat().st_size, "sha256": sha(path)} for i, path in enumerate(inputs)]
@@ -179,8 +180,8 @@ def dual_packages(paths, ble, label):
         expected.append(entry)
     args = [arg for path in paths for arg in ("--package", str(path))]
     rc, _, err = run(*args, "--version", "0.9.0", "--release-url", releases + "0.9.0",
-                     "--ble-package", str(ble), "--ble-version", "0.9.B",
-                     "--ble-release-url", releases + "0.9.B", "--out", str(out))
+                     "--ble-package", str(ble), "--ble-version", ble_version,
+                     "--ble-release-url", releases + ble_version, "--out", str(out))
     manifest = {**expected[0], "variants": expected}
     ok(rc == 0 and not err and (out / "manifest.json").read_bytes()
        == (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode(),
